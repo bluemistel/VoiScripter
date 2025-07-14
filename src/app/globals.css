@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: 0 0% 100%;
+  --color-foreground: 222.2 47.4% 11.2%;
+  --color-card: 0 0% 100%;
+  --color-card-foreground: 222.2 47.4% 11.2%;
+  --color-popover: 0 0% 100%;
+  --color-popover-foreground: 222.2 47.4% 11.2%;
+  --color-primary: 222.2 47.4% 11.2%;
+  --color-primary-foreground: 210 40% 98%;
+  --color-secondary: 210 40% 96.1%;
+  --color-secondary-foreground: 222.2 47.4% 11.2%;
+  --color-muted: 210 40% 96.1%;
+  --color-muted-foreground: 215.4 16.3% 46.9%;
+  --color-accent: 210 40% 96.1%;
+  --color-accent-foreground: 222.2 47.4% 11.2%;
+  --color-destructive: 0 84.2% 60.2%;
+  --color-destructive-foreground: 210 40% 98%;
+  --color-border: 214.3 31.8% 91.4%;
+  --color-input: 214.3 31.8% 91.4%;
+  --color-ring: 222.2 47.4% 11.2%;
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-gray-200;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  
+  .dark {
+    --color-background: 224 71% 4%;
+    --color-foreground: 213 31% 91%;
+    --color-card: 224 71% 4%;
+    --color-card-foreground: 213 31% 91%;
+    --color-popover: 224 71% 4%;
+    --color-popover-foreground: 213 31% 91%;
+    --color-primary: 210 40% 98%;
+    --color-primary-foreground: 222.2 47.4% 11.2%;
+    --color-secondary: 222.2 47.4% 11.2%;
+    --color-secondary-foreground: 210 40% 98%;
+    --color-muted: 223 47% 11%;
+    --color-muted-foreground: 215.4 16.3% 56.9%;
+    --color-accent: 223 47% 11%;
+    --color-accent-foreground: 210 40% 98%;
+    --color-destructive: 0 62.8% 30.6%;
+    --color-destructive-foreground: 210 40% 98%;
+    --color-border: 216 34% 17%;
+    --color-input: 216 34% 17%;
+    --color-ring: 216 34% 17%;
+  }
+}
+
