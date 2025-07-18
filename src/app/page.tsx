@@ -6,29 +6,33 @@ import ScriptEditor from '@/components/ScriptEditor';
 import { Script, Character, ScriptBlock, Emotion } from '@/types';
 
 export default function Home() {
+  // グローバルキャラクター管理
+  const [characters, setCharacters] = useState<Character[]>(() => {
+    const saved = localStorage.getItem('voiscripter_characters');
+    return saved ? JSON.parse(saved) : [];
+  });
+  useEffect(() => {
+    localStorage.setItem('voiscripter_characters', JSON.stringify(characters));
+  }, [characters]);
+
   // プロジェクトID管理
   const [projectId, setProjectId] = useState<string>(() => {
-    // 直近のプロジェクト or デフォルト
     return localStorage.getItem('voiscripter_lastProject') || 'default';
   });
-  // プロジェクト一覧
   const [projectList, setProjectList] = useState<string[]>(() => {
-    const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo'));
+    const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters');
     return keys.map(k => k.replace('voiscripter_', ''));
   });
+  const [undoStack, setUndoStack] = useState<Omit<Script, 'characters'>[]>([]);
+  const [redoStack, setRedoStack] = useState<Omit<Script, 'characters'>[]>([]);
 
-  // Undo/Redoスタック
-  const [undoStack, setUndoStack] = useState<Script[]>([]);
-  const [redoStack, setRedoStack] = useState<Script[]>([]);
-
-  // script本体
-  const [script, setScript] = useState<Script>(() => {
+  // script本体（charactersは持たない）
+  const [script, setScript] = useState<Omit<Script, 'characters'>>(() => {
     const saved = localStorage.getItem(`voiscripter_${projectId}`);
     if (saved) return JSON.parse(saved);
     return {
       id: '1',
       title: '新しい台本',
-      characters: [],
       blocks: []
     };
   });
@@ -38,7 +42,7 @@ export default function Home() {
     localStorage.setItem('voiscripter_lastProject', projectId);
     const saved = localStorage.getItem(`voiscripter_${projectId}`);
     setScript(saved ? JSON.parse(saved) : {
-      id: '1', title: '新しい台本', characters: [], blocks: []
+      id: '1', title: '新しい台本', blocks: []
     });
     setUndoStack(() => {
       const u = localStorage.getItem(`voiscripter_${projectId}_undo`);
@@ -48,8 +52,7 @@ export default function Home() {
       const r = localStorage.getItem(`voiscripter_${projectId}_redo`);
       return r ? JSON.parse(r) : [];
     });
-    // プロジェクト一覧も更新
-    const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo'));
+    const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters');
     setProjectList(keys.map(k => k.replace('voiscripter_', '')));
   }, [projectId]);
 
@@ -60,16 +63,13 @@ export default function Home() {
       isFirstRender.current = false;
       return;
     }
-    // Undoスタックにpush
     setUndoStack(prev => {
       const newStack = [...prev, script];
       localStorage.setItem(`voiscripter_${projectId}_undo`, JSON.stringify(newStack));
       return newStack;
     });
-    // Redoスタックはクリア
     setRedoStack([]);
     localStorage.removeItem(`voiscripter_${projectId}_redo`);
-    // script保存
     localStorage.setItem(`voiscripter_${projectId}`, JSON.stringify(script));
   }, [script, projectId]);
 
@@ -124,9 +124,8 @@ export default function Home() {
     }
     setProjectId(name);
     setProjectList(prev => [...prev, name]);
-    // 新規プロジェクトは初期状態
     localStorage.setItem(`voiscripter_${name}`, JSON.stringify({
-      id: '1', title: name, characters: [], blocks: []
+      id: '1', title: name, blocks: []
     }));
     localStorage.setItem('voiscripter_lastProject', name);
   };
@@ -167,25 +166,18 @@ export default function Home() {
 
   // キャラクター追加
   const handleAddCharacter = (character: Character) => {
-    setScript(prev => ({
-      ...prev,
-      characters: [...prev.characters, character]
-    }));
+    setCharacters(prev => ([...prev, character]));
   };
-
   // キャラクター編集
   const handleUpdateCharacter = (updated: Character) => {
-    setScript(prev => ({
-      ...prev,
-      characters: prev.characters.map(c => c.id === updated.id ? updated : c)
-    }));
+    setCharacters(prev => prev.map(c => c.id === updated.id ? updated : c));
   };
-
   // キャラクター削除
   const handleDeleteCharacter = (id: string) => {
+    setCharacters(prev => prev.filter(c => c.id !== id));
+    // blocks内のcharacterIdも空にする
     setScript(prev => ({
       ...prev,
-      characters: prev.characters.filter(c => c.id !== id),
       blocks: prev.blocks.map(b => b.characterId === id ? { ...b, characterId: '' } : b)
     }));
   };
@@ -199,11 +191,10 @@ export default function Home() {
       )
     }));
   };
-
-  // ブロック追加（直前のセリフブロック or 最初のキャラ or ト書き）
+  // ブロック追加
   const handleAddBlock = () => {
     const lastSerif = [...script.blocks].reverse().find(b => b.characterId);
-    const charId = lastSerif?.characterId || script.characters[0]?.id || '';
+    const charId = lastSerif?.characterId || characters[0]?.id || '';
     const emotion = lastSerif?.emotion || 'normal';
     const newBlock: ScriptBlock = {
       id: Date.now().toString(),
@@ -251,7 +242,7 @@ export default function Home() {
       ...script.blocks
         .filter(block => block.characterId) // ト書きは除外
         .map(block => {
-          const char = script.characters.find(c => c.id === block.characterId);
+          const char = characters.find(c => c.id === block.characterId);
           return [
             char ? char.name : '',
             block.text
@@ -318,7 +309,7 @@ export default function Home() {
   const handleExportCharacterCSV = () => {
     const rows = [
       ['名前', '通常', '喜び', '悲しみ', '怒り', '驚き'],
-      ...script.characters.map(char => [
+      ...characters.map(char => [
         char.name,
         char.emotions.normal.iconUrl,
         char.emotions.happy.iconUrl,
@@ -401,7 +392,7 @@ export default function Home() {
         .filter(row => row.length >= 2 && (row[0] || row[1])) // 空行を除外
         .map(([speaker, text]) => {
           // 話者が既存のキャラクターと一致するか確認
-          const character = script.characters.find(c => c.name === speaker);
+          const character = characters.find(c => c.name === speaker);
           
           if (character) {
             // キャラクターが存在する場合はセリフブロックとして追加
@@ -498,10 +489,7 @@ export default function Home() {
           };
         });
 
-      setScript(prev => ({
-        ...prev,
-        characters: [...prev.characters, ...newCharacters]
-      }));
+      setCharacters(prev => [...prev, ...newCharacters]);
 
       alert(`${newCharacters.length}個のキャラクターをインポートしました。`);
     } catch (error) {
@@ -524,7 +512,7 @@ export default function Home() {
           <button onClick={handleNewProject} className="px-2 py-1 bg-primary text-primary-foreground rounded">新規作成</button>
         </div>
         <Header
-          characters={script.characters}
+          characters={characters}
           onAddCharacter={handleAddCharacter}
           onUpdateCharacter={handleUpdateCharacter}
           onDeleteCharacter={handleDeleteCharacter}
@@ -539,7 +527,7 @@ export default function Home() {
         <main className="p-4">
           <div className="max-w-6xl mx-auto">
             <ScriptEditor
-              script={script}
+              script={{ ...script, characters }}
               onUpdateBlock={handleUpdateBlock}
               onAddBlock={handleAddBlock}
               onDeleteBlock={handleDeleteBlock}
