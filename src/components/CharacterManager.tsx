@@ -91,8 +91,6 @@ export default function CharacterManager({
   };
 
   return (
-    <div className="bg-card border rounded-lg shadow p-4">
-      <h2 className="text-xl font-bold mb-4 text-card-foreground">キャラクター管理</h2>
       <div className="space-y-4">
         {characters.map(character => (
           <div key={character.id} className="border rounded p-3 flex items-center justify-between bg-background">
@@ -171,7 +169,7 @@ export default function CharacterManager({
                     setIsEditingId(character.id);
                     setEditCharacter({ ...character });
                     setEditEmotionList(Object.keys(character.emotions) as Emotion[]);
-                  }} className="p-2 text-blue-500 hover:bg-blue-100 dark:text-blue-300 dark:hover:bg-blue-900/20 rounded flex items-center">
+                  }} className="p-2 text-destructive hover:bg-destructive/10 rounded flex items-center">
                     <PencilIcon className="w-5 h-5" />
                     <span className="ml-1 text-xs">編集</span>
                   </button>
@@ -248,6 +246,5 @@ export default function CharacterManager({
           </button>
         )}
       </div>
-    </div>
   );
 }

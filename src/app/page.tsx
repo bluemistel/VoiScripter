@@ -14,23 +14,37 @@ export default function Home() {
   });
 
   // ダークモード管理
-  const [isDarkMode, setIsDarkMode] = useState(() =>
-    typeof window !== 'undefined'
-      ? document.documentElement.classList.contains('dark')
-      : false
-  );
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
   useEffect(() => {
-    const isDark =
-      localStorage.getItem('theme') === 'dark' ||
-      (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    setIsDarkMode(isDark);
-    document.documentElement.classList.toggle('dark', isDark);
+    const applyTheme = () => {
+      const userTheme = localStorage.getItem('theme');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isDark = userTheme === 'dark' || (!userTheme && systemDark);
+      setIsDarkMode(isDark);
+      document.documentElement.classList.toggle('dark', isDark);
+    };
+
+    applyTheme();
+
+    // システムテーマ変更時のリスナー
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = () => {
+      if (!localStorage.getItem('theme')) {
+        applyTheme();
+      }
+    };
+    mediaQuery.addEventListener('change', handleChange);
+
+    return () => {
+      mediaQuery.removeEventListener('change', handleChange);
+    };
   }, []);
 
   const handleThemeChange = (isDark: boolean) => {
     setIsDarkMode(isDark);
-    document.documentElement.classList.toggle('dark', isDark);
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    document.documentElement.classList.toggle('dark', isDark);
   };
 
   // キャラクター追加
@@ -379,32 +393,34 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
-      <Header
-        characters={script.characters}
-        onAddCharacter={handleAddCharacter}
-        onUpdateCharacter={handleUpdateCharacter}
-        onDeleteCharacter={handleDeleteCharacter}
-        onThemeChange={handleThemeChange}
-        onExportCSV={handleExportCSV}
-        onExportSerifOnly={handleExportSerifOnly}
-        onExportCharacterCSV={handleExportCharacterCSV}
-        onImportCSV={handleImportCSV}
-        onImportCharacterCSV={handleImportCharacterCSV}
-        isDarkMode={isDarkMode}
-      />
-      <main className="p-4">
-        <div className="max-w-6xl mx-auto">
-          <ScriptEditor
-            script={script}
-            onUpdateBlock={handleUpdateBlock}
-            onAddBlock={handleAddBlock}
-            onDeleteBlock={handleDeleteBlock}
-            onInsertBlock={handleInsertBlock}
-            onMoveBlock={handleMoveBlock}
-          />
-        </div>
-      </main>
+    <div id="root">
+      <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
+        <Header
+          characters={script.characters}
+          onAddCharacter={handleAddCharacter}
+          onUpdateCharacter={handleUpdateCharacter}
+          onDeleteCharacter={handleDeleteCharacter}
+          onThemeChange={handleThemeChange}
+          onExportCSV={handleExportCSV}
+          onExportSerifOnly={handleExportSerifOnly}
+          onExportCharacterCSV={handleExportCharacterCSV}
+          onImportCSV={handleImportCSV}
+          onImportCharacterCSV={handleImportCharacterCSV}
+          isDarkMode={isDarkMode}
+        />
+        <main className="p-4">
+          <div className="max-w-6xl mx-auto">
+            <ScriptEditor
+              script={script}
+              onUpdateBlock={handleUpdateBlock}
+              onAddBlock={handleAddBlock}
+              onDeleteBlock={handleDeleteBlock}
+              onInsertBlock={handleInsertBlock}
+              onMoveBlock={handleMoveBlock}
+            />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
