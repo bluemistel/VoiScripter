@@ -7,38 +7,49 @@ import { Script, Character, ScriptBlock, Emotion } from '@/types';
 
 export default function Home() {
   // グローバルキャラクター管理
-  const [characters, setCharacters] = useState<Character[]>(() => {
-    const saved = localStorage.getItem('voiscripter_characters');
-    return saved ? JSON.parse(saved) : [];
+  const [characters, setCharacters] = useState<Character[]>([]);
+  // プロジェクトID管理
+  const [projectId, setProjectId] = useState<string>('default');
+  const [projectList, setProjectList] = useState<string[]>([]);
+  const [undoStack, setUndoStack] = useState<Omit<Script, 'characters'>[]>([]);
+  const [redoStack, setRedoStack] = useState<Omit<Script, 'characters'>[]>([]);
+  const [script, setScript] = useState<Omit<Script, 'characters'>>({
+    id: '1',
+    title: '新しい台本',
+    blocks: []
   });
+
+  // 初回マウント時にlocalStorageから値を取得
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    // characters
+    const savedChars = localStorage.getItem('voiscripter_characters');
+    if (savedChars) setCharacters(JSON.parse(savedChars));
+    // projectId
+    const lastProject = localStorage.getItem('voiscripter_lastProject');
+    if (lastProject) setProjectId(lastProject);
+    // projectList
+    const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters');
+    setProjectList(keys.map(k => k.replace('voiscripter_', '')));
+    // script
+    const savedScript = localStorage.getItem(`voiscripter_${lastProject || 'default'}`);
+    if (savedScript) setScript(JSON.parse(savedScript));
+    // undo/redo
+    const u = localStorage.getItem(`voiscripter_${lastProject || 'default'}_undo`);
+    if (u) setUndoStack(JSON.parse(u));
+    const r = localStorage.getItem(`voiscripter_${lastProject || 'default'}_redo`);
+    if (r) setRedoStack(JSON.parse(r));
+  }, []);
+
+  // characters保存
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
     localStorage.setItem('voiscripter_characters', JSON.stringify(characters));
   }, [characters]);
 
-  // プロジェクトID管理
-  const [projectId, setProjectId] = useState<string>(() => {
-    return localStorage.getItem('voiscripter_lastProject') || 'default';
-  });
-  const [projectList, setProjectList] = useState<string[]>(() => {
-    const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters');
-    return keys.map(k => k.replace('voiscripter_', ''));
-  });
-  const [undoStack, setUndoStack] = useState<Omit<Script, 'characters'>[]>([]);
-  const [redoStack, setRedoStack] = useState<Omit<Script, 'characters'>[]>([]);
-
-  // script本体（charactersは持たない）
-  const [script, setScript] = useState<Omit<Script, 'characters'>>(() => {
-    const saved = localStorage.getItem(`voiscripter_${projectId}`);
-    if (saved) return JSON.parse(saved);
-    return {
-      id: '1',
-      title: '新しい台本',
-      blocks: []
-    };
-  });
-
   // プロジェクト切替時の復元
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     localStorage.setItem('voiscripter_lastProject', projectId);
     const saved = localStorage.getItem(`voiscripter_${projectId}`);
     setScript(saved ? JSON.parse(saved) : {
@@ -63,6 +74,7 @@ export default function Home() {
       isFirstRender.current = false;
       return;
     }
+    if (typeof window === 'undefined') return;
     setUndoStack(prev => {
       const newStack = [...prev, script];
       localStorage.setItem(`voiscripter_${projectId}_undo`, JSON.stringify(newStack));
@@ -81,13 +93,13 @@ export default function Home() {
         if (undoStack.length > 0) {
           setRedoStack(r => {
             const newRedo = [script, ...r];
-            localStorage.setItem(`voiscripter_${projectId}_redo`, JSON.stringify(newRedo));
+            if (typeof window !== 'undefined') localStorage.setItem(`voiscripter_${projectId}_redo`, JSON.stringify(newRedo));
             return newRedo;
           });
           const prev = undoStack[undoStack.length - 1];
           setUndoStack(u => {
             const newUndo = u.slice(0, -1);
-            localStorage.setItem(`voiscripter_${projectId}_undo`, JSON.stringify(newUndo));
+            if (typeof window !== 'undefined') localStorage.setItem(`voiscripter_${projectId}_undo`, JSON.stringify(newUndo));
             return newUndo;
           });
           setScript(prev);
@@ -98,12 +110,12 @@ export default function Home() {
           const next = redoStack[0];
           setUndoStack(u => {
             const newUndo = [...u, script];
-            localStorage.setItem(`voiscripter_${projectId}_undo`, JSON.stringify(newUndo));
+            if (typeof window !== 'undefined') localStorage.setItem(`voiscripter_${projectId}_undo`, JSON.stringify(newUndo));
             return newUndo;
           });
           setRedoStack(r => {
             const newRedo = r.slice(1);
-            localStorage.setItem(`voiscripter_${projectId}_redo`, JSON.stringify(newRedo));
+            if (typeof window !== 'undefined') localStorage.setItem(`voiscripter_${projectId}_redo`, JSON.stringify(newRedo));
             return newRedo;
           });
           setScript(next);
@@ -116,6 +128,7 @@ export default function Home() {
 
   // プロジェクト新規作成
   const handleNewProject = () => {
+    if (typeof window === 'undefined') return;
     const name = prompt('新しいプロジェクト名を入力してください');
     if (!name) return;
     if (projectList.includes(name)) {
