@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -54,8 +54,9 @@ function SortableBlock({
   onDelete,
   onDuplicate,
   onMoveUp,
-  onMoveDown
-}: SortableBlockProps) {
+  onMoveDown,
+  textareaRef
+}: SortableBlockProps & { textareaRef: (el: HTMLTextAreaElement | null) => void }) {
   const {
     attributes,
     listeners,
@@ -101,6 +102,7 @@ function SortableBlock({
               ))}
             </select>
             <textarea
+              ref={textareaRef}
               value={block.text}
               onChange={e => onUpdate({ text: e.target.value })}
               placeholder="ト書きを入力"
@@ -118,6 +120,7 @@ function SortableBlock({
             )}
             <div className="relative flex-1">
               <textarea
+                ref={textareaRef}
                 value={block.text}
                 onChange={e => onUpdate({ text: e.target.value })}
                 placeholder="セリフを入力"
@@ -200,6 +203,164 @@ export default function ScriptEditor({
     })
   );
 
+  // テキストエリアref配列
+  const textareaRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
+  useEffect(() => {
+    // ブロック数が変わったらref配列を調整
+    textareaRefs.current = textareaRefs.current.slice(0, script.blocks.length);
+  }, [script.blocks.length]);
+
+  // 最後に追加されたブロックに自動フォーカス
+  const prevBlockCount = useRef(script.blocks.length);
+  useEffect(() => {
+    if (script.blocks.length > prevBlockCount.current) {
+      setTimeout(() => {
+        const lastIdx = script.blocks.length - 1;
+        textareaRefs.current[lastIdx]?.focus();
+      }, 0);
+    }
+    prevBlockCount.current = script.blocks.length;
+  }, [script.blocks.length]);
+
+  // ショートカットキー
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // フォーカス中のtextareaを特定
+      const activeIdx = textareaRefs.current.findIndex(ref => ref === document.activeElement);
+      // Ctrl+B: 新規ブロック
+      if (e.ctrlKey && !e.altKey && e.key === 'b') {
+        e.preventDefault();
+        onAddBlock();
+      }
+      // Ctrl+Alt+B: 新規ト書き
+      else if (e.ctrlKey && e.altKey && e.key === 'b') {
+        e.preventDefault();
+        const idx = activeIdx >= 0 ? activeIdx + 1 : script.blocks.length;
+        const newBlock: ScriptBlock = {
+          id: Date.now().toString(),
+          characterId: '',
+          emotion: 'normal',
+          text: ''
+        };
+        onInsertBlock(newBlock, idx);
+        setTimeout(() => {
+          textareaRefs.current[idx]?.focus();
+        }, 0);
+      }
+      // Alt+B: 選択中のブロックを削除
+      else if (!e.ctrlKey && e.altKey && e.key === 'b') {
+        if (activeIdx >= 0) {
+          e.preventDefault();
+          onDeleteBlock(script.blocks[activeIdx].id);
+          setTimeout(() => {
+            // 削除後に次のブロック、なければ前のブロックにフォーカス
+            if (textareaRefs.current[activeIdx]) {
+              textareaRefs.current[activeIdx]?.focus();
+            } else if (textareaRefs.current[activeIdx - 1]) {
+              textareaRefs.current[activeIdx - 1]?.focus();
+            }
+          }, 0);
+        }
+      }
+      // Alt+↑: 上のキャラクターを選択（ト書き以外）
+      else if (!e.ctrlKey && e.altKey && e.key === 'ArrowUp') {
+        if (activeIdx >= 0) {
+          const block = script.blocks[activeIdx];
+          if (block.characterId) {
+            const charIdx = script.characters.findIndex(c => c.id === block.characterId);
+            if (charIdx > 0) {
+              e.preventDefault();
+              onUpdateBlock(block.id, { characterId: script.characters[charIdx - 1].id });
+            }
+          }
+        }
+      }
+      // Alt+↓: 下のキャラクターを選択（ト書き以外）
+      else if (!e.ctrlKey && e.altKey && e.key === 'ArrowDown') {
+        if (activeIdx >= 0) {
+          const block = script.blocks[activeIdx];
+          if (block.characterId) {
+            const charIdx = script.characters.findIndex(c => c.id === block.characterId);
+            if (charIdx >= 0 && charIdx < script.characters.length - 1) {
+              e.preventDefault();
+              onUpdateBlock(block.id, { characterId: script.characters[charIdx + 1].id });
+            }
+          }
+        }
+      }
+      // Alt+→: 次の感情を選択
+      else if (!e.ctrlKey && e.shiftKey && e.key === 'ArrowRight') {
+        if (activeIdx >= 0) {
+          const block = script.blocks[activeIdx];
+          if (block.characterId) {
+            const character = script.characters.find(c => c.id === block.characterId);
+            if (character) {
+              const emotions = Object.keys(character.emotions);
+              const idx = emotions.indexOf(block.emotion);
+              if (idx >= 0 && idx < emotions.length - 1) {
+                e.preventDefault();
+                onUpdateBlock(block.id, { emotion: emotions[idx + 1] as Emotion });
+              }
+            }
+          }
+        }
+      }
+      // Alt+←: 前の感情を選択
+      else if (!e.ctrlKey && e.shiftKey && e.key === 'ArrowLeft') {
+        if (activeIdx >= 0) {
+          const block = script.blocks[activeIdx];
+          if (block.characterId) {
+            const character = script.characters.find(c => c.id === block.characterId);
+            if (character) {
+              const emotions = Object.keys(character.emotions);
+              const idx = emotions.indexOf(block.emotion);
+              if (idx > 0) {
+                e.preventDefault();
+                onUpdateBlock(block.id, { emotion: emotions[idx - 1] as Emotion });
+              }
+            }
+          }
+        }
+      }
+      // ↑: 上のブロック
+      else if (!e.ctrlKey && e.key === 'ArrowUp') {
+        if (activeIdx > 0) {
+          e.preventDefault();
+          textareaRefs.current[activeIdx - 1]?.focus();
+        }
+      }
+      // ↓: 下のブロック
+      else if (!e.ctrlKey && e.key === 'ArrowDown') {
+        if (activeIdx >= 0 && activeIdx < script.blocks.length - 1) {
+          e.preventDefault();
+          textareaRefs.current[activeIdx + 1]?.focus();
+        }
+      }
+      // Ctrl+↑: ブロック上移動
+      else if (e.ctrlKey && e.key === 'ArrowUp') {
+        if (activeIdx > 0) {
+          e.preventDefault();
+          onMoveBlock(activeIdx, activeIdx - 1);
+          setTimeout(() => {
+            textareaRefs.current[activeIdx - 1]?.focus();
+          }, 0);
+        }
+      }
+      // Ctrl+↓: ブロック下移動
+      else if (e.ctrlKey && e.key === 'ArrowDown') {
+        if (activeIdx >= 0 && activeIdx < script.blocks.length - 1) {
+          e.preventDefault();
+          onMoveBlock(activeIdx, activeIdx + 1);
+          setTimeout(() => {
+            textareaRefs.current[activeIdx + 1]?.focus();
+          }, 0);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [script.blocks, onAddBlock, onInsertBlock, onMoveBlock, onDeleteBlock]);
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
@@ -218,6 +379,9 @@ export default function ScriptEditor({
       text: ''
     };
     onInsertBlock(newBlock, insertIndex);
+    setTimeout(() => {
+      textareaRefs.current[insertIndex]?.focus();
+    }, 0);
   };
 
   return (
@@ -258,6 +422,7 @@ export default function ScriptEditor({
                       onMoveBlock(index, index + 1);
                     }
                   }}
+                  textareaRef={el => textareaRefs.current[index] = el}
                 />
                 {/* ブロック間のト書き追加 */}
                 <div className="flex justify-center my-1 group">
