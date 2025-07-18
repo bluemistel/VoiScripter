@@ -115,7 +115,7 @@ function SortableBlock({
               <img
                 src={character.emotions[block.emotion]?.iconUrl}
                 alt={character.name}
-                className="w-10 h-10 rounded-full object-cover mt-2"
+                className="w-14 h-14 rounded-full object-cover mt-2"
               />
             )}
             <div className="relative flex-1">

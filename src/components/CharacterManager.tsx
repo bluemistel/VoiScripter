@@ -54,6 +54,33 @@ export default function CharacterManager({
     }
   };
 
+  // 画像ファイル→DataURL変換
+  const handleIconFileChange = (e: React.ChangeEvent<HTMLInputElement>, emotion: Emotion, isEdit = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (isEdit) {
+        setEditCharacter(prev => ({
+          ...(prev ?? {}),
+          emotions: {
+            ...((prev && prev.emotions) ? prev.emotions : {}),
+            [emotion]: { iconUrl: reader.result as string }
+          }
+        } as Partial<Character>));
+      } else {
+        setNewCharacter(prev => ({
+          ...prev,
+          emotions: {
+            ...(prev?.emotions ?? {}),
+            [emotion]: { iconUrl: reader.result as string }
+          }
+        } as Partial<Character>));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newCharacter.name && newCharacter.emotions?.normal?.iconUrl) {
@@ -119,9 +146,15 @@ export default function CharacterManager({
                           [emotion]: { iconUrl: e.target.value }
                         }
                       } as Partial<Character>))}
-                      placeholder={`${emotion}のアイコンURL`}
+                      placeholder={`${emotion}のアイコンURLまたは画像を選択`}
                       className="flex-1 p-2 border rounded bg-background text-foreground"
                       required={emotion === 'normal'}
+                    />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={e => handleIconFileChange(e, emotion, true)}
+                      className="w-24"
                     />
                     {emotion !== 'normal' && (
                       <button type="button" onClick={() => handleRemoveEmotion(emotion, true)} className="text-destructive">×</button>
@@ -204,9 +237,15 @@ export default function CharacterManager({
                       [emotion]: { iconUrl: e.target.value }
                     }
                   } as Partial<Character>))}
-                  placeholder={`${emotion}のアイコンURL`}
+                  placeholder={`${emotion}のアイコンURLまたは画像を選択`}
                   className="flex-1 p-2 border rounded bg-background text-foreground"
                   required={emotion === 'normal'}
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={e => handleIconFileChange(e, emotion, false)}
+                  className="w-24"
                 />
                 {emotion !== 'normal' && (
                   <button type="button" onClick={() => handleRemoveEmotion(emotion)} className="text-destructive">×</button>

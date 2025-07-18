@@ -27,22 +27,52 @@ export default function Home() {
     if (savedChars) setCharacters(JSON.parse(savedChars));
     // projectId
     const lastProject = localStorage.getItem('voiscripter_lastProject');
-    if (lastProject) setProjectId(lastProject);
+    // lastProjectが有効なプロジェクト名かチェック
+    const validProjectId = lastProject && lastProject !== 'lastProject' ? lastProject : 'default';
+    setProjectId(validProjectId);
     // projectList
-    const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters');
+    const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject');
     setProjectList(keys.map(k => k.replace('voiscripter_', '')));
     // script
-    const savedScript = localStorage.getItem(`voiscripter_${lastProject || 'default'}`);
-    if (savedScript) setScript(JSON.parse(savedScript));
+    const savedScript = localStorage.getItem(`voiscripter_${validProjectId}`);
+    if (savedScript) {
+      try {
+        setScript(JSON.parse(savedScript));
+      } catch (error) {
+        console.error('Script parse error:', error);
+        setScript({
+          id: '1', title: '新しい台本', blocks: []
+        });
+      }
+    }
     // undo/redo
-    const u = localStorage.getItem(`voiscripter_${lastProject || 'default'}_undo`);
-    if (u) setUndoStack(JSON.parse(u));
-    const r = localStorage.getItem(`voiscripter_${lastProject || 'default'}_redo`);
-    if (r) setRedoStack(JSON.parse(r));
+    const u = localStorage.getItem(`voiscripter_${validProjectId}_undo`);
+    if (u) {
+      try {
+        setUndoStack(JSON.parse(u));
+      } catch (error) {
+        console.error('Undo stack parse error:', error);
+        setUndoStack([]);
+      }
+    }
+    const r = localStorage.getItem(`voiscripter_${validProjectId}_redo`);
+    if (r) {
+      try {
+        setRedoStack(JSON.parse(r));
+      } catch (error) {
+        console.error('Redo stack parse error:', error);
+        setRedoStack([]);
+      }
+    }
   }, []);
 
-  // characters保存
+  // characters保存（初回マウント時の復元直後は保存しない）
+  const isFirstCharacters = useRef(true);
   useEffect(() => {
+    if (isFirstCharacters.current) {
+      isFirstCharacters.current = false;
+      return;
+    }
     if (typeof window === 'undefined') return;
     localStorage.setItem('voiscripter_characters', JSON.stringify(characters));
   }, [characters]);
@@ -63,7 +93,7 @@ export default function Home() {
       const r = localStorage.getItem(`voiscripter_${projectId}_redo`);
       return r ? JSON.parse(r) : [];
     });
-    const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters');
+    const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject');
     setProjectList(keys.map(k => k.replace('voiscripter_', '')));
   }, [projectId]);
 
@@ -141,6 +171,33 @@ export default function Home() {
       id: '1', title: name, blocks: []
     }));
     localStorage.setItem('voiscripter_lastProject', name);
+  };
+
+  // プロジェクト削除
+  const handleDeleteProject = () => {
+    if (typeof window === 'undefined') return;
+    if (projectId === 'default') {
+      alert('デフォルトプロジェクトは削除できません');
+      return;
+    }
+    if (confirm(`プロジェクト「${projectId}」を削除しますか？\nこの操作は元に戻せません。`)) {
+      // localStorageから削除
+      localStorage.removeItem(`voiscripter_${projectId}`);
+      localStorage.removeItem(`voiscripter_${projectId}_undo`);
+      localStorage.removeItem(`voiscripter_${projectId}_redo`);
+      // プロジェクトリストから削除
+      setProjectList(prev => prev.filter(p => p !== projectId));
+      // デフォルトプロジェクトに切り替え
+      setProjectId('default');
+      // 台本を空にする
+      setScript({
+        id: '1',
+        title: '新しい台本',
+        blocks: []
+      });
+      setUndoStack([]);
+      setRedoStack([]);
+    }
   };
 
   // ダークモード管理
@@ -523,6 +580,9 @@ export default function Home() {
             ))}
           </select>
           <button onClick={handleNewProject} className="px-2 py-1 bg-primary text-primary-foreground rounded">新規作成</button>
+          {projectId !== 'default' && (
+            <button onClick={handleDeleteProject} className="px-2 py-1 bg-destructive text-destructive-foreground rounded">削除</button>
+          )}
         </div>
         <Header
           characters={characters}
