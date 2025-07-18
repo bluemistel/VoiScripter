@@ -322,18 +322,56 @@ export default function ScriptEditor({
           }
         }
       }
-      // ↑: 上のブロック
+      // ↑: 上のブロック（テキストエリアの最上段のみ）
       else if (!e.ctrlKey && e.key === 'ArrowUp') {
         if (activeIdx > 0) {
-          e.preventDefault();
-          textareaRefs.current[activeIdx - 1]?.focus();
+          const textarea = textareaRefs.current[activeIdx] as HTMLTextAreaElement | null;
+          if (textarea) {
+            const { selectionStart } = textarea;
+            // 現在のカーソル位置が最上段か判定
+            const value = textarea.value;
+            const before = value.slice(0, selectionStart);
+            const lineCount = before.split('\n').length;
+            if (lineCount === 1) {
+              e.preventDefault();
+              textareaRefs.current[activeIdx - 1]?.focus();
+            }
+          }
         }
       }
-      // ↓: 下のブロック
+      // ↓: 下のブロック（テキストエリアの最下段のみ）
       else if (!e.ctrlKey && e.key === 'ArrowDown') {
         if (activeIdx >= 0 && activeIdx < script.blocks.length - 1) {
+          const textarea = textareaRefs.current[activeIdx] as HTMLTextAreaElement | null;
+          if (textarea) {
+            const { selectionStart } = textarea;
+            const value = textarea.value;
+            const before = value.slice(0, selectionStart);
+            const currentLine = before.split('\n').length;
+            const totalLines = value.split('\n').length;
+            // 現在のカーソル位置が最下段か判定
+            if (currentLine === totalLines) {
+              e.preventDefault();
+              textareaRefs.current[activeIdx + 1]?.focus();
+            }
+          }
+        }
+      }
+      // Ctrl+Enter: 直後にキャラクター引き継ぎ新規ブロック
+      else if (e.ctrlKey && e.key === 'Enter') {
+        if (activeIdx >= 0) {
           e.preventDefault();
-          textareaRefs.current[activeIdx + 1]?.focus();
+          const currentBlock = script.blocks[activeIdx];
+          const newBlock: ScriptBlock = {
+            id: Date.now().toString(),
+            characterId: currentBlock.characterId,
+            emotion: currentBlock.emotion,
+            text: ''
+          };
+          onInsertBlock(newBlock, activeIdx + 1);
+          setTimeout(() => {
+            textareaRefs.current[activeIdx + 1]?.focus();
+          }, 0);
         }
       }
       // Ctrl+↑: ブロック上移動
