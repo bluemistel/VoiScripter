@@ -9,16 +9,16 @@
   --color-popover-foreground: oklch(51.16% 57% 204);
   --color-primary: oklch(51.16% 57% 204);
   --color-primary-foreground: oklch(96.89% 30% 190);
-  --color-secondary:rgb(202, 239, 239);
+  --color-secondary:  rgb(202, 239, 239);
   --color-secondary-foreground: oklch(51.16% 57% 204);
-  --color-muted:rgb(202, 239, 239);
+  --color-muted:  rgb(202, 239, 239);
   --color-muted-foreground: oklch(96.89% 30% 190);
-  --color-accent:rgb(202, 239, 239);
+  --color-accent: rgb(202, 239, 239);
   --color-accent-foreground: oklch(96.89% 30% 190);
   --color-destructive: oklch(84.2% 60.2% 0);
   --color-destructive-foreground: oklch(96.89% 30% 190);
-  --color-border: oklch(31.8% 91.4% 214.3);
-  --color-input: oklch(31.8% 91.4% 214.3);
+  --color-border: rgb(30, 30, 30);
+  --color-input: rgb(30, 30, 30);
   --color-ring: oklch(51.16% 57% 204);
   --radius: 0.5rem;
 }
@@ -32,22 +32,22 @@
   }
   
   html.dark {
-    --color-background: oklch(71% 4% 224);
-    --color-foreground: oklch(31% 91% 213);
-    --color-card: oklch(71% 4% 224);
-    --color-card-foreground: oklch(31% 91% 213);
-    --color-popover: oklch(71% 4% 224);
-    --color-popover-foreground: oklch(31% 91% 213);
-    --color-primary: oklch(40% 98% 210);
-    --color-primary-foreground: oklch(47.4% 11.2% 222.2);
-    --color-secondary: oklch(47.4% 11.2% 222.2);
-    --color-secondary-foreground: oklch(40% 98% 210);
-    --color-muted: oklch(47% 11% 223);
+    --color-background: rgb(30, 30, 30);
+    --color-foreground: rgb(212, 212, 212);
+    --color-card: rgb(39, 39, 39);
+    --color-card-foreground: rgb(212, 212, 212);
+    --color-popover: rgb(39, 39, 39);
+    --color-popover-foreground: rgb(212, 212, 212);
+    --color-primary: rgb(29, 178, 134);
+    --color-primary-foreground: rgb(160, 245, 219);
+    --color-secondary: rgb(29, 178, 134);
+    --color-secondary-foreground: rgb(160, 245, 219);
+    --color-muted: rgb(68, 68, 68);
     --color-muted-foreground: oklch(16.3% 56.9% 215.4);
-    --color-accent: oklch(47% 11% 223);
-    --color-accent-foreground: oklch(40% 98% 210);
+    --color-accent: rgb(68, 68, 68);
+    --color-accent-foreground: rgb(29, 178, 134);
     --color-destructive: oklch(62.8% 30.6% 0);
-    --color-destructive-foreground: oklch(40% 98% 210);
+    --color-destructive-foreground: rgb(29, 178, 134);
     --color-border: oklch(34% 17% 216);
     --color-input: oklch(34% 17% 216);
     --color-ring: oklch(34% 17% 216);
