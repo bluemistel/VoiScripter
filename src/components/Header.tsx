@@ -88,7 +88,7 @@ export default function Header({
               className="p-2 text-primary hover:bg-accent rounded-lg transition"
               title="エクスポート"
             >
-              <ArrowDownTrayIcon className="w-7 h-7"/>
+              <ArrowUpTrayIcon className="w-7 h-7"/>
             </button>
             {isExportMenuOpen && (
               <div className="absolute right-0 mt-2 w-48 bg-popover border rounded-lg shadow-lg z-10">
@@ -119,7 +119,7 @@ export default function Header({
               className="p-2 text-primary hover:bg-accent rounded-lg transition"
               title="インポート"
             >
-              <ArrowUpTrayIcon className="w-7 h-7"/>
+              <ArrowDownTrayIcon className="w-7 h-7"/>
             </button>
             {isImportMenuOpen && (
               <div className="absolute right-0 mt-2 w-48 bg-popover border rounded-lg shadow-lg z-10">

@@ -1,31 +1,31 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: oklch(95% 0% 220);
-  --color-foreground: oklch(51.16% 57% 204);
-  --color-card: oklch(95% 0% 220);
-  --color-card-foreground: oklch(51.16% 57% 204);
+  --color-background: oklch(100% 0% 220);
+  --color-foreground: oklch(0.3211 0 0);
+  --color-card: oklch(100% 0% 220);
+  --color-card-foreground: oklch(0.3211 0 0);
   --color-popover: oklch(95% 0% 220);
-  --color-popover-foreground: oklch(51.16% 57% 204);
-  --color-primary: oklch(51.16% 57% 204);
-  --color-primary-foreground: oklch(96.89% 30% 190);
-  --color-secondary:  rgb(202, 239, 239);
-  --color-secondary-foreground: oklch(51.16% 57% 204);
-  --color-muted:  rgb(202, 239, 239);
-  --color-muted-foreground: oklch(96.89% 30% 190);
-  --color-accent: rgb(202, 239, 239);
+  --color-popover-foreground: oklch(0.78 0.18 186);
+  --color-primary: oklch(0.78 0.18 186);
+  --color-primary-foreground: oklch(100% 0% 220);
+  --color-secondary:  oklch(95% 0% 220);
+  --color-secondary-foreground: oklch(0.78 0.18 226);
+  --color-muted:  oklch(95% 0% 220);
+  --color-muted-foreground: oklch(0.3211 0 0);
+  --color-accent: oklch(95% 0% 220);
   --color-accent-foreground: oklch(96.89% 30% 190);
-  --color-destructive: oklch(84.2% 60.2% 0);
-  --color-destructive-foreground: oklch(96.89% 30% 190);
-  --color-border: rgb(30, 30, 30);
+  --color-destructive: oklch(0.7294 0.18 0);
+  --color-destructive-foreground: oklch(100% 0% 220);
+  --color-border: oklch(0.3211 0 0);
   --color-input: rgb(30, 30, 30);
-  --color-ring: oklch(51.16% 57% 204);
+  --color-ring: oklch(0.78 0.18 186);
   --radius: 0.5rem;
 }
  
 @layer base {
   * {
-    @apply border-gray-200;
+    @apply border-gray-400;
   }
   body {
     @apply bg-background text-foreground;
@@ -43,11 +43,11 @@
     --color-secondary: rgb(29, 178, 134);
     --color-secondary-foreground: rgb(160, 245, 219);
     --color-muted: rgb(68, 68, 68);
-    --color-muted-foreground: oklch(16.3% 56.9% 215.4);
+    --color-muted-foreground: rgb(212, 212, 212);
     --color-accent: rgb(68, 68, 68);
     --color-accent-foreground: rgb(29, 178, 134);
-    --color-destructive: oklch(62.8% 30.6% 0);
-    --color-destructive-foreground: rgb(29, 178, 134);
+    --color-destructive: oklch(0.7294 0.18 0);
+    --color-destructive-foreground: oklch(100% 0% 220);
     --color-border: oklch(34% 17% 216);
     --color-input: oklch(34% 17% 216);
     --color-ring: oklch(34% 17% 216);

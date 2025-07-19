@@ -55,8 +55,9 @@ function SortableBlock({
   onDuplicate,
   onMoveUp,
   onMoveDown,
-  textareaRef
-}: SortableBlockProps & { textareaRef: (el: HTMLTextAreaElement | null) => void }) {
+  textareaRef,
+  isSelected
+}: SortableBlockProps & { textareaRef: (el: HTMLTextAreaElement | null) => void; isSelected: boolean }) {
   const {
     attributes,
     listeners,
@@ -79,14 +80,16 @@ function SortableBlock({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-start space-x-2 p-2 bg-card border rounded-lg shadow mb-2"
+      className={`flex items-start space-x-2 p-2 border rounded-lg shadow mb-2 transition-colors ${
+        isSelected ? 'bg-secondary-foreground/10' : 'bg-card'
+      }`}
     >
       <div
         {...attributes}
         {...listeners}
-        className="cursor-grab flex items-center justify-center w-12 h-12 rounded hover:bg-accent transition"
+        className="cursor-grab flex items-center justify-center w-8 h-6 rounded hover:bg-accent transition"
       >
-        <Bars3Icon className="w-12 h-12 text-primary" />
+        <Bars3Icon className="w-8 h-8 text-primary" />
       </div>
       <div className="flex-1">
         {isTogaki ? (
@@ -124,11 +127,11 @@ function SortableBlock({
                 value={block.text}
                 onChange={e => onUpdate({ text: e.target.value })}
                 placeholder="セリフを入力"
-                className="rounded-2xl border p-2 bg-muted shadow-md min-h-[60px] text-sm w-full text-foreground"
+                className="rounded-2xl border p-2 bg-card shadow-md min-h-[60px] text-sm w-full text-foreground"
                 style={{ borderRadius: '20px 20px 20px 0' }}
               />
               {/* フキダシの三角形 */}
-              <div className="absolute left-[-10px] top-4 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-muted"></div>
+              <div className="absolute left-[-10px] top-4 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-400"></div>
             </div>
             <div className="flex flex-col space-y-1 ml-2 mt-2">
               <select
@@ -157,7 +160,7 @@ function SortableBlock({
             </div>
           </div>
         )}
-        <div className="flex justify-end space-x-1 mt-1">
+        <div className="flex justify-end space-x-0.5 mt-1">
           <button
             onClick={onMoveUp}
             className="p-1 rounded hover:bg-accent"
@@ -205,22 +208,99 @@ export default function ScriptEditor({
 
   // テキストエリアref配列
   const textareaRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
+  const [isButtonFixed, setIsButtonFixed] = useState(false);
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [manualFocusTarget, setManualFocusTarget] = useState<{ index: number; id: string } | null>(null);
+  
   useEffect(() => {
     // ブロック数が変わったらref配列を調整
     textareaRefs.current = textareaRefs.current.slice(0, script.blocks.length);
   }, [script.blocks.length]);
 
+  // コンテンツの高さに応じてボタンの位置を調整
+  useEffect(() => {
+    const handleResize = () => {
+      const container = document.querySelector('.script-editor-container');
+      if (container) {
+        const containerHeight = container.scrollHeight;
+        const windowHeight = window.innerHeight;
+        const isContentOverflow = containerHeight > windowHeight - 200; // 200pxのマージン
+        setIsButtonFixed(isContentOverflow);
+      }
+    };
+
+    // 初期状態とリサイズ時に実行
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    
+    // ブロックが変更された時にも実行
+    const timer = setTimeout(handleResize, 1);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(timer);
+    };
+  }, [script.blocks]);
+
   // 最後に追加されたブロックに自動フォーカス
   const prevBlockCount = useRef(script.blocks.length);
   useEffect(() => {
     if (script.blocks.length > prevBlockCount.current) {
+      // 手動フォーカスターゲットがある場合は自動フォーカスをスキップ
+      if (manualFocusTarget) {
+        setManualFocusTarget(null);
+        return;
+      }
       setTimeout(() => {
         const lastIdx = script.blocks.length - 1;
         textareaRefs.current[lastIdx]?.focus();
-      }, 0);
+        setSelectedBlockId(script.blocks[lastIdx]?.id || null);
+      }, 10); // タイミングを調整
     }
     prevBlockCount.current = script.blocks.length;
-  }, [script.blocks.length]);
+  }, [script.blocks.length, manualFocusTarget]);
+
+  // フォーカス時に選択状態を更新
+  useEffect(() => {
+    const handleFocus = (e: FocusEvent) => {
+      const textarea = e.target as HTMLTextAreaElement;
+      const index = textareaRefs.current.findIndex(ref => ref === textarea);
+      if (index >= 0) {
+        setSelectedBlockId(script.blocks[index]?.id || null);
+      }
+    };
+
+    const handleBlur = () => {
+      // フォーカスが外れた時は選択状態をクリアしない（他の要素にフォーカスが移る可能性があるため）
+    };
+
+    textareaRefs.current.forEach(ref => {
+      if (ref) {
+        ref.addEventListener('focus', handleFocus);
+        ref.addEventListener('blur', handleBlur);
+      }
+    });
+
+    return () => {
+      textareaRefs.current.forEach(ref => {
+        if (ref) {
+          ref.removeEventListener('focus', handleFocus);
+          ref.removeEventListener('blur', handleBlur);
+        }
+      });
+    };
+  }, [script.blocks]);
+
+  // 手動フォーカスターゲットの処理
+  useEffect(() => {
+    if (manualFocusTarget) {
+      setTimeout(() => {
+        textareaRefs.current[manualFocusTarget.index]?.focus();
+        setSelectedBlockId(manualFocusTarget.id);
+        setManualFocusTarget(null);
+      }, 10);
+    }
+  }, [manualFocusTarget]);
 
   // ショートカットキー
   useEffect(() => {
@@ -231,21 +311,25 @@ export default function ScriptEditor({
       if (e.ctrlKey && !e.altKey && e.key === 'b') {
         e.preventDefault();
         onAddBlock();
+        setTimeout(() => {
+          const lastIdx = script.blocks.length;
+          setManualFocusTarget({ index: lastIdx, id: script.blocks[lastIdx]?.id || '' });
+        }, 10); // タイミングを調整
       }
       // Ctrl+Alt+B: 新規ト書き
       else if (e.ctrlKey && e.altKey && e.key === 'b') {
         e.preventDefault();
         const idx = activeIdx >= 0 ? activeIdx + 1 : script.blocks.length;
         const newBlock: ScriptBlock = {
-          id: Date.now().toString(),
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           characterId: '',
           emotion: 'normal',
           text: ''
         };
         onInsertBlock(newBlock, idx);
         setTimeout(() => {
-          textareaRefs.current[idx]?.focus();
-        }, 0);
+          setManualFocusTarget({ index: idx, id: newBlock.id });
+        }, 10); // タイミングを調整
       }
       // Alt+B: 選択中のブロックを削除
       else if (!e.ctrlKey && e.altKey && e.key === 'b') {
@@ -363,15 +447,15 @@ export default function ScriptEditor({
           e.preventDefault();
           const currentBlock = script.blocks[activeIdx];
           const newBlock: ScriptBlock = {
-            id: Date.now().toString(),
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
             characterId: currentBlock.characterId,
             emotion: currentBlock.emotion,
             text: ''
           };
           onInsertBlock(newBlock, activeIdx + 1);
           setTimeout(() => {
-            textareaRefs.current[activeIdx + 1]?.focus();
-          }, 0);
+            setManualFocusTarget({ index: activeIdx + 1, id: newBlock.id });
+          }, 10); // タイミングを調整
         }
       }
       // Ctrl+↑: ブロック上移動
@@ -380,8 +464,8 @@ export default function ScriptEditor({
           e.preventDefault();
           onMoveBlock(activeIdx, activeIdx - 1);
           setTimeout(() => {
-            textareaRefs.current[activeIdx - 1]?.focus();
-          }, 0);
+            setManualFocusTarget({ index: activeIdx - 1, id: script.blocks[activeIdx - 1]?.id || '' });
+          }, 10); // タイミングを調整
         }
       }
       // Ctrl+↓: ブロック下移動
@@ -390,8 +474,8 @@ export default function ScriptEditor({
           e.preventDefault();
           onMoveBlock(activeIdx, activeIdx + 1);
           setTimeout(() => {
-            textareaRefs.current[activeIdx + 1]?.focus();
-          }, 0);
+            setManualFocusTarget({ index: activeIdx + 1, id: script.blocks[activeIdx + 1]?.id || '' });
+          }, 10); // タイミングを調整
         }
       }
     };
@@ -424,61 +508,79 @@ export default function ScriptEditor({
 
   return (
     <>
-      <div className="bg-card border rounded-lg shadow p-4 relative">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={script.blocks.map(block => block.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {script.blocks.map((block, index) => (
-              <div key={block.id}>
-                <SortableBlock
-                  block={block}
-                  characters={script.characters}
-                  character={script.characters.find(c => c.id === block.characterId)}
-                  onUpdate={updates => onUpdateBlock(block.id, updates)}
-                  onDelete={() => onDeleteBlock(block.id)}
-                  onDuplicate={() => {
-                    const newBlock: ScriptBlock = {
-                      ...block,
-                      id: Date.now().toString(),
-                      text: ''
-                    };
-                    onAddBlock();
-                  }}
-                  onMoveUp={() => {
-                    if (index > 0) {
-                      onMoveBlock(index, index - 1);
-                    }
-                  }}
-                  onMoveDown={() => {
-                    if (index < script.blocks.length - 1) {
-                      onMoveBlock(index, index + 1);
-                    }
-                  }}
-                  textareaRef={el => textareaRefs.current[index] = el}
-                />
-                {/* ブロック間のト書き追加 */}
-                <div className="flex justify-center my-1 group">
-                  <button
-                    className="hidden group-hover:inline-block px-2 py-1 bg-primary text-primary-foreground rounded text-xs"
-                    onClick={() => handleAddTogaki(index + 1)}
-                  >
-                    ＋ト書きを追加
-                  </button>
-                </div>
-              </div>
-            ))}
-          </SortableContext>
-        </DndContext>
+      <div className="script-editor-container">
+        {script.blocks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
+            <p className="text-lg mb-4">キャラクターのアイコンから話者を追加して下のボタンからブロックを追加します。</p>
+          </div>
+        ) : (
+          <div className="bg-card border rounded-lg shadow p-4 relative">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={script.blocks.map(block => block.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {script.blocks.map((block, index) => (
+                  <div key={block.id}>
+                                      <SortableBlock
+                    block={block}
+                    characters={script.characters}
+                    character={script.characters.find(c => c.id === block.characterId)}
+                    onUpdate={updates => onUpdateBlock(block.id, updates)}
+                    onDelete={() => onDeleteBlock(block.id)}
+                    onDuplicate={() => {
+                      const newBlock: ScriptBlock = {
+                        ...block,
+                        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                        text: block.text // 元のテキストを保持
+                      };
+                      onInsertBlock(newBlock, index + 1);
+                      setTimeout(() => {
+                        setManualFocusTarget({ index: index + 1, id: newBlock.id });
+                      }, 10); // タイミングを調整
+                    }}
+                    onMoveUp={() => {
+                      if (index > 0) {
+                        onMoveBlock(index, index - 1);
+                      }
+                    }}
+                    onMoveDown={() => {
+                      if (index < script.blocks.length - 1) {
+                        onMoveBlock(index, index + 1);
+                      }
+                    }}
+                    textareaRef={el => textareaRefs.current[index] = el}
+                    isSelected={selectedBlockId === block.id}
+                  />
+                    {/* ブロック間のト書き追加 */}
+                    <div className="flex justify-center my-1 group">
+                      <button
+                        className="hidden group-hover:inline-block px-2 py-1 bg-primary text-primary-foreground rounded text-xs"
+                        onClick={() => handleAddTogaki(index + 1)}
+                      >
+                        ＋ト書きを追加
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </SortableContext>
+            </DndContext>
+          </div>
+        )}
       </div>
       <button
         onClick={onAddBlock}
-        className="fixed bottom-6 right-6 z-50 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full shadow-lg transition-colors text-lg"
+        className={`fixed right-6 z-40 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full shadow-lg transition-all text-lg ${
+          script.blocks.length === 0 
+            ? 'bottom-1/2 transform translate-y-1/2' 
+            : isButtonFixed 
+              ? 'bottom-6' 
+              : 'bottom-6'
+        }`}
       >
         ＋ブロックを追加
       </button>

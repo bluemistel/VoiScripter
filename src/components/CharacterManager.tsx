@@ -150,12 +150,15 @@ export default function CharacterManager({
                       className="flex-1 p-2 border rounded bg-background text-foreground"
                       required={emotion === 'normal'}
                     />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={e => handleIconFileChange(e, emotion, true)}
-                      className="w-24"
-                    />
+                                    <label className="cursor-pointer bg-primary text-primary-foreground px-3 py-1 rounded text-xs hover:bg-primary/90 transition-colors">
+                  ファイルを選択
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => handleIconFileChange(e, emotion, true)}
+                    className="hidden"
+                  />
+                </label>
                     {emotion !== 'normal' && (
                       <button type="button" onClick={() => handleRemoveEmotion(emotion, true)} className="text-destructive">×</button>
                     )}
@@ -241,12 +244,15 @@ export default function CharacterManager({
                   className="flex-1 p-2 border rounded bg-background text-foreground"
                   required={emotion === 'normal'}
                 />
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={e => handleIconFileChange(e, emotion, false)}
-                  className="w-24"
-                />
+                <label className="cursor-pointer bg-primary text-primary-foreground px-3 py-1 rounded text-xs hover:bg-primary/90 transition-colors">
+                  ファイルを選択
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => handleIconFileChange(e, emotion, false)}
+                    className="hidden"
+                  />
+                </label>
                 {emotion !== 'normal' && (
                   <button type="button" onClick={() => handleRemoveEmotion(emotion)} className="text-destructive">×</button>
                 )}
