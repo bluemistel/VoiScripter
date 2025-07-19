@@ -20,6 +20,7 @@
   --color-border: oklch(0.3211 0 0);
   --color-input: rgb(30, 30, 30);
   --color-ring: oklch(0.78 0.18 186);
+  --color-ring-ring: oklch(0.78 0.18 186);
   --radius: 0.5rem;
 }
  
@@ -50,7 +51,9 @@
     --color-destructive-foreground: oklch(100% 0% 220);
     --color-border: oklch(34% 17% 216);
     --color-input: oklch(34% 17% 216);
-    --color-ring: oklch(34% 17% 216);
+    --color-ring: oklch(0.78 0.1828 218.11);
+    --color-ring-ring: oklch(0.78 0.1828 218.11);
+    --radius: 0.5rem;
   }
 }
 

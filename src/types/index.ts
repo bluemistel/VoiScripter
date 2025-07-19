@@ -1,11 +1,11 @@
 
-export type Emotion = 'happy' | 'sad' | 'angry' | 'normal' | 'surprised';
+export type Emotion = 'normal';
 
 export interface Character {
   id: string;
   name: string;
   emotions: {
-    [key in Emotion]: {
+    normal: {
       iconUrl: string;
     };
   };

@@ -378,14 +378,10 @@ export default function Home() {
   // キャラクター設定のCSVエクスポート
   const handleExportCharacterCSV = () => {
     const rows = [
-      ['名前', '通常', '喜び', '悲しみ', '怒り', '驚き'],
+      ['名前', 'アイコン'],
       ...characters.map(char => [
         char.name,
-        char.emotions.normal.iconUrl,
-        char.emotions.happy.iconUrl,
-        char.emotions.sad.iconUrl,
-        char.emotions.angry.iconUrl,
-        char.emotions.surprised.iconUrl
+        char.emotions.normal.iconUrl
       ])
     ];
     
@@ -543,13 +539,9 @@ export default function Home() {
       // 新しいキャラクターを作成
       const newCharacters: Character[] = dataRows
         .filter(row => row.length >= 1 && row[0].trim() !== '') // 名前が空の行をスキップ
-        .map(([name, ...emotionUrls]) => {
+        .map(([name, iconUrl]) => {
           const emotions = {
-            normal: { iconUrl: emotionUrls[0] || '' },
-            happy: { iconUrl: emotionUrls[1] || '' },
-            sad: { iconUrl: emotionUrls[2] || '' },
-            angry: { iconUrl: emotionUrls[3] || '' },
-            surprised: { iconUrl: emotionUrls[4] || '' }
+            normal: { iconUrl: iconUrl || '' }
           } as const;
 
           return {

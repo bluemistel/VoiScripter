@@ -147,7 +147,7 @@ export default function Header({
           <button
             onClick={() => setIsCharacterModalOpen(true)}
             className="p-2 text-primary hover:bg-accent rounded-lg transition"
-            title="話者設定"
+            title="キャラクター設定"
           >
             <UsersIcon className="w-7 h-7" />
           </button>

@@ -5,14 +5,9 @@ import { Character, Emotion } from '@/types';
 import { PlusIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline';
 
 const defaultEmotions: Emotion[] = ['normal'];
-const allEmotions: Emotion[] = ['normal', 'happy', 'sad', 'angry', 'surprised'];
 
 const emptyEmotions = {
-  happy: { iconUrl: '' },
-  sad: { iconUrl: '' },
-  angry: { iconUrl: '' },
-  normal: { iconUrl: '' },
-  surprised: { iconUrl: '' }
+  normal: { iconUrl: '' }
 };
 
 interface CharacterManagerProps {
@@ -34,28 +29,12 @@ export default function CharacterManager({
     name: '',
     emotions: { ...emptyEmotions }
   });
-  const [emotionList, setEmotionList] = useState<Emotion[]>([...defaultEmotions]);
 
   // 編集用
   const [editCharacter, setEditCharacter] = useState<Partial<Character> | null>(null);
-  const [editEmotionList, setEditEmotionList] = useState<Emotion[]>([...defaultEmotions]);
-
-  const handleAddEmotion = (emotion: Emotion, isEdit = false) => {
-    if (isEdit) {
-      if (editEmotionList && !editEmotionList.includes(emotion)) setEditEmotionList([...editEmotionList, emotion]);
-    } else {
-      if (!emotionList.includes(emotion)) setEmotionList([...emotionList, emotion]);
-    }
-  };
-  const handleRemoveEmotion = (emotion: Emotion, isEdit = false) => {
-    if (emotion !== 'normal') {
-      if (isEdit) setEditEmotionList(editEmotionList.filter(e => e !== emotion));
-      else setEmotionList(emotionList.filter(e => e !== emotion));
-    }
-  };
 
   // 画像ファイル→DataURL変換
-  const handleIconFileChange = (e: React.ChangeEvent<HTMLInputElement>, emotion: Emotion, isEdit = false) => {
+  const handleIconFileChange = (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -64,16 +43,14 @@ export default function CharacterManager({
         setEditCharacter(prev => ({
           ...(prev ?? {}),
           emotions: {
-            ...((prev && prev.emotions) ? prev.emotions : {}),
-            [emotion]: { iconUrl: reader.result as string }
+            normal: { iconUrl: reader.result as string }
           }
         } as Partial<Character>));
       } else {
         setNewCharacter(prev => ({
           ...prev,
           emotions: {
-            ...(prev?.emotions ?? {}),
-            [emotion]: { iconUrl: reader.result as string }
+            normal: { iconUrl: reader.result as string }
           }
         } as Partial<Character>));
       }
@@ -84,17 +61,12 @@ export default function CharacterManager({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newCharacter.name && newCharacter.emotions?.normal?.iconUrl) {
-      const emotions: any = {};
-      for (const emo of emotionList) {
-        emotions[emo] = { iconUrl: newCharacter.emotions?.[emo]?.iconUrl || '' };
-      }
       onAddCharacter({
         id: Date.now().toString(),
         name: newCharacter.name,
-        emotions: { ...emptyEmotions, ...emotions }
+        emotions: { normal: { iconUrl: newCharacter.emotions.normal.iconUrl } }
       } as Character);
       setNewCharacter({ name: '', emotions: { ...emptyEmotions } });
-      setEmotionList([...defaultEmotions]);
       setIsAdding(false);
     }
   };
@@ -102,18 +74,13 @@ export default function CharacterManager({
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editCharacter && editCharacter.name && editCharacter.emotions?.normal?.iconUrl) {
-      const emotions: any = {};
-      for (const emo of editEmotionList) {
-        emotions[emo] = { iconUrl: editCharacter.emotions?.[emo]?.iconUrl || '' };
-      }
       onUpdateCharacter({
         id: editCharacter.id!,
         name: editCharacter.name,
-        emotions: { ...emptyEmotions, ...emotions }
+        emotions: { normal: { iconUrl: editCharacter.emotions.normal.iconUrl } }
       } as Character);
       setIsEditingId(null);
       setEditCharacter(null);
-      setEditEmotionList([...defaultEmotions]);
     }
   };
 
@@ -134,47 +101,34 @@ export default function CharacterManager({
                   className="w-full p-2 border rounded bg-background text-foreground"
                   required
                 />
-                {editEmotionList.map(emotion => (
-                  <div key={emotion} className="flex items-center space-x-2 mb-1">
-                    <input
-                      type="text"
-                      value={editCharacter?.emotions?.[emotion]?.iconUrl || ''}
-                      onChange={e => setEditCharacter(prev => ({
-                        ...(prev ?? {}),
-                        emotions: {
-                          ...((prev && prev.emotions) ? prev.emotions : {}),
-                          [emotion]: { iconUrl: e.target.value }
-                        }
-                      } as Partial<Character>))}
-                      placeholder={`${emotion}のアイコンURLまたは画像を選択`}
-                      className="flex-1 p-2 border rounded bg-background text-foreground"
-                      required={emotion === 'normal'}
-                    />
-                                    <label className="cursor-pointer bg-primary text-primary-foreground px-3 py-1 rounded text-xs hover:bg-primary/90 transition-colors">
-                  ファイルを選択
+                <div className="flex items-center space-x-2 mb-1">
                   <input
-                    type="file"
-                    accept="image/*"
-                    onChange={e => handleIconFileChange(e, emotion, true)}
-                    className="hidden"
+                    type="text"
+                    value={editCharacter?.emotions?.normal?.iconUrl || ''}
+                    onChange={e => setEditCharacter(prev => ({
+                      ...(prev ?? {}),
+                      emotions: {
+                        normal: { iconUrl: e.target.value }
+                      }
+                    } as Partial<Character>))}
+                    placeholder="アイコンURLまたは画像を選択"
+                    className="flex-1 p-2 border rounded bg-background text-foreground"
+                    required
                   />
-                </label>
-                    {emotion !== 'normal' && (
-                      <button type="button" onClick={() => handleRemoveEmotion(emotion, true)} className="text-destructive">×</button>
-                    )}
-                  </div>
-                ))}
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {allEmotions.filter(e => !editEmotionList.includes(e)).map(emotion => (
-                    <button key={emotion} type="button" onClick={() => handleAddEmotion(emotion, true)} className="px-2 py-1 bg-primary text-primary-foreground rounded text-xs">
-                      {emotion}を追加
-                    </button>
-                  ))}
+                  <label className="cursor-pointer bg-primary text-primary-foreground px-3 py-1 rounded text-xs hover:bg-primary/90 transition-colors">
+                    ファイルを選択
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={e => handleIconFileChange(e, true)}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
                 <div className="flex justify-end space-x-2">
                   <button
                     type="button"
-                    onClick={() => { setIsEditingId(null); setEditCharacter(null); setEditEmotionList([...defaultEmotions]); }}
+                    onClick={() => { setIsEditingId(null); setEditCharacter(null); }}
                     className="px-3 py-1 text-sm text-muted-foreground hover:bg-accent rounded"
                   >
                     キャンセル
@@ -190,21 +144,17 @@ export default function CharacterManager({
             ) : (
               <>
                 <div>
-                  <h3 className="font-semibold text-foreground">{character.name}</h3>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {Object.entries(character.emotions).map(([emotion, { iconUrl }]) => (
-                      <div key={emotion} className="flex items-center space-x-1">
-                        <img src={iconUrl} alt={emotion} className="w-8 h-8 rounded-full border" />
-                        <span className="text-xs capitalize text-foreground">{emotion}</span>
-                      </div>
-                    ))}
+                  <div className="flex flex-wrap gap-2 md:mt-0">
+                    <div className="flex items-center space-x-1">
+                      <img src={character.emotions.normal.iconUrl} alt={character.name} className="w-14 h-14 rounded-full border" />
+                    </div>
+                    <h3 className="font-semibold text-foreground flex items-center justify-center">{character.name}</h3>
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
                   <button onClick={() => {
                     setIsEditingId(character.id);
                     setEditCharacter({ ...character });
-                    setEditEmotionList(Object.keys(character.emotions) as Emotion[]);
                   }} className="p-2 text-destructive hover:bg-destructive/10 rounded flex items-center">
                     <PencilIcon className="w-5 h-5" />
                     <span className="ml-1 text-xs">編集</span>
@@ -228,42 +178,29 @@ export default function CharacterManager({
               className="w-full p-2 border rounded bg-background text-foreground"
               required
             />
-            {emotionList.map(emotion => (
-              <div key={emotion} className="flex items-center space-x-2 mb-1">
+            <div className="flex items-center space-x-2 mb-1">
+              <input
+                type="text"
+                value={newCharacter.emotions?.normal?.iconUrl || ''}
+                onChange={e => setNewCharacter(prev => ({
+                  ...prev,
+                  emotions: {
+                    normal: { iconUrl: e.target.value }
+                  }
+                } as Partial<Character>))}
+                placeholder="アイコンURLまたは画像を選択"
+                className="flex-1 p-2 border rounded text-foreground"
+                required
+              />
+              <label className="cursor-pointer bg-primary text-primary-foreground px-3 py-1 rounded text-xs hover:bg-primary/90 transition-colors">
+                ファイルを選択
                 <input
-                  type="text"
-                  value={newCharacter.emotions?.[emotion]?.iconUrl || ''}
-                  onChange={e => setNewCharacter(prev => ({
-                    ...prev,
-                    emotions: {
-                      ...(prev?.emotions ?? {}),
-                      [emotion]: { iconUrl: e.target.value }
-                    }
-                  } as Partial<Character>))}
-                  placeholder={`${emotion}のアイコンURLまたは画像を選択`}
-                  className="flex-1 p-2 border rounded bg-background text-foreground"
-                  required={emotion === 'normal'}
+                  type="file"
+                  accept="image/*"
+                  onChange={e => handleIconFileChange(e, false)}
+                  className="hidden"
                 />
-                <label className="cursor-pointer bg-primary text-primary-foreground px-3 py-1 rounded text-xs hover:bg-primary/90 transition-colors">
-                  ファイルを選択
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={e => handleIconFileChange(e, emotion, false)}
-                    className="hidden"
-                  />
-                </label>
-                {emotion !== 'normal' && (
-                  <button type="button" onClick={() => handleRemoveEmotion(emotion)} className="text-destructive">×</button>
-                )}
-              </div>
-            ))}
-            <div className="flex flex-wrap gap-2 mb-2">
-              {allEmotions.filter(e => !emotionList.includes(e)).map(emotion => (
-                <button key={emotion} type="button" onClick={() => handleAddEmotion(emotion)} className="px-2 py-1 bg-primary text-primary-foreground rounded text-xs">
-                  {emotion}を追加
-                </button>
-              ))}
+              </label>
             </div>
             <div className="flex justify-end space-x-2">
               <button
