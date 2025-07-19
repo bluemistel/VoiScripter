@@ -207,16 +207,22 @@ export default function Header({
               </button>
             </div>
             <div className="prose max-w-none text-foreground">
-              <h3>WebEdit - ブラウザベースの脚本作成アプリ</h3>
-              <p>WebEditは、ブラウザ上で脚本を作成・編集できるWebアプリケーションです。</p>
+              <h3>Voiscripter. - ブラウザベースの合成音声系台本作成アプリ</h3>
+              <p>Voiscripter.は、ブラウザ上で脚本を作成・編集できるWebアプリケーションです。<br />
+                合成音声系の台本作成に特化しています。<br />
+                ブロックベースの編集で、ドラッグ・ショートカット操作による並び替えも可能です。<br />
+                保存状態などは使用者のローカルストレージに保存されており、データの収集などがおこなわれることはありません。<br />
+                作業状態は自動で保存されており、ブラウザを閉じてもデータは残ります。ただし、ブラウザのデータ消去などでデータが消える可能性があります。<br />
+                適宜データのインポート・エクスポートを使用してデータを保存してください。</p>
               <h4>主な機能</h4>
               <ul>
                 <li>キャラクター管理（追加、編集、削除）</li>
-                <li>感情設定とアイコン表示</li>
+                <li>感情設定とアイコン表示(ローカルPC・WEBの画像を指定可能)</li>
                 <li>ブロックベースの編集</li>
                 <li>ドラッグ&ドロップによるブロック並び替え</li>
                 <li>CSVインポート/エクスポート</li>
                 <li>ダークモード対応</li>
+                <li>台詞の入れ替えをショートカットでできる</li>
               </ul>
               <h4>技術スタック</h4>
               <ul>
@@ -225,11 +231,6 @@ export default function Header({
                 <li>TailwindCSS v4</li>
                 <li>React DnD Kit</li>
               </ul>
-              <h4>開発環境のセットアップ</h4>
-              <pre><code>npm install
-npm run dev
-npm run build
-npm start</code></pre>
               <h4>デプロイ</h4>
               <p>このプロジェクトはVercelにデプロイされています。</p>
               <h4>ライセンス</h4>
@@ -241,12 +242,12 @@ npm start</code></pre>
                 <li><b>Ctrl+Alt+B</b>：新規ト書きブロックを作成</li>
                 <li><b>Alt+B</b>：選択中のブロックを削除</li>
                 <li><b>Ctrl+↑/Ctrl+↓</b>：ブロックの上下移動</li>
-                <li><b>↑/↓</b>：テキストエリアの最上段/最下段で前後のブロックに移動</li>
+                <li><b>↑/↓</b>：テキストエリアの最上段/最下段にいる場合は前後のブロックに移動</li>
                 <li><b>Alt+↑/Alt+↓</b>：キャラクター選択（ト書き以外）</li>
                 <li><b>Alt+→/Alt+←</b>：感情選択</li>
-                <li><b>Ctrl+Enter</b>：直後にキャラクター引き継ぎ新規ブロック</li>
-                <li><b>Ctrl+Z</b>：アンドゥ（元に戻す）</li>
-                <li><b>Ctrl+Y</b>：リドゥ（やり直し）</li>
+                <li><b>Ctrl+Enter</b>：キャラクター引き継ぎ新規ブロックを作成</li>
+                <li><b>Ctrl+Z</b>：元に戻す(アンドゥ)</li>
+                <li><b>Ctrl+Y</b>：やり直し(リドゥ)</li>
               </ul>
             </div>
           </div>
