@@ -1,6 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: 'export',
+  trailingSlash: true,
+  images: {
+    unoptimized: true
+  },
   // React DevToolsのメッセージを非表示にする
   webpack: (config, { dev, isServer }) => {
     if (!dev && !isServer) {
