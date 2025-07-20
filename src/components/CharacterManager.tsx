@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Character, Emotion } from '@/types';
-import { PlusIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, TrashIcon, PencilIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 
 const defaultEmotions: Emotion[] = ['normal'];
 
@@ -15,18 +15,27 @@ interface CharacterManagerProps {
   onAddCharacter: (character: Character) => void;
   onUpdateCharacter: (character: Character) => void;
   onDeleteCharacter: (id: string) => void;
+  groups: string[];
+  onAddGroup: (group: string) => void;
+  onDeleteGroup: (group: string) => void;
 }
 
 export default function CharacterManager({
   characters,
   onAddCharacter,
   onUpdateCharacter,
-  onDeleteCharacter
+  onDeleteCharacter,
+  groups,
+  onAddGroup,
+  onDeleteGroup
 }: CharacterManagerProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [isEditingId, setIsEditingId] = useState<string | null>(null);
+  const [isGroupSettingsOpen, setIsGroupSettingsOpen] = useState(false);
+  const [newGroup, setNewGroup] = useState('');
   const [newCharacter, setNewCharacter] = useState<Partial<Character>>({
     name: '',
+    group: 'なし',
     emotions: { ...emptyEmotions }
   });
 
@@ -64,9 +73,10 @@ export default function CharacterManager({
       onAddCharacter({
         id: Date.now().toString(),
         name: newCharacter.name,
+        group: newCharacter.group || 'なし',
         emotions: { normal: { iconUrl: newCharacter.emotions.normal.iconUrl } }
       } as Character);
-      setNewCharacter({ name: '', emotions: { ...emptyEmotions } });
+      setNewCharacter({ name: '', group: 'なし', emotions: { ...emptyEmotions } });
       setIsAdding(false);
     }
   };
@@ -77,6 +87,7 @@ export default function CharacterManager({
       onUpdateCharacter({
         id: editCharacter.id!,
         name: editCharacter.name,
+        group: editCharacter.group || 'なし',
         emotions: { normal: { iconUrl: editCharacter.emotions.normal.iconUrl } }
       } as Character);
       setIsEditingId(null);
@@ -101,6 +112,19 @@ export default function CharacterManager({
                   className="w-full p-2 border rounded bg-background text-foreground"
                   required
                 />
+                <select
+                  value={editCharacter?.group || 'なし'}
+                  onChange={e => setEditCharacter(prev => ({
+                    ...(prev ?? {}),
+                    group: e.target.value
+                  }))}
+                  className="w-full p-2 border rounded bg-background text-foreground"
+                >
+                  <option value="なし">なし</option>
+                  {groups.map(group => (
+                    <option key={group} value={group}>{group}</option>
+                  ))}
+                </select>
                 <div className="flex items-center space-x-2 mb-1">
                   <input
                     type="text"
@@ -148,7 +172,10 @@ export default function CharacterManager({
                     <div className="flex items-center space-x-1">
                       <img src={character.emotions.normal.iconUrl} alt={character.name} className="w-14 h-14 rounded-full border" />
                     </div>
-                    <h3 className="font-semibold text-foreground flex items-center justify-center">{character.name}</h3>
+                    <div>
+                      <h3 className="font-semibold text-foreground">{character.name}</h3>
+                      <p className="text-sm text-muted-foreground">グループ: {character.group || 'なし'}</p>
+                    </div>
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
@@ -178,6 +205,16 @@ export default function CharacterManager({
               className="w-full p-2 border rounded bg-background text-foreground"
               required
             />
+            <select
+              value={newCharacter.group || 'なし'}
+              onChange={e => setNewCharacter(prev => ({ ...prev, group: e.target.value }))}
+              className="w-full p-2 border rounded bg-background text-foreground"
+            >
+              <option value="なし">なし</option>
+              {groups.map(group => (
+                <option key={group} value={group}>{group}</option>
+              ))}
+            </select>
             <div className="flex items-center space-x-2 mb-1">
               <input
                 type="text"
@@ -219,14 +256,87 @@ export default function CharacterManager({
             </div>
           </form>
         ) : (
-          <button
-            onClick={() => setIsAdding(true)}
-            className="w-full flex items-center justify-center space-x-2 p-2 border rounded hover:bg-accent text-foreground"
-          >
-            <PlusIcon className="w-5 h-5" />
-            <span>キャラクターを追加</span>
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setIsGroupSettingsOpen(true)}
+              className="flex-1 flex items-center justify-center space-x-2 p-2 border rounded hover:bg-accent text-foreground"
+              style={{ flex: '0 0 33.333%' }}
+            >
+              <Cog6ToothIcon className="w-4 h-4" />
+              <span className="text-xs">グループ設定</span>
+            </button>
+            <button
+              onClick={() => setIsAdding(true)}
+              className="flex-1 flex items-center justify-center space-x-2 p-2 border rounded hover:bg-accent text-foreground"
+              style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-primary-foreground)' }}
+            >
+              <PlusIcon className="w-5 h-5" />
+              <span>キャラクターを追加</span>
+            </button>
+          </div>
         )}
-      </div>
+      
+      {/* グループ設定ダイアログ */}
+      {isGroupSettingsOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4">グループ設定</h3>
+            
+            {/* グループ追加 */}
+            <div className="mb-4">
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={newGroup}
+                  onChange={e => setNewGroup(e.target.value)}
+                  placeholder="新しいグループ名"
+                  className="flex-1 p-2 border rounded bg-background text-foreground"
+                />
+                <button
+                  onClick={() => {
+                    if (newGroup.trim() && !groups.includes(newGroup.trim())) {
+                      onAddGroup(newGroup.trim());
+                      setNewGroup('');
+                    }
+                  }}
+                  className="px-3 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                >
+                  追加
+                </button>
+              </div>
+            </div>
+            
+            {/* グループ一覧 */}
+            <div className="space-y-2">
+              <h4 className="font-medium text-foreground">既存のグループ</h4>
+              {groups.length === 0 ? (
+                <p className="text-muted-foreground text-sm">グループがありません</p>
+              ) : (
+                groups.map(group => (
+                  <div key={group} className="flex items-center justify-between p-2 border rounded bg-muted/30">
+                    <span className="text-foreground">{group}</span>
+                    <button
+                      onClick={() => onDeleteGroup(group)}
+                      className="p-1 text-destructive hover:bg-destructive/10 rounded"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setIsGroupSettingsOpen(false)}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

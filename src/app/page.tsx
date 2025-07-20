@@ -10,6 +10,8 @@ import { Script, Character, ScriptBlock, Emotion } from '@/types';
 export default function Home() {
   // グローバルキャラクター管理
   const [characters, setCharacters] = useState<Character[]>([]);
+  // グループ管理
+  const [groups, setGroups] = useState<string[]>([]);
   // プロジェクトID管理
   const [projectId, setProjectId] = useState<string>('default');
   const [projectList, setProjectList] = useState<string[]>([]);
@@ -70,7 +72,50 @@ export default function Home() {
       
       // characters
       const savedChars = await loadData('voiscripter_characters');
-      if (savedChars) setCharacters(JSON.parse(savedChars));
+      if (savedChars) {
+        const parsedChars = JSON.parse(savedChars);
+        // 既存のキャラクターにグループプロパティを追加
+        const charsWithGroups = parsedChars.map((char: any) => ({
+          ...char,
+          group: char.group || 'なし'
+        }));
+        setCharacters(charsWithGroups);
+      }
+      
+      // groups
+      const savedGroups = await loadData('voiscripter_groups');
+      if (savedGroups) {
+        try {
+          const parsedGroups = JSON.parse(savedGroups);
+          if (Array.isArray(parsedGroups)) {
+            setGroups(parsedGroups);
+          } else {
+            console.warn('Invalid groups data format:', parsedGroups);
+            setGroups([]);
+          }
+        } catch (error) {
+          console.error('Groups parse error:', error);
+          setGroups([]);
+        }
+      } else {
+        // グループデータがない場合、キャラクターからグループを抽出
+        const savedChars = await loadData('voiscripter_characters');
+        if (savedChars) {
+          try {
+            const parsedChars = JSON.parse(savedChars);
+            const extractedGroups = parsedChars
+              .map((char: any) => char.group || 'なし')
+              .filter((group: string) => group !== 'なし')
+              .filter((group: string, index: number, arr: string[]) => arr.indexOf(group) === index);
+            setGroups(extractedGroups);
+          } catch (error) {
+            console.error('Failed to extract groups from characters:', error);
+            setGroups([]);
+          }
+        } else {
+          setGroups([]);
+        }
+      }
       
       // projectId
       const lastProject = await loadData('voiscripter_lastProject');
@@ -83,11 +128,11 @@ export default function Home() {
       
       // projectList
       if (savedDirectory === '') {
-        const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory');
+        const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory' && k !== 'voiscripter_groups');
         setProjectList(keys.map(k => k.replace('voiscripter_', '')));
       } else if (window.electronAPI) {
         const keys = await window.electronAPI?.listDataKeys() || [];
-        const projectKeys = keys.filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory');
+        const projectKeys = keys.filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory' && k !== 'voiscripter_groups');
         setProjectList(projectKeys.map(k => k.replace('voiscripter_', '')));
       }
       
@@ -148,6 +193,14 @@ export default function Home() {
     saveData('voiscripter_characters', JSON.stringify(characters));
   }, [characters, saveDirectory]);
 
+  // groups保存
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (groups.length > 0 || localStorage.getItem('voiscripter_groups')) {
+      saveData('voiscripter_groups', JSON.stringify(groups));
+    }
+  }, [groups, saveDirectory]);
+
   // プロジェクト切替時の復元
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -167,11 +220,11 @@ export default function Home() {
       
       // プロジェクトリストの更新
       if (saveDirectory === '') {
-        const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory');
+        const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory' && k !== 'voiscripter_groups');
         setProjectList(keys.map(k => k.replace('voiscripter_', '')));
       } else if (window.electronAPI) {
         const keys = await window.electronAPI?.listDataKeys() || [];
-        const projectKeys = keys.filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory');
+        const projectKeys = keys.filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory' && k !== 'voiscripter_groups');
         setProjectList(projectKeys.map(k => k.replace('voiscripter_', '')));
       }
     };
@@ -373,6 +426,20 @@ export default function Home() {
     }));
   };
 
+  // グループ追加
+  const handleAddGroup = (group: string) => {
+    setGroups(prev => [...prev, group]);
+  };
+
+  // グループ削除
+  const handleDeleteGroup = (group: string) => {
+    setGroups(prev => prev.filter(g => g !== group));
+    // 削除されたグループのキャラクターを「なし」に変更
+    setCharacters(prev => prev.map(char => 
+      char.group === group ? { ...char, group: 'なし' } : char
+    ));
+  };
+
   // ブロック編集
   const handleUpdateBlock = (blockId: string, updates: Partial<ScriptBlock>) => {
     setScript(prev => ({
@@ -428,18 +495,15 @@ export default function Home() {
 
   // CSVエクスポート（話者,セリフ）
   const handleExportCSV = () => {
-    const rows = [
-      ['話者', 'セリフ'],
-      ...script.blocks
-        .filter(block => block.characterId) // ト書きは除外
-        .map(block => {
-          const char = characters.find(c => c.id === block.characterId);
-          return [
-            char ? char.name : '',
-            block.text
-          ];
-        })
-    ];
+    const rows = script.blocks
+      .filter(block => block.characterId) // ト書きは除外
+      .map(block => {
+        const char = characters.find(c => c.id === block.characterId);
+        return [
+          char ? char.name : '',
+          block.text
+        ];
+      });
     
     // CSVエンコード関数
     const encodeCSV = (rows: string[][]) => {
@@ -466,12 +530,9 @@ export default function Home() {
 
   // セリフだけエクスポート
   const handleExportSerifOnly = () => {
-    const rows = [
-      ['セリフ'],
-      ...script.blocks
-        .filter(block => block.characterId) // ト書きは除外
-        .map(block => [block.text])
-    ];
+    const rows = script.blocks
+      .filter(block => block.characterId) // ト書きは除外
+      .map(block => [block.text]);
     
     // CSVエンコード関数
     const encodeCSV = (rows: string[][]) => {
@@ -494,6 +555,67 @@ export default function Home() {
     a.download = `${script.title || 'serif'}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  // グループ別エクスポート
+  const handleExportByGroups = (selectedGroups: string[], exportType: 'full' | 'serif-only') => {
+    selectedGroups.forEach(group => {
+      // グループに属するキャラクターのIDを取得
+      const groupCharacterIds = characters
+        .filter(char => char.group === group)
+        .map(char => char.id);
+
+      // グループに属するキャラクターのブロックのみをフィルタリング
+      const groupBlocks = script.blocks.filter(block => 
+        block.characterId && groupCharacterIds.includes(block.characterId)
+      );
+
+      if (groupBlocks.length === 0) {
+        console.log(`グループ「${group}」にはセリフがありません`);
+        return;
+      }
+
+      let rows: string[][];
+      let filename: string;
+
+      if (exportType === 'full') {
+        // 話者,セリフ形式
+        rows = groupBlocks.map(block => {
+          const char = characters.find(c => c.id === block.characterId);
+          return [
+            char ? char.name : '',
+            block.text
+          ];
+        });
+        filename = `${script.title || 'script'}_${group}.csv`;
+      } else {
+        // セリフだけ
+        rows = groupBlocks.map(block => [block.text]);
+        filename = `${script.title || 'serif'}_${group}.csv`;
+      }
+
+      // CSVエンコード関数
+      const encodeCSV = (rows: string[][]) => {
+        return rows.map(row => 
+          row.map(cell => {
+            // セルにカンマ、改行、ダブルクォートが含まれる場合はダブルクォートで囲む
+            if (cell.includes(',') || cell.includes('\n') || cell.includes('"')) {
+              return `"${cell.replace(/"/g, '""')}"`;
+            }
+            return cell;
+          }).join(',')
+        ).join('\r\n');
+      };
+
+      const csv = encodeCSV(rows);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
   };
 
   // キャラクター設定のCSVエクスポート
@@ -668,6 +790,7 @@ export default function Home() {
           return {
             id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
             name: name,
+            group: 'なし',
             emotions
           };
         });
@@ -708,11 +831,15 @@ export default function Home() {
           onExportCSV={handleExportCSV}
           onExportSerifOnly={handleExportSerifOnly}
           onExportCharacterCSV={handleExportCharacterCSV}
+          onExportByGroups={handleExportByGroups}
           onImportCSV={handleImportCSV}
           onImportCharacterCSV={handleImportCharacterCSV}
           isDarkMode={isDarkMode}
           saveDirectory={saveDirectory}
           onSaveDirectoryChange={handleSaveDirectoryChange}
+          groups={groups}
+          onAddGroup={handleAddGroup}
+          onDeleteGroup={handleDeleteGroup}
         />
         <main className="p-4">
           <div className="max-w-6xl mx-auto">

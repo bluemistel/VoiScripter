@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { SunIcon, MoonIcon, UsersIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 import CharacterManager from './CharacterManager';
 import Settings from './Settings';
+import CSVExportDialog from './CSVExportDialog';
 import { Character } from '@/types';
 
 interface HeaderProps {
@@ -15,11 +16,15 @@ interface HeaderProps {
   onExportCSV: () => void;
   onExportSerifOnly: () => void;
   onExportCharacterCSV: () => void;
+  onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only') => void;
   onImportCSV: (file: File) => void;
   onImportCharacterCSV: (file: File) => void;
   isDarkMode: boolean;
   saveDirectory: string;
   onSaveDirectoryChange: (directory: string) => void;
+  groups: string[];
+  onAddGroup: (group: string) => void;
+  onDeleteGroup: (group: string) => void;
 }
 
 export default function Header({
@@ -31,26 +36,26 @@ export default function Header({
   onExportCSV,
   onExportSerifOnly,
   onExportCharacterCSV,
+  onExportByGroups,
   onImportCSV,
   onImportCharacterCSV,
   isDarkMode,
   saveDirectory,
-  onSaveDirectoryChange
+  onSaveDirectoryChange,
+  groups,
+  onAddGroup,
+  onDeleteGroup
 }: HeaderProps) {
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
-  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isCSVExportDialogOpen, setIsCSVExportDialogOpen] = useState(false);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
-  const exportMenuRef = useRef<HTMLDivElement>(null);
   const importMenuRef = useRef<HTMLDivElement>(null);
 
   // メニュー外クリックでメニューを閉じる
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
-        setIsExportMenuOpen(false);
-      }
       if (importMenuRef.current && !importMenuRef.current.contains(event.target as Node)) {
         setIsImportMenuOpen(false);
       }
@@ -87,37 +92,13 @@ export default function Header({
           VoiScripter.
         </h1>
         <div className="flex items-center space-x-2">
-          <div className="relative" ref={exportMenuRef}>
-            <button
-              onClick={() => setIsExportMenuOpen(v => !v)}
-              className="p-2 text-primary hover:bg-accent rounded-lg transition"
-              title="エクスポート"
-            >
-              <ArrowUpTrayIcon className="w-7 h-7"/>
-            </button>
-            {isExportMenuOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-popover border rounded-lg shadow-lg z-10">
-                <button
-                  onClick={() => { onExportCSV(); setIsExportMenuOpen(false); }}
-                  className="block w-full text-left px-4 py-2 hover:bg-accent text-popover-foreground"
-                >
-                  CSVエクスポート（話者,セリフ）
-                </button>
-                <button
-                  onClick={() => { onExportSerifOnly(); setIsExportMenuOpen(false); }}
-                  className="block w-full text-left px-4 py-2 hover:bg-accent text-popover-foreground"
-                >
-                  セリフだけエクスポート
-                </button>
-                <button
-                  onClick={() => { onExportCharacterCSV(); setIsExportMenuOpen(false); }}
-                  className="block w-full text-left px-4 py-2 hover:bg-accent text-popover-foreground"
-                >
-                  キャラクター設定エクスポート
-                </button>
-              </div>
-            )}
-          </div>
+          <button
+            onClick={() => setIsCSVExportDialogOpen(true)}
+            className="p-2 text-primary hover:bg-accent rounded-lg transition"
+            title="CSVエクスポート"
+          >
+            <ArrowUpTrayIcon className="w-7 h-7"/>
+          </button>
           <div className="relative" ref={importMenuRef}>
             <button
               onClick={() => setIsImportMenuOpen(v => !v)}
@@ -194,6 +175,9 @@ export default function Header({
               onAddCharacter={onAddCharacter}
               onUpdateCharacter={onUpdateCharacter}
               onDeleteCharacter={onDeleteCharacter}
+              groups={groups}
+              onAddGroup={onAddGroup}
+              onDeleteGroup={onDeleteGroup}
             />
           </div>
         </div>
@@ -206,6 +190,15 @@ export default function Header({
           onSaveDirectoryChange={onSaveDirectoryChange}
         />
       )}
+      <CSVExportDialog
+        isOpen={isCSVExportDialogOpen}
+        onClose={() => setIsCSVExportDialogOpen(false)}
+        characters={characters}
+        groups={groups}
+        onExportCSV={onExportCSV}
+        onExportSerifOnly={onExportSerifOnly}
+        onExportByGroups={onExportByGroups}
+      />
     </header>
   );
 }

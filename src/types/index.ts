@@ -4,6 +4,7 @@ export type Emotion = 'normal';
 export interface Character {
   id: string;
   name: string;
+  group: string; // グループ設定を追加
   emotions: {
     [key in Emotion]: {
       iconUrl: string;
