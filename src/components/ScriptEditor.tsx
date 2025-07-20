@@ -94,23 +94,23 @@ function SortableBlock({
       <div className="flex-1">
         {isTogaki ? (
           <div className="flex items-center space-x-2">
+            <textarea
+              ref={textareaRef}
+              value={block.text}
+              onChange={e => onUpdate({ text: e.target.value })}
+              placeholder="ト書きを入力"
+              className="w-full p-2 border rounded min-h-[40px] bg-muted text-foreground focus:ring-1 focus:ring-ring text-sm italic focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400"
+            />
             <select
               value={block.characterId}
               onChange={e => onUpdate({ characterId: e.target.value })}
-              className="p-1 border rounded bg-background text-foreground text-xs"
+              className="ml-1 p-2 pl-3 mr-2 border rounded bg-background text-foreground text-xs w-36"
             >
               <option value="">ト書きを入力</option>
               {characters.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-            <textarea
-              ref={textareaRef}
-              value={block.text}
-              onChange={e => onUpdate({ text: e.target.value })}
-              placeholder="ト書きを入力"
-              className="w-full p-2 border rounded min-h-[40px] bg-muted text-foreground focus:ring-2 focus:ring-ring text-sm italic"
-            />
           </div>
         ) : (
           <div className="flex items-start space-x-2">
@@ -118,7 +118,7 @@ function SortableBlock({
               <img
                 src={character.emotions[block.emotion]?.iconUrl}
                 alt={character.name}
-                className="w-14 h-14 rounded-full object-cover mt-2"
+                className="w-16 h-16 rounded-full object-cover mt-0 mr-2"
               />
             )}
             <div className="relative flex-1">
@@ -127,63 +127,54 @@ function SortableBlock({
                 value={block.text}
                 onChange={e => onUpdate({ text: e.target.value })}
                 placeholder="セリフを入力"
-                className="rounded-2xl border p-2 bg-card shadow-md min-h-[60px] text-sm w-full text-foreground"
+                className="rounded-2xl border p-2 bg-card shadow-md min-h-[60px] text-sm w-full text-foreground focus:ring-1 focus:ring-ring focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400"
                 style={{ borderRadius: '20px 20px 20px 0' }}
               />
               {/* フキダシの三角形 */}
-              <div className="absolute left-[-10px] top-4 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-400"></div>
+              <div className="absolute left-[-10px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-400 focus:ring-2 focus:ring-ring focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400"></div>
             </div>
-            <div className="flex flex-col space-y-1 ml-2 mt-2">
+            <div className="flex flex-col space-y-1 mr-2 mt-3">
               <select
                 value={block.characterId}
                 onChange={e => onUpdate({ characterId: e.target.value })}
-                className="p-1 border rounded bg-background text-foreground focus:ring-2 focus:ring-ring text-xs"
+                className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-36"
               >
                 <option value="">ト書きを入力</option>
                 {characters.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
-              {character && (
-                <select
-                  value={block.emotion}
-                  onChange={e => onUpdate({ emotion: e.target.value as Emotion })}
-                  className="p-1 border rounded bg-background text-foreground focus:ring-2 focus:ring-ring text-xs"
-                >
-                  {Object.keys(character.emotions).map(emotion => (
-                    <option key={emotion} value={emotion}>
-                      {emotion}
-                    </option>
-                  ))}
-                </select>
-              )}
             </div>
           </div>
         )}
-        <div className="flex justify-end space-x-0.5 mt-1">
+        <div className="flex justify-end space-x-1.5 mt-1 mr-1.5">
           <button
             onClick={onMoveUp}
             className="p-1 rounded hover:bg-accent"
+            title="Ctrl+↑:ブロックを上に移動"
           >
-            <ArrowUpIcon className="w-4 h-4 text-foreground" />
+            <ArrowUpIcon className="w-6 h-6 text-foreground" />
           </button>
           <button
             onClick={onMoveDown}
             className="p-1 rounded hover:bg-accent"
+            title="Ctrl+↓:ブロックを下に移動"
           >
-            <ArrowDownIcon className="w-4 h-4 text-foreground" />
+            <ArrowDownIcon className="w-6 h-6 text-foreground" />
           </button>
           <button
             onClick={onDuplicate}
             className="p-1 rounded hover:bg-accent"
+            title="Ctrl+B:ブロックを複製"
           >
-            <DocumentDuplicateIcon className="w-4 h-4 text-foreground" />
+            <DocumentDuplicateIcon className="w-6 h-6 text-foreground" />
           </button>
           <button
             onClick={onDelete}
             className="p-1 text-destructive hover:bg-destructive/10 rounded"
+            title="Alt+B:ブロックを削除"
           >
-            <TrashIcon className="w-4 h-4" />
+            <TrashIcon className="w-6 h-6" />
           </button>
         </div>
       </div>
@@ -372,40 +363,7 @@ export default function ScriptEditor({
           }
         }
       }
-      // Alt+→: 次の感情を選択
-      else if (!e.ctrlKey && e.shiftKey && e.key === 'ArrowRight') {
-        if (activeIdx >= 0) {
-          const block = script.blocks[activeIdx];
-          if (block.characterId) {
-            const character = script.characters.find(c => c.id === block.characterId);
-            if (character) {
-              const emotions = Object.keys(character.emotions);
-              const idx = emotions.indexOf(block.emotion);
-              if (idx >= 0 && idx < emotions.length - 1) {
-                e.preventDefault();
-                onUpdateBlock(block.id, { emotion: emotions[idx + 1] as Emotion });
-              }
-            }
-          }
-        }
-      }
-      // Alt+←: 前の感情を選択
-      else if (!e.ctrlKey && e.shiftKey && e.key === 'ArrowLeft') {
-        if (activeIdx >= 0) {
-          const block = script.blocks[activeIdx];
-          if (block.characterId) {
-            const character = script.characters.find(c => c.id === block.characterId);
-            if (character) {
-              const emotions = Object.keys(character.emotions);
-              const idx = emotions.indexOf(block.emotion);
-              if (idx > 0) {
-                e.preventDefault();
-                onUpdateBlock(block.id, { emotion: emotions[idx - 1] as Emotion });
-              }
-            }
-          }
-        }
-      }
+
       // ↑: 上のブロック（テキストエリアの最上段のみ）
       else if (!e.ctrlKey && e.key === 'ArrowUp') {
         if (activeIdx > 0) {
@@ -581,6 +539,7 @@ export default function ScriptEditor({
               ? 'bottom-6' 
               : 'bottom-6'
         }`}
+        title="Ctrl+B:新規ブロックを追加"
       >
         ＋ブロックを追加
       </button>
