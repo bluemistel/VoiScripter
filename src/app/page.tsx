@@ -25,11 +25,6 @@ export default function Home() {
   // プロジェクトダイアログ
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
 
-  // データ保存先設定
-  const [saveDirectory, setSaveDirectory] = useState<string>('');
-  // プロジェクトダイアログ
-  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
-
   // データ保存関数
   const saveData = (key: string, data: string) => {
     if (saveDirectory === '') {
@@ -326,29 +321,6 @@ export default function Home() {
     setIsDarkMode(isDark);
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
     document.documentElement.classList.toggle('dark', isDark);
-  };
-
-  // データ保存関数
-  const saveData = (key: string, data: string) => {
-    if (saveDirectory === '') {
-      // localStorageに保存
-      localStorage.setItem(key, data);
-    } else if (window.electronAPI) {
-      // ファイルに保存
-      window.electronAPI?.saveData(key, data);
-    }
-  };
-
-  // データ読み込み関数
-  const loadData = async (key: string): Promise<string | null> => {
-    if (saveDirectory === '') {
-      // localStorageから読み込み
-      return localStorage.getItem(key);
-    } else if (window.electronAPI) {
-      // ファイルから読み込み
-      return await window.electronAPI?.loadData(key) || null;
-    }
-    return null;
   };
 
   // データ保存先変更
@@ -709,38 +681,7 @@ export default function Home() {
     }
   };
 
-  const handleSaveDirectoryChange = async (directory: string) => {
-    const previousDirectory = saveDirectory;
-    setSaveDirectory(directory);
 
-    // 設定を保存
-    if (window.electronAPI) {
-      await window.electronAPI.saveData('voiscripter_saveDirectory', directory);
-    } else {
-      localStorage.setItem('voiscripter_saveDirectory', directory);
-    }
-
-    // データ移動
-    if (directory !== '' && previousDirectory === '') {
-      // localStorage→ファイル
-      if (window.electronAPI) {
-        const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_'));
-        for (const key of keys) {
-          const data = localStorage.getItem(key);
-          if (data) await window.electronAPI.saveData(key, data);
-        }
-      }
-    } else if (directory === '' && previousDirectory !== '') {
-      // ファイル→localStorage
-      if (window.electronAPI) {
-        const keys = await window.electronAPI.listDataKeys() || [];
-        for (const key of keys) {
-          const data = await window.electronAPI.loadData(key);
-          if (data) localStorage.setItem(key, data);
-        }
-      }
-    }
-  };
 
   return (
     <div id="root">
