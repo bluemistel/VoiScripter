@@ -34,10 +34,10 @@ export default function RootLayout({
 
       // クリーンアップ
       return () => {
-        window.electronAPI.removeAllListeners('new-project');
-        window.electronAPI.removeAllListeners('open-project');
-        window.electronAPI.removeAllListeners('save-project');
-        window.electronAPI.removeAllListeners('show-about');
+        window.electronAPI?.removeAllListeners('new-project');
+        window.electronAPI?.removeAllListeners('open-project');
+        window.electronAPI?.removeAllListeners('save-project');
+        window.electronAPI?.removeAllListeners('show-about');
       };
     }
   }, []);

@@ -1,5 +1,6 @@
-const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -10,7 +11,7 @@ app.disableHardwareAcceleration();
 
 // 開発サーバーのポートを検出する関数
 async function findDevServerPort() {
-  const ports = [3000, 3001, 3002, 3003, 3004, 3005];
+  const ports = [3000,3001];
   
   for (const port of ports) {
     try {
@@ -213,4 +214,116 @@ ipcMain.handle('get-app-version', () => {
 
 ipcMain.handle('get-app-name', () => {
   return app.getName();
+});
+
+// ファイルシステム操作
+ipcMain.handle('selectDirectory', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'データ保存先ディレクトリを選択'
+  });
+  
+  if (!result.canceled && result.filePaths.length > 0) {
+    return result.filePaths[0];
+  }
+  return null;
+});
+
+ipcMain.handle('saveData', async (event, key, data) => {
+  try {
+    // 保存先ディレクトリを取得（設定から）
+    const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+    let saveDirectory = '';
+    
+    if (fs.existsSync(settingsPath)) {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      saveDirectory = settings.saveDirectory || '';
+    }
+    
+    if (!saveDirectory) {
+      throw new Error('保存先ディレクトリが設定されていません');
+    }
+    
+    const filePath = path.join(saveDirectory, `${key}.json`);
+    fs.writeFileSync(filePath, data, 'utf8');
+  } catch (error) {
+    console.error('データ保存エラー:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('loadData', async (event, key) => {
+  try {
+    // 保存先ディレクトリを取得（設定から）
+    const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+    let saveDirectory = '';
+    
+    if (fs.existsSync(settingsPath)) {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      saveDirectory = settings.saveDirectory || '';
+    }
+    
+    if (!saveDirectory) {
+      return null;
+    }
+    
+    const filePath = path.join(saveDirectory, `${key}.json`);
+    if (fs.existsSync(filePath)) {
+      return fs.readFileSync(filePath, 'utf8');
+    }
+    return null;
+  } catch (error) {
+    console.error('データ読み込みエラー:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('listDataKeys', async () => {
+  try {
+    // 保存先ディレクトリを取得（設定から）
+    const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+    let saveDirectory = '';
+    
+    if (fs.existsSync(settingsPath)) {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      saveDirectory = settings.saveDirectory || '';
+    }
+    
+    if (!saveDirectory) {
+      return [];
+    }
+    
+    const files = fs.readdirSync(saveDirectory);
+    return files
+      .filter(file => file.endsWith('.json'))
+      .map(file => file.replace('.json', ''));
+  } catch (error) {
+    console.error('データキー一覧取得エラー:', error);
+    return [];
+  }
+});
+
+// 設定保存
+ipcMain.handle('saveSettings', async (event, settings) => {
+  try {
+    const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+    fs.writeFileSync(settingsPath, JSON.stringify(settings), 'utf8');
+  } catch (error) {
+    console.error('設定保存エラー:', error);
+    throw error;
+  }
+});
+
+// 設定読み込み
+ipcMain.handle('loadSettings', async () => {
+  try {
+    const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+    if (fs.existsSync(settingsPath)) {
+      return JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    }
+    return { saveDirectory: '' };
+  } catch (error) {
+    console.error('設定読み込みエラー:', error);
+    return { saveDirectory: '' };
+  }
 }); 

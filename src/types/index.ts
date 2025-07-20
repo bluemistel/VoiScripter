@@ -5,7 +5,7 @@ export interface Character {
   id: string;
   name: string;
   emotions: {
-    normal: {
+    [key in Emotion]: {
       iconUrl: string;
     };
   };
@@ -21,6 +21,39 @@ export interface ScriptBlock {
 export interface Script {
   id: string;
   title: string;
-  characters: Character[];
   blocks: ScriptBlock[];
+  characters: Character[];
+}
+
+// Electron API型定義
+declare global {
+  interface Window {
+    electronAPI?: {
+      // アプリケーション情報の取得
+      getAppVersion: () => Promise<string>;
+      getAppName: () => Promise<string>;
+      
+      // ファイルシステム操作
+      selectDirectory: () => Promise<string | null>;
+      saveData: (key: string, data: string) => Promise<void>;
+      loadData: (key: string) => Promise<string | null>;
+      listDataKeys: () => Promise<string[]>;
+      
+      // 設定操作
+      saveSettings: (settings: any) => Promise<void>;
+      loadSettings: () => Promise<{ saveDirectory: string }>;
+      
+      // デフォルトプロジェクト初期化
+      initializeDefaultProject: () => Promise<void>;
+      
+      // メニューイベントの受信
+      onNewProject: (callback: () => void) => void;
+      onOpenProject: (callback: () => void) => void;
+      onSaveProject: (callback: () => void) => void;
+      onShowAbout: (callback: () => void) => void;
+      
+      // イベントリスナーの削除
+      removeAllListeners: (channel: string) => void;
+    };
+  }
 } 

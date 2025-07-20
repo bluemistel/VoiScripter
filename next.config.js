@@ -6,6 +6,10 @@ const nextConfig = {
   images: {
     unoptimized: true
   },
+  // 開発サーバーの設定
+  async rewrites() {
+    return [];
+  },
   // React DevToolsのメッセージを非表示にする
   webpack: (config, { dev, isServer }) => {
     if (!dev && !isServer) {
