@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { SunIcon, MoonIcon, UsersIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline';
+import { SunIcon, MoonIcon, UsersIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 import CharacterManager from './CharacterManager';
+import Settings from './Settings';
 import { Character } from '@/types';
 
 interface HeaderProps {
@@ -17,6 +18,8 @@ interface HeaderProps {
   onImportCSV: (file: File) => void;
   onImportCharacterCSV: (file: File) => void;
   isDarkMode: boolean;
+  onSaveDirectoryChange: (directory: string) => void;
+  currentSaveDirectory: string;
 }
 
 export default function Header({
@@ -30,12 +33,14 @@ export default function Header({
   onExportCharacterCSV,
   onImportCSV,
   onImportCharacterCSV,
-  isDarkMode
+  isDarkMode,
+  onSaveDirectoryChange,
+  currentSaveDirectory
 }: HeaderProps) {
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
-  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const importMenuRef = useRef<HTMLDivElement>(null);
@@ -163,11 +168,11 @@ export default function Header({
             )}
           </button>
           <button
-            onClick={() => setIsHelpOpen(true)}
+            onClick={() => setIsSettingsOpen(true)}
             className="p-2 text-primary hover:bg-accent rounded-lg transition"
-            title="ヘルプ"
+            title="設定"
           >
-            <QuestionMarkCircleIcon className="w-7 h-7" />
+            <Cog6ToothIcon className="w-7 h-7" />
           </button>
         </div>
       </div>
@@ -193,66 +198,12 @@ export default function Header({
           </div>
         </div>
       )}
-      {isHelpOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-card border rounded-lg p-6 w-full max-w-2xl mx-4 shadow-xl overflow-y-auto max-h-[90vh]">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-card-foreground">ヘルプ</h2>
-              <button
-                onClick={() => setIsHelpOpen(false)}
-                className="text-muted-foreground hover:text-foreground text-2xl"
-                title="閉じる"
-              >
-                ×
-              </button>
-            </div>
-            <div className="prose max-w-none text-foreground">
-              <h3>Voiscripter. - ブラウザベースの合成音声系台本作成アプリ</h3>
-              <p>Voiscripter.は、ブラウザ上で脚本を作成・編集できるWebアプリケーションです。<br />
-                合成音声系の台本作成に特化しています。<br />
-                ブロックベースの編集で、ドラッグ・ショートカット操作による並び替えも可能です。<br />
-                保存状態などは使用者のローカルストレージに保存されており、データの収集などがおこなわれることはありません。<br />
-                作業状態は自動で保存されており、ブラウザを閉じてもデータは残ります。ただし、ブラウザのデータ消去などでデータが消える可能性があります。<br />
-                適宜データのインポート・エクスポートを使用してデータを保存してください。</p>
-              <h4>主な機能</h4>
-              <ul>
-                <li>キャラクター管理（追加、編集、削除）</li>
-                <li>感情設定とアイコン表示(ローカルPC・WEBの画像を指定可能)</li>
-                <li>ブロックベースの編集</li>
-                <li>ドラッグ&ドロップによるブロック並び替え</li>
-                <li>CSVインポート/エクスポート</li>
-                <li>ダークモード対応</li>
-                <li>台詞の入れ替えをショートカットでできる</li>
-              </ul>
-              <h4>技術スタック</h4>
-              <ul>
-                <li>Next.js 14</li>
-                <li>TypeScript</li>
-                <li>TailwindCSS v4</li>
-                <li>React DnD Kit</li>
-              </ul>
-              <h4>デプロイ</h4>
-              <p>このプロジェクトはVercelにデプロイされています。</p>
-              <h4>ライセンス</h4>
-              <p>MIT License</p>
-              <hr />
-              <h3>ショートカット一覧</h3>
-              <ul>
-                <li><b>Ctrl+B</b>：新規セリフブロックを作成</li>
-                <li><b>Ctrl+Alt+B</b>：新規ト書きブロックを作成</li>
-                <li><b>Alt+B</b>：選択中のブロックを削除</li>
-                <li><b>Ctrl+↑/Ctrl+↓</b>：ブロックの上下移動</li>
-                <li><b>↑/↓</b>：テキストエリアの最上段/最下段にいる場合は前後のブロックに移動</li>
-                <li><b>Alt+↑/Alt+↓</b>：キャラクター選択（ト書き以外）</li>
-                <li><b>Alt+→/Alt+←</b>：感情選択</li>
-                <li><b>Ctrl+Enter</b>：キャラクター引き継ぎ新規ブロックを作成</li>
-                <li><b>Ctrl+Z</b>：元に戻す(アンドゥ)</li>
-                <li><b>Ctrl+Y</b>：やり直し(リドゥ)</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
+      <Settings
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onSaveDirectoryChange={onSaveDirectoryChange}
+        currentSaveDirectory={currentSaveDirectory}
+      />
     </header>
   );
 }
