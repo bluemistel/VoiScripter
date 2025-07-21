@@ -21,7 +21,7 @@ export default function Settings({
 
   const handleDirectorySelect = async () => {
     if (typeof window === 'undefined' || !window.electronAPI) {
-      alert('この機能はElectron環境でのみ利用できます');
+      alert('この機能はデスクトップアプリ版でのみ利用できます(開発中)');
       return;
     }
 

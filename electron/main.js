@@ -9,6 +9,9 @@ let mainWindow;
 // GPUハードウェアアクセラレーションを無効化してキャッシュエラーを回避
 app.disableHardwareAcceleration();
 
+// ffmpegを有効化
+app.commandLine.appendSwitch('enable-features', 'PlatformHEVCDecoderSupport');
+
 // 開発サーバーのポートを検出する関数
 async function findDevServerPort() {
   const ports = [3000,3001];
@@ -48,9 +51,9 @@ function createWindow() {
       contextIsolation: true,
       enableRemoteModule: false,
       preload: path.join(__dirname, 'preload.js'),
-      // キャッシュエラーを回避するための設定
-      webSecurity: true,
-      allowRunningInsecureContent: false
+      // ローカルファイルの読み込みを許可するための設定
+      webSecurity: false,
+      allowRunningInsecureContent: true
     },
     icon: path.join(__dirname, '../public/icon.png'),
     show: false,
@@ -65,9 +68,24 @@ function createWindow() {
       console.log(`Loading app from: ${startUrl}`);
       mainWindow.loadURL(startUrl);
     } else {
-      const startUrl = `file://${path.join(__dirname, '../out/index.html')}`;
-      console.log(`Loading app from: ${startUrl}`);
-      mainWindow.loadURL(startUrl);
+      // 本番環境では、app.asar内のoutディレクトリを参照
+      const indexPath = path.join(__dirname, '../out/index.html');
+      console.log(`Loading app from: ${indexPath}`);
+      
+      // ファイルの存在確認
+      if (fs.existsSync(indexPath)) {
+        // file://プロトコルを使用して相対パスでの読み込みを確実にする
+        const fileUrl = `file://${indexPath}`;
+        console.log(`Loading file URL: ${fileUrl}`);
+        mainWindow.loadURL(fileUrl);
+      } else {
+        console.error(`Index file not found: ${indexPath}`);
+        // フォールバック: 開発サーバーに接続
+        const port = await findDevServerPort();
+        const startUrl = `http://localhost:${port}`;
+        console.log(`Falling back to dev server: ${startUrl}`);
+        mainWindow.loadURL(startUrl);
+      }
     }
   };
 
