@@ -46,7 +46,7 @@ export default function Settings({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-background border rounded-lg shadow-lg w-full max-w-2xl mx-4 h-[600px] overflow-hidden">
+      <div className="bg-background border rounded-lg shadow-lg w-full max-w-2xl mx-4 h-[750px] overflow-hidden">
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-lg font-semibold text-foreground">設定</h2>
           <button
@@ -59,7 +59,7 @@ export default function Settings({
         
         <div className="flex">
           {/* サイドバー */}
-          <div className="w-48 border-r bg-muted/30 h-[600px]">
+          <div className="w-48 border-r bg-muted/30 h-[750px]">
             <button
               onClick={() => setActiveTab('settings')}
               className={`w-full p-3 text-left flex items-center space-x-2 transition-colors ${
@@ -140,41 +140,45 @@ export default function Settings({
             )}
             
             {activeTab === 'help' && (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-medium text-foreground mb-4">VoiScripter ヘルプ</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="font-medium text-foreground mb-2">基本的な使い方</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1 ml-4">
-                        <li>• キャラクターを追加して、アイコンを設定してください</li>
-                        <li>• 「＋ブロックを追加」ボタンでセリフを追加できます</li>
-                        <li>• キャラクターを選択してセリフを入力してください</li>
-                        <li>• ドラッグ&ドロップでブロックの順序を変更できます</li>
-                      </ul>
-                    </div>
-                    
-                    <div>
-                      <h4 className="font-medium text-foreground mb-2">キーボードショートカット</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1 ml-4">
-                        <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+B</kbd> 新規ブロック追加</li>
-                        <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+Alt+B</kbd> ト書き追加</li>
-                        <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Alt+B</kbd> ブロック削除</li>
-                        <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+Z</kbd> 元に戻す</li>
-                        <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+Y</kbd> やり直し</li>
-                        <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+↑/↓</kbd> ブロック移動</li>
-                        <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Alt+↑/↓</kbd> キャラクター選択</li>
-                      </ul>
-                    </div>
-                    
-                    <div>
-                      <h4 className="font-medium text-foreground mb-2">プロジェクト管理</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1 ml-4">
-                        <li>• 複数のプロジェクトを作成・管理できます</li>
-                        <li>• プロジェクトは自動的に保存されます</li>
-                        <li>• 設定でデータの保存先を変更できます</li>
-                      </ul>
-                    </div>
+              <div className="flex flex-col max-h-[60vh] overflow-y-auto pr-2">
+                <h4 className="font-medium text-foreground mb-2">VoiScripter ヘルプ</h4>
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">基本的な使い方</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• 右上のキャラクターのアイコンから話者を追加してください。</li>
+                      <li>• Alt+↑ ↓、またはキャラクターを変更してセリフを入力してください。</li>
+                      <li>• Ctrl+Enter、または「＋ブロックを追加」ボタンでセリフを追加できます。</li>
+                      <li>• Ctrl+↑ ↓、またはドラッグ&ドロップでブロックの順序を変更できます。</li>
+                      <li>• 右上のエクスポートからCSVのテキストファイルとして出力できます。</li>
+                      <li>• エクスポートしたファイルは、VoiScripterでも読み込むことができます。</li>
+                      <li>• 作業状態は随時保存されており、閉じても前回の状態から再開できます。</li>
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">キーボードショートカット</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                    <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+Z</kbd> 元に戻す</li>
+                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+Y</kbd> やり直し</li>
+                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+Enter</kbd> 直下に新規ブロック追加</li>
+                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+B</kbd> 最下段に新規ブロック追加</li>
+                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+Alt+B</kbd> ト書きブロックを追加</li>
+                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Alt+B</kbd>選択ブロック削除</li>
+                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+↑/↓</kbd> ブロック移動</li>
+                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Alt+↑/↓</kbd> キャラクターを選択</li>
+                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+,</kbd> 最下段へ移動する</li>
+                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+Alt+,</kbd> 最上段へ移動する</li>
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">プロジェクト管理</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• 複数のプロジェクトを作成・管理できます。</li>
+                      <li>• プロジェクトは自動的に保存されます。</li>
+                      <li>• 設定でデータの保存先を変更できます。</li>
+                    </ul>
                   </div>
                 </div>
               </div>

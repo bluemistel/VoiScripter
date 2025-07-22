@@ -568,15 +568,15 @@ export default function ScriptEditor({
           }, 10); // タイミングを調整
         }
       }
-      // Shift+Alt+↑ : 最上段へ
-      if (e.shiftKey && e.altKey && e.key === 'ArrowUp') {
-        e.preventDefault();
-        handleScrollTop();
-      }
-      // Shift+Alt+↓. : 最下段へ
-      if (e.shiftKey && e.altKey && e.key === 'ArrowDown') {
+      // Ctrl+, : 最下段へ
+      if (e.ctrlKey && e.key === ',') {
         e.preventDefault();
         handleScrollBottom();
+      }
+      // Ctrl+Alt+, : 最上段へ
+      if (e.ctrlKey && e.altKey && e.key === ',') {
+        e.preventDefault();
+        handleScrollTop();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -677,14 +677,14 @@ export default function ScriptEditor({
         <button
           onClick={handleScrollTop}
           className={`px-3 py-2 bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full shadow-lg text-lg transition-transform duration-600 ${slideUp ? '-translate-y-2' : ''}`}
-          title="Shift+Alt+↑: 最上段へ"
+          title="Ctrl+Alt+↑: 最上段へ"
         >
           <ArrowUpIcon className="w-6 h-6" />
         </button>
         <button
           onClick={handleScrollBottom}
           className={`px-3 py-2 bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full shadow-lg text-lg transition-transform duration-600 ${slideDown ? 'translate-y-2' : ''}`}
-          title="Shift+Alt+↓: 最下段へ"
+          title="Ctrl+,: 最下段へ"
         >
           <ArrowDownIcon className="w-6 h-6" />
         </button>
