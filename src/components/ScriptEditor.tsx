@@ -111,7 +111,14 @@ function SortableBlock({
               value={block.text}
               onChange={e => onUpdate({ text: e.target.value })}
               placeholder="ト書きを入力"
-              className="w-full p-2 pt-4 border rounded min-h-[40px] bg-muted text-foreground focus:ring-1 focus:ring-ring text-sm italic focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400"
+              className="w-full p-2 pt-2 border rounded min-h-[40px] bg-muted text-foreground focus:ring-1 focus:ring-ring text-sm italic focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400 resize-none"
+              rows={1}
+              style={{ height: 'auto', borderRadius: '20px 20px 20px 0' }}
+              onInput={e => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = 'auto';
+                target.style.height = target.scrollHeight + 'px';
+              }}
             />
 
             {/* キャラ選択リストとアイコン群を横並びに */}
@@ -174,7 +181,7 @@ function SortableBlock({
                   className={`w-16 h-16 rounded-full object-cover mt-0 mr-2 transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
                 />
               ) : (
-                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center text-center mt-0 mr-2 overflow-hidden">
+                <div className={`w-16 h-16 rounded-full bg-muted flex items-center justify-center text-center mt-0 mr-2 overflow-hidden transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}>
                   <span className="text-xs font-bold text-foreground px-1 whitespace-nowrap overflow-hidden text-ellipsis">
                     {character.name}
                   </span>
@@ -187,8 +194,14 @@ function SortableBlock({
                 value={block.text}
                 onChange={e => onUpdate({ text: e.target.value })}
                 placeholder="セリフを入力"
-                className="rounded-2xl border p-2 bg-card shadow-md min-h-[60px] text-sm w-full text-foreground focus:ring-1 focus:ring-ring focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400"
-                style={{ borderRadius: '20px 20px 20px 0' }}
+                className="rounded-2xl border p-2 bg-card shadow-md min-h-[60px] text-sm w-full text-foreground focus:ring-1 focus:ring-ring focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400 resize-none"
+                rows={1}
+                style={{ height: 'auto', borderRadius: '20px 20px 20px 0' }}
+                onInput={e => {
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = 'auto';
+                  target.style.height = target.scrollHeight + 'px';
+                }}
               />
               {/* フキダシの三角形 */}
               <div className="absolute left-[-4px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-400"></div>
@@ -272,6 +285,15 @@ export default function ScriptEditor({
   useEffect(() => {
     // ブロック数が変わったらref配列を調整
     textareaRefs.current = textareaRefs.current.slice(0, script.blocks.length);
+    // 初期表示時に各textareaの高さを自動調整
+    setTimeout(() => {
+      textareaRefs.current.forEach(ref => {
+        if (ref) {
+          ref.style.height = 'auto';
+          ref.style.height = ref.scrollHeight + 'px';
+        }
+      });
+    }, 0);
   }, [script.blocks.length]);
 
   // コンテンツの高さに応じてボタンの位置を調整
