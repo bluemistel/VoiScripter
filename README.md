@@ -1,16 +1,21 @@
-# VoiScripter - デスクトップ脚本作成アプリ
+# VoiScripter - ブラウザで動作する合成音声系台本作成アプリ
 
 ## 概要
 VoiScripterは、合成音声ソフトの台本に向いたシンプルなエディタです。Webアプリケーションとしても、Electronを使用したデスクトップアプリケーションとしても動作します。
+※デスクトップアプリケーション版は開発中です
+※合成音声系台本に向いているというのは個人の主観です
+
+## 使い方
+https://voiscripter.vercel.app/ にアクセス
 
 ## 主な機能
 - キャラクター管理（追加、編集、削除）
-- 感情設定とアイコン表示
-- ブロックベースの編集
-- ドラッグ&ドロップによるブロック並び替え
-- CSVインポート/エクスポート
+- アイコンの表示
+- ブロックベースの台本作成・編集
+- ドラッグ操作によるブロック並び替え
+- グループ設定での分割CSVエクスポート/インポート
 - ダークモード対応
-- デスクトップアプリケーション対応
+- デスクトップアプリケーション対応(開発中)
 
 ## 技術スタック
 - Next.js 14
@@ -18,33 +23,6 @@ VoiScripterは、合成音声ソフトの台本に向いたシンプルなエデ
 - TailwindCSS v4
 - React DnD Kit
 - Electron
-
-## 開発環境のセットアップ
-
-```bash
-# 依存関係のインストール
-npm install
-
-# Webアプリケーションとして開発サーバーを起動
-npm run dev
-
-# Electronアプリケーションとして開発サーバーを起動
-npm run electron-dev
-
-# ビルド
-npm run build
-
-# 本番サーバーの起動
-npm start
-
-# Electronアプリケーションのビルド
-npm run electron-build
-
-# Electronアプリケーションのパッケージング
-npm run electron-pack
-```
-
-## 使用方法
 
 ### Webアプリケーションとして
 1. `npm run dev` で開発サーバーを起動
@@ -71,10 +49,8 @@ npm run electron-pack
 npm run electron-build
 ```
 
-## 対応プラットフォーム
-- Windows
-- macOS
-- Linux
-
 ## ライセンス
 MIT License 
+
+## 更新履歴
+* 2025/07/22 テスト公開
