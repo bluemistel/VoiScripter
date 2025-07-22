@@ -3,6 +3,20 @@
 import { useState } from 'react';
 import { Character, Emotion } from '@/types';
 import { PlusIcon, TrashIcon, PencilIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  rectSortingStrategy
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const defaultEmotions: Emotion[] = ['normal'];
 
@@ -18,6 +32,56 @@ interface CharacterManagerProps {
   groups: string[];
   onAddGroup: (group: string) => void;
   onDeleteGroup: (group: string) => void;
+  onReorderCharacters?: (newOrder: Character[]) => void; // 並び替え用
+  onReorderGroups?: (newOrder: string[]) => void;
+}
+
+function SortableCharacter({ character, isEditing, children, ...props }: any) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: character.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="border rounded p-3 flex items-center justify-items-start bg-background">
+      <div {...attributes} {...listeners} className="cursor-grab mr-2 select-none">
+        <svg width="20" height="20" fill="none"><rect width="4" height="4" x="2" y="2" rx="1" fill="#888"/><rect width="4" height="4" x="2" y="10" rx="1" fill="#888"/><rect width="4" height="4" x="10" y="2" rx="1" fill="#888"/><rect width="4" height="4" x="10" y="10" rx="1" fill="#888"/></svg>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function SortableGroup({ group, children, ...props }: any) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: group });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center justify-between p-2 border rounded bg-muted/30 mb-1">
+      <div {...attributes} {...listeners} className="cursor-grab mr-2 select-none">
+        <svg width="16" height="16" fill="none"><rect width="3" height="3" x="1" y="1" rx="1" fill="#888"/><rect width="3" height="3" x="1" y="7" rx="1" fill="#888"/><rect width="3" height="3" x="7" y="1" rx="1" fill="#888"/><rect width="3" height="3" x="7" y="7" rx="1" fill="#888"/></svg>
+      </div>
+      {children}
+    </div>
+  );
 }
 
 export default function CharacterManager({
@@ -27,7 +91,9 @@ export default function CharacterManager({
   onDeleteCharacter,
   groups,
   onAddGroup,
-  onDeleteGroup
+  onDeleteGroup,
+  onReorderCharacters,
+  onReorderGroups
 }: CharacterManagerProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [isEditingId, setIsEditingId] = useState<string | null>(null);
@@ -69,12 +135,12 @@ export default function CharacterManager({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newCharacter.name && newCharacter.emotions?.normal?.iconUrl) {
+    if (newCharacter.name) {
       onAddCharacter({
         id: Date.now().toString(),
         name: newCharacter.name,
         group: newCharacter.group || 'なし',
-        emotions: { normal: { iconUrl: newCharacter.emotions.normal.iconUrl } }
+        emotions: { normal: { iconUrl: newCharacter.emotions?.normal?.iconUrl || '' } }
       } as Character);
       setNewCharacter({ name: '', group: 'なし', emotions: { ...emptyEmotions } });
       setIsAdding(false);
@@ -83,118 +149,165 @@ export default function CharacterManager({
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editCharacter && editCharacter.name && editCharacter.emotions?.normal?.iconUrl) {
+    if (editCharacter && editCharacter.name) {
       onUpdateCharacter({
         id: editCharacter.id!,
         name: editCharacter.name,
         group: editCharacter.group || 'なし',
-        emotions: { normal: { iconUrl: editCharacter.emotions.normal.iconUrl } }
+        emotions: { normal: { iconUrl: editCharacter.emotions?.normal?.iconUrl || '' } }
       } as Character);
       setIsEditingId(null);
       setEditCharacter(null);
     }
   };
 
+  const sensors = useSensors(useSensor(PointerSensor));
+  const handleDragEnd = (event: DragEndEvent) => {
+    if (!onReorderCharacters) return;
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = characters.findIndex(c => c.id === active.id);
+      const newIndex = characters.findIndex(c => c.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newOrder = [...characters];
+        const [removed] = newOrder.splice(oldIndex, 1);
+        newOrder.splice(newIndex, 0, removed);
+        onReorderCharacters(newOrder);
+      }
+    }
+  };
+
+  // グループ並び替え用
+  const groupSensors = useSensors(useSensor(PointerSensor));
+  const handleGroupDragEnd = (event: DragEndEvent) => {
+    if (!onReorderGroups) return;
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = groups.findIndex(g => g === active.id);
+      const newIndex = groups.findIndex(g => g === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newOrder = [...groups];
+        const [removed] = newOrder.splice(oldIndex, 1);
+        newOrder.splice(newIndex, 0, removed);
+        onReorderGroups(newOrder);
+      }
+    }
+  };
+
   return (
       <div className="space-y-4">
-        {characters.map(character => (
-          <div key={character.id} className="border rounded p-3 flex items-center justify-between bg-background">
-            {isEditingId === character.id ? (
-              <form onSubmit={handleEditSubmit} className="flex-1 space-y-2">
-                <input
-                  type="text"
-                  value={editCharacter?.name || ''}
-                  onChange={e => setEditCharacter(prev => ({
-                    ...(prev ?? {}),
-                    name: e.target.value
-                  }))}
-                  placeholder="キャラクター名"
-                  className="w-full p-2 border rounded bg-background text-foreground"
-                  required
-                />
-                <select
-                  value={editCharacter?.group || 'なし'}
-                  onChange={e => setEditCharacter(prev => ({
-                    ...(prev ?? {}),
-                    group: e.target.value
-                  }))}
-                  className="w-full p-2 border rounded bg-background text-foreground"
-                >
-                  <option value="なし">なし</option>
-                  {groups.map(group => (
-                    <option key={group} value={group}>{group}</option>
-                  ))}
-                </select>
-                <div className="flex items-center space-x-2 mb-1">
-                  <input
-                    type="text"
-                    value={editCharacter?.emotions?.normal?.iconUrl || ''}
-                    onChange={e => setEditCharacter(prev => ({
-                      ...(prev ?? {}),
-                      emotions: {
-                        normal: { iconUrl: e.target.value }
-                      }
-                    } as Partial<Character>))}
-                    placeholder="アイコンURLまたは画像を選択"
-                    className="flex-1 p-2 border rounded bg-background text-foreground"
-                    required
-                  />
-                  <label className="cursor-pointer bg-primary text-primary-foreground px-3 py-1 rounded text-xs hover:bg-primary/90 transition-colors">
-                    ファイルを選択
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={e => handleIconFileChange(e, true)}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-                <div className="flex justify-end space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => { setIsEditingId(null); setEditCharacter(null); }}
-                    className="px-3 py-1 text-sm text-muted-foreground hover:bg-accent rounded"
-                  >
-                    キャンセル
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
-                  >
-                    保存
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <>
-                <div>
-                  <div className="flex flex-wrap gap-2 md:mt-0">
-                    <div className="flex items-center space-x-1">
-                      <img src={character.emotions.normal.iconUrl} alt={character.name} className="w-14 h-14 rounded-full border" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground">{character.name}</h3>
-                      <p className="text-sm text-muted-foreground">グループ: {character.group || 'なし'}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <button onClick={() => {
-                    setIsEditingId(character.id);
-                    setEditCharacter({ ...character });
-                  }} className="p-2 text-destructive hover:bg-destructive/10 rounded flex items-center">
-                    <PencilIcon className="w-5 h-5" />
-                    <span className="ml-1 text-xs">編集</span>
-                  </button>
-                  <button onClick={() => onDeleteCharacter(character.id)} className="p-2 text-destructive hover:bg-destructive/10 rounded flex items-center">
-                    <TrashIcon className="w-5 h-5" />
-                    <span className="ml-1 text-xs">削除</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        ))}
+        {/* キャラクター一覧を2段組グリッドで表示＋ドラッグ＆ドロップ */}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={characters.map(c => c.id)} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {characters.map(character => (
+                <SortableCharacter key={character.id} character={character} isEditing={isEditingId === character.id}>
+                  {isEditingId === character.id ? (
+                    <form onSubmit={handleEditSubmit} className="flex-1 space-y-2">
+                      <input
+                        type="text"
+                        value={editCharacter?.name || ''}
+                        onChange={e => setEditCharacter(prev => ({
+                          ...(prev ?? {}),
+                          name: e.target.value
+                        }))}
+                        placeholder="キャラクター名"
+                        className="w-full p-2 border rounded bg-background text-foreground"
+                        required
+                      />
+                      <select
+                        value={editCharacter?.group || 'なし'}
+                        onChange={e => setEditCharacter(prev => ({
+                          ...(prev ?? {}),
+                          group: e.target.value
+                        }))}
+                        className="w-full p-2 border rounded bg-background text-foreground"
+                      >
+                        <option value="なし">なし</option>
+                        {groups.map(group => (
+                          <option key={group} value={group}>{group}</option>
+                        ))}
+                      </select>
+                      <div className="flex items-center space-x-2 mb-1">
+                        <input
+                          type="text"
+                          value={editCharacter?.emotions?.normal?.iconUrl || ''}
+                          onChange={e => setEditCharacter(prev => ({
+                            ...(prev ?? {}),
+                            emotions: {
+                              normal: { iconUrl: e.target.value }
+                            }
+                          } as Partial<Character>))}
+                          placeholder="アイコンURLまたは画像を選択"
+                          className="flex-1 p-2 border rounded bg-background text-foreground"
+                        />
+                        <label className="cursor-pointer bg-primary text-primary-foreground px-3 py-1 rounded text-xs hover:bg-primary/90 transition-colors">
+                          ファイルを選択
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={e => handleIconFileChange(e, true)}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => { setIsEditingId(null); setEditCharacter(null); }}
+                          className="px-3 py-1 text-sm text-muted-foreground hover:bg-accent rounded"
+                        >
+                          キャンセル
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                        >
+                          保存
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <div>
+                        <div className="flex flex-wrap gap-2 md:mt-0">
+                          <div className="flex items-center space-x-1">
+                            {character.emotions.normal.iconUrl ? (
+                              <img src={character.emotions.normal.iconUrl} alt={character.name} className="w-14 h-14 rounded-full border object-cover" />
+                            ) : (
+                              <div className="w-14 h-14 rounded-full border bg-muted flex items-center justify-center text-center overflow-hidden">
+                                <span className="text-xs font-bold text-foreground px-1 whitespace-nowrap overflow-hidden text-ellipsis">
+                                  {character.name}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-foreground ">{character.name}</h3>
+                            <p className="text-sm text-muted-foreground mt-1">グループ: {character.group || 'なし'}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1 ml-auto items-end">
+                        <button onClick={() => {
+                          setIsEditingId(character.id);
+                          setEditCharacter({ ...character });
+                        }} className="p-2 text-destructive hover:bg-destructive/10 rounded flex items-center">
+                          <PencilIcon className="w-5 h-5" />
+                          <span className="ml-1 text-xs">編集</span>
+                        </button>
+                        <button onClick={() => onDeleteCharacter(character.id)} className="p-2 text-destructive hover:bg-destructive/10 rounded flex items-center">
+                          <TrashIcon className="w-5 h-5" />
+                          <span className="ml-1 text-xs">削除</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </SortableCharacter>
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
         {isAdding ? (
           <form onSubmit={handleSubmit} className="border rounded p-3 space-y-3 bg-background">
             <input
@@ -227,7 +340,6 @@ export default function CharacterManager({
                 } as Partial<Character>))}
                 placeholder="アイコンURLまたは画像を選択"
                 className="flex-1 p-2 border rounded text-foreground"
-                required
               />
               <label className="cursor-pointer bg-primary text-primary-foreground px-3 py-1 rounded text-xs hover:bg-primary/90 transition-colors">
                 ファイルを選択
@@ -260,10 +372,10 @@ export default function CharacterManager({
             <button
               onClick={() => setIsGroupSettingsOpen(true)}
               className="flex-1 flex items-center justify-center space-x-2 p-2 border rounded hover:bg-accent text-foreground"
-              style={{ flex: '0 0 33.333%' }}
+              style={{ flex: '0 0 33.333%', backgroundColor: 'var(--color-secondary)', color: 'var(--color-secondary-foreground)' }}
             >
               <Cog6ToothIcon className="w-4 h-4" />
-              <span className="text-xs">グループ設定</span>
+              <span>グループ設定</span>
             </button>
             <button
               onClick={() => setIsAdding(true)}
@@ -312,17 +424,21 @@ export default function CharacterManager({
               {groups.length === 0 ? (
                 <p className="text-muted-foreground text-sm">グループがありません</p>
               ) : (
-                groups.map(group => (
-                  <div key={group} className="flex items-center justify-between p-2 border rounded bg-muted/30">
-                    <span className="text-foreground">{group}</span>
-                    <button
-                      onClick={() => onDeleteGroup(group)}
-                      className="p-1 text-destructive hover:bg-destructive/10 rounded"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))
+                <DndContext sensors={groupSensors} collisionDetection={closestCenter} onDragEnd={handleGroupDragEnd}>
+                  <SortableContext items={groups} strategy={rectSortingStrategy}>
+                    {groups.map(group => (
+                      <SortableGroup key={group} group={group}>
+                        <span className="text-foreground">{group}</span>
+                        <button
+                          onClick={() => onDeleteGroup(group)}
+                          className="p-1 text-destructive hover:bg-destructive/10 rounded"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </SortableGroup>
+                    ))}
+                  </SortableContext>
+                </DndContext>
               )}
             </div>
             

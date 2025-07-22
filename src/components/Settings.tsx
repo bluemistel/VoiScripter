@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { XMarkIcon, Cog6ToothIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, Cog6ToothIcon, QuestionMarkCircleIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -16,7 +16,7 @@ export default function Settings({
   saveDirectory,
   onSaveDirectoryChange
 }: SettingsProps) {
-  const [activeTab, setActiveTab] = useState<'settings' | 'help'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'help' | 'license'>('settings');
   const [isSelectingDirectory, setIsSelectingDirectory] = useState(false);
 
   const handleDirectorySelect = async () => {
@@ -45,7 +45,7 @@ export default function Settings({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-background border rounded-lg shadow-lg w-full max-w-2xl mx-4 h-[600px] overflow-hidden">
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-lg font-semibold text-foreground">設定</h2>
@@ -81,6 +81,17 @@ export default function Settings({
             >
               <QuestionMarkCircleIcon className="w-5 h-5" />
               <span>ヘルプ</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('license')}
+              className={`w-full p-3 text-left flex items-center space-x-2 transition-colors ${
+                activeTab === 'license' 
+                  ? 'bg-primary text-primary-foreground' 
+                  : 'hover:bg-accent'
+              }`}
+            >
+              <InformationCircleIcon className="w-5 h-5" />
+              <span>ライセンス</span>
             </button>
           </div>
           
@@ -132,7 +143,6 @@ export default function Settings({
               <div className="space-y-6">
                 <div>
                   <h3 className="text-lg font-medium text-foreground mb-4">VoiScripter ヘルプ</h3>
-                  
                   <div className="space-y-4">
                     <div>
                       <h4 className="font-medium text-foreground mb-2">基本的な使い方</h4>
@@ -169,6 +179,45 @@ export default function Settings({
                 </div>
               </div>
             )}
+
+              {activeTab === 'license' && (
+                <div className="mt-6">
+                  <h4 className="font-medium text-foreground mb-2">このアプリについて</h4>
+                  <div className="text-sm text-muted-foreground space-y-1 ml-4">
+                    <div className="mb-2">
+                      <span className="font-bold text-foreground">VoiScripter</span> v0.1.0
+                    </div>
+                    <div className="ml-2">
+                        <span>本アプリの不具合により何らかの損害が発生した場合でも、作者は一切の責任を負いません。自己責任でのご使用をお願いいたします。
+                        </span>
+                      </div>
+                    <h4 className="font-medium text-foreground mb-2">使用技術</h4>
+                    <div className="mb-2">
+                      <ul className="list-disc ml-6">
+                        <li>Next.js (MIT)</li>
+                        <li>React (MIT)</li>
+                        <li>TypeScript (Apache-2.0)</li>
+                        <li>Tailwind CSS (MIT)</li>
+                        <li>@dnd-kit/core, @dnd-kit/sortable (MIT)</li>
+                        <li>Heroicons (MIT)</li>
+                        <li>Electron (MIT)</li>
+                      </ul>
+                    </div>
+                    <div className="mb-2">
+                      <span className="font-semibold text-foreground">ライセンス:</span>
+                      <div className="ml-2">
+                        <span>本アプリおよび上記ライブラリはMITまたはApache-2.0ライセンスに基づき配布されています。</span>
+                      </div>
+                    </div>
+                    <div className="mb-2">
+                      <span className="font-semibold text-foreground">Copyright:</span>
+                      <div className="ml-2">
+                        <span>© 2025 VoiScripter Authors</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
           </div>
         </div>
       </div>

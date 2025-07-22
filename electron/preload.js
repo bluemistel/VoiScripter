@@ -12,6 +12,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadData: (key) => ipcRenderer.invoke('loadData', key),
   listDataKeys: () => ipcRenderer.invoke('listDataKeys'),
   
+  // CSVファイル保存
+  saveCSVFile: (defaultName, csvContent) => ipcRenderer.invoke('saveCSVFile', defaultName, csvContent),
+  
   // 設定操作
   saveSettings: (settings) => ipcRenderer.invoke('saveSettings', settings),
   loadSettings: () => ipcRenderer.invoke('loadSettings'),

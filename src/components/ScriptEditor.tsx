@@ -23,7 +23,8 @@ import {
   ArrowDownIcon,
   TrashIcon,
   DocumentDuplicateIcon,
-  Bars3Icon
+  Bars3Icon,
+  PlusIcon
 } from '@heroicons/react/24/outline';
 
 interface ScriptEditorProps {
@@ -76,13 +77,24 @@ function SortableBlock({
   // ト書き判定
   const isTogaki = !block.characterId;
 
+  // 話者変更アニメーション
+  const [animateBorder, setAnimateBorder] = useState(false);
+  const prevCharacterId = useRef(block.characterId);
+  useEffect(() => {
+    if (block.characterId && block.characterId !== prevCharacterId.current) {
+      setAnimateBorder(true);
+      const timer = setTimeout(() => setAnimateBorder(false), 300);
+      prevCharacterId.current = block.characterId;
+      return () => clearTimeout(timer);
+    }
+    prevCharacterId.current = block.characterId;
+  }, [block.characterId]);
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-start space-x-2 p-2 border rounded-lg shadow mb-2 transition-colors ${
-        isSelected ? 'bg-secondary-foreground/10' : 'bg-card'
-      }`}
+      className={`flex items-start space-x-2 p-2 border rounded-lg shadow mb-2 transition-colors `}
     >
       <div
         {...attributes}
@@ -99,29 +111,77 @@ function SortableBlock({
               value={block.text}
               onChange={e => onUpdate({ text: e.target.value })}
               placeholder="ト書きを入力"
-              className="w-full p-2 border rounded min-h-[40px] bg-muted text-foreground focus:ring-1 focus:ring-ring text-sm italic focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400"
+              className="w-full p-2 pt-4 border rounded min-h-[40px] bg-muted text-foreground focus:ring-1 focus:ring-ring text-sm italic focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400"
             />
-            <select
-              value={block.characterId}
-              onChange={e => onUpdate({ characterId: e.target.value })}
-              className="ml-1 p-2 pl-3 mr-2 border rounded bg-background text-foreground text-xs w-36"
-            >
-              <option value="">ト書きを入力</option>
-              {characters.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+
+            {/* キャラ選択リストとアイコン群を横並びに */}
+            <div className="flex flex-col justify-between items-center h-16 mr-2 mt-0">
+              <select
+                value={block.characterId}
+                onChange={e => onUpdate({ characterId: e.target.value })}
+                className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-36 mb-1"
+                style={{ height: '2.5rem' }}
+              >
+                <option value="">ト書きを入力</option>
+                {characters.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <div className="flex flex-row space-x-1.5 mt-0">
+                <button
+                  onClick={onMoveUp}
+                  className="p-1 rounded hover:bg-accent"
+                  title="Ctrl+↑:ブロックを上に移動"
+                  style={{ height: '2rem', width: '2rem' }}
+                >
+                  <ArrowUpIcon className="w-6 h-6 text-foreground" />
+                </button>
+                <button
+                  onClick={onMoveDown}
+                  className="p-1 rounded hover:bg-accent"
+                  title="Ctrl+↓:ブロックを下に移動"
+                  style={{ height: '2rem', width: '2rem' }}
+                >
+                  <ArrowDownIcon className="w-6 h-6 text-foreground" />
+                </button>
+                <button
+                  onClick={onDuplicate}
+                  className="p-1 rounded hover:bg-accent"
+                  title="Ctrl+B:ブロックを複製"
+                  style={{ height: '2rem', width: '2rem' }}
+                >
+                  <DocumentDuplicateIcon className="w-6 h-6 text-foreground" />
+                </button>
+                <button
+                  onClick={onDelete}
+                  className="p-1 text-destructive hover:bg-destructive/10 rounded"
+                  title="Alt+B:ブロックを削除"
+                  style={{ height: '2rem', width: '2rem' }}
+                >
+                  <TrashIcon className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
           </div>
+          
         ) : (
           <div className="flex items-start space-x-2">
             {character && (
-              <img
-                src={character.emotions[block.emotion]?.iconUrl}
-                alt={character.name}
-                className="w-16 h-16 rounded-full object-cover mt-0 mr-2"
-              />
+              character.emotions[block.emotion]?.iconUrl ? (
+                <img
+                  src={character.emotions[block.emotion]?.iconUrl}
+                  alt={character.name}
+                  className={`w-16 h-16 rounded-full object-cover mt-0 mr-2 transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center text-center mt-0 mr-2 overflow-hidden">
+                  <span className="text-xs font-bold text-foreground px-1 whitespace-nowrap overflow-hidden text-ellipsis">
+                    {character.name}
+                  </span>
+                </div>
+              )
             )}
-            <div className="relative flex-1">
+            <div className="relative flex-1 pl-2">
               <textarea
                 ref={textareaRef}
                 value={block.text}
@@ -131,52 +191,58 @@ function SortableBlock({
                 style={{ borderRadius: '20px 20px 20px 0' }}
               />
               {/* フキダシの三角形 */}
-              <div className="absolute left-[-10px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-400 focus:ring-2 focus:ring-ring focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400"></div>
+              <div className="absolute left-[-4px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-400"></div>
             </div>
-            <div className="flex flex-col space-y-1 mr-2 mt-3">
+            {/* キャラ選択リストとアイコン群を横並びに */}
+            <div className="flex flex-col justify-between items-center h-16 mr-2 mt-0">
               <select
                 value={block.characterId}
                 onChange={e => onUpdate({ characterId: e.target.value })}
-                className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-36"
+                className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-36 mb-1"
+                style={{ height: '2.5rem' }}
               >
                 <option value="">ト書きを入力</option>
                 {characters.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
+              <div className="flex flex-row space-x-1.5 mt-0">
+                <button
+                  onClick={onMoveUp}
+                  className="p-1 rounded hover:bg-accent"
+                  title="Ctrl+↑:ブロックを上に移動"
+                  style={{ height: '2rem', width: '2rem' }}
+                >
+                  <ArrowUpIcon className="w-6 h-6 text-foreground" />
+                </button>
+                <button
+                  onClick={onMoveDown}
+                  className="p-1 rounded hover:bg-accent"
+                  title="Ctrl+↓:ブロックを下に移動"
+                  style={{ height: '2rem', width: '2rem' }}
+                >
+                  <ArrowDownIcon className="w-6 h-6 text-foreground" />
+                </button>
+                <button
+                  onClick={onDuplicate}
+                  className="p-1 rounded hover:bg-accent"
+                  title="Ctrl+B:ブロックを複製"
+                  style={{ height: '2rem', width: '2rem' }}
+                >
+                  <DocumentDuplicateIcon className="w-6 h-6 text-foreground" />
+                </button>
+                <button
+                  onClick={onDelete}
+                  className="p-1 text-destructive hover:bg-destructive/10 rounded"
+                  title="Alt+B:ブロックを削除"
+                  style={{ height: '2rem', width: '2rem' }}
+                >
+                  <TrashIcon className="w-6 h-6" />
+                </button>
+              </div>
             </div>
           </div>
         )}
-        <div className="flex justify-end space-x-1.5 mt-1 mr-1.5">
-          <button
-            onClick={onMoveUp}
-            className="p-1 rounded hover:bg-accent"
-            title="Ctrl+↑:ブロックを上に移動"
-          >
-            <ArrowUpIcon className="w-6 h-6 text-foreground" />
-          </button>
-          <button
-            onClick={onMoveDown}
-            className="p-1 rounded hover:bg-accent"
-            title="Ctrl+↓:ブロックを下に移動"
-          >
-            <ArrowDownIcon className="w-6 h-6 text-foreground" />
-          </button>
-          <button
-            onClick={onDuplicate}
-            className="p-1 rounded hover:bg-accent"
-            title="Ctrl+B:ブロックを複製"
-          >
-            <DocumentDuplicateIcon className="w-6 h-6 text-foreground" />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-1 text-destructive hover:bg-destructive/10 rounded"
-            title="Alt+B:ブロックを削除"
-          >
-            <TrashIcon className="w-6 h-6" />
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -292,6 +358,48 @@ export default function ScriptEditor({
       }, 10);
     }
   }, [manualFocusTarget]);
+
+  // スクロールアニメーション（500ms）
+  const scrollToY = (targetY: number, duration: number = 500) => {
+    const startY = window.scrollY;
+    const diff = targetY - startY;
+    const startTime = performance.now();
+    function animateScroll(now: number) {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      window.scrollTo(0, startY + diff * easeInOutQuad(progress));
+      if (progress < 1) {
+        requestAnimationFrame(animateScroll);
+      }
+    }
+    function easeInOutQuad(t: number) {
+      return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+    }
+    requestAnimationFrame(animateScroll);
+  };
+
+  // スクロール＆選択機能＋ボタンスライドアニメーション
+  const [slideUp, setSlideUp] = useState(false);
+  const [slideDown, setSlideDown] = useState(false);
+  const scrollToBlock = (index: number) => {
+    if (textareaRefs.current[index]) {
+      textareaRefs.current[index]?.focus();
+      textareaRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setSelectedBlockId(script.blocks[index]?.id || null);
+    }
+  };
+  const handleScrollTop = () => {
+    setSlideUp(true);
+    setTimeout(() => setSlideUp(false), 300);
+    scrollToY(0, 500);
+    scrollToBlock(0);
+  };
+  const handleScrollBottom = () => {
+    setSlideDown(true);
+    setTimeout(() => setSlideDown(false), 300);
+    scrollToY(document.body.scrollHeight, 500);
+    scrollToBlock(script.blocks.length - 1);
+  };
 
   // ショートカットキー
   useEffect(() => {
@@ -421,6 +529,7 @@ export default function ScriptEditor({
         if (activeIdx > 0) {
           e.preventDefault();
           onMoveBlock(activeIdx, activeIdx - 1);
+          setSelectedBlockId(script.blocks[activeIdx - 1]?.id || ''); // 追加
           setTimeout(() => {
             setManualFocusTarget({ index: activeIdx - 1, id: script.blocks[activeIdx - 1]?.id || '' });
           }, 10); // タイミングを調整
@@ -431,10 +540,21 @@ export default function ScriptEditor({
         if (activeIdx >= 0 && activeIdx < script.blocks.length - 1) {
           e.preventDefault();
           onMoveBlock(activeIdx, activeIdx + 1);
+          setSelectedBlockId(script.blocks[activeIdx + 1]?.id || ''); // 追加
           setTimeout(() => {
             setManualFocusTarget({ index: activeIdx + 1, id: script.blocks[activeIdx + 1]?.id || '' });
           }, 10); // タイミングを調整
         }
+      }
+      // Ctrl+, : 最上段へ
+      if (e.ctrlKey && e.key === ',') {
+        e.preventDefault();
+        handleScrollTop();
+      }
+      // Ctrl+. : 最下段へ
+      if (e.ctrlKey && e.key === '.') {
+        e.preventDefault();
+        handleScrollBottom();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -466,13 +586,13 @@ export default function ScriptEditor({
 
   return (
     <>
-      <div className="script-editor-container">
+      <div className="script-editor-container min-h-screen">
         {script.blocks.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
             <p className="text-lg mb-4">キャラクターのアイコンから話者を追加して下のボタンからブロックを追加します。</p>
           </div>
         ) : (
-          <div className="bg-card border rounded-lg shadow p-4 relative">
+          <div className="bg-card rounded-lg shadow p-4 relative h-full flex flex-col justify-between">
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -483,37 +603,37 @@ export default function ScriptEditor({
                 strategy={verticalListSortingStrategy}
               >
                 {script.blocks.map((block, index) => (
-                  <div key={block.id}>
-                                      <SortableBlock
-                    block={block}
-                    characters={script.characters}
-                    character={script.characters.find(c => c.id === block.characterId)}
-                    onUpdate={updates => onUpdateBlock(block.id, updates)}
-                    onDelete={() => onDeleteBlock(block.id)}
-                    onDuplicate={() => {
-                      const newBlock: ScriptBlock = {
-                        ...block,
-                        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                        text: block.text // 元のテキストを保持
-                      };
-                      onInsertBlock(newBlock, index + 1);
-                      setTimeout(() => {
-                        setManualFocusTarget({ index: index + 1, id: newBlock.id });
-                      }, 10); // タイミングを調整
-                    }}
-                    onMoveUp={() => {
-                      if (index > 0) {
-                        onMoveBlock(index, index - 1);
-                      }
-                    }}
-                    onMoveDown={() => {
-                      if (index < script.blocks.length - 1) {
-                        onMoveBlock(index, index + 1);
-                      }
-                    }}
-                    textareaRef={el => textareaRefs.current[index] = el}
-                    isSelected={selectedBlockId === block.id}
-                  />
+                  <div key={block.id} className="mb-1 last:mb-0">
+                    <SortableBlock
+                      block={block}
+                      characters={script.characters}
+                      character={script.characters.find(c => c.id === block.characterId)}
+                      onUpdate={updates => onUpdateBlock(block.id, updates)}
+                      onDelete={() => onDeleteBlock(block.id)}
+                      onDuplicate={() => {
+                        const newBlock: ScriptBlock = {
+                          ...block,
+                          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                          text: block.text // 元のテキストを保持
+                        };
+                        onInsertBlock(newBlock, index + 1);
+                        setTimeout(() => {
+                          setManualFocusTarget({ index: index + 1, id: newBlock.id });
+                        }, 10); // タイミングを調整
+                      }}
+                      onMoveUp={() => {
+                        if (index > 0) {
+                          onMoveBlock(index, index - 1);
+                        }
+                      }}
+                      onMoveDown={() => {
+                        if (index < script.blocks.length - 1) {
+                          onMoveBlock(index, index + 1);
+                        }
+                      }}
+                      textareaRef={el => textareaRefs.current[index] = el}
+                      isSelected={selectedBlockId === block.id}
+                    />
                     {/* ブロック間のト書き追加 */}
                     <div className="flex justify-center my-1 group">
                       <button
@@ -530,19 +650,30 @@ export default function ScriptEditor({
           </div>
         )}
       </div>
-      <button
-        onClick={onAddBlock}
-        className={`fixed right-6 z-40 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full shadow-lg transition-all text-lg ${
-          script.blocks.length === 0 
-            ? 'bottom-1/2 transform translate-y-1/2' 
-            : isButtonFixed 
-              ? 'bottom-6' 
-              : 'bottom-6'
-        }`}
-        title="Ctrl+B:新規ブロックを追加"
-      >
-        ＋ブロックを追加
-      </button>
+      {/* 右下固定ボタン群 */}
+      <div className="fixed right-6 z-40 flex flex-row items-end space-x-2 bottom-6">
+        <button
+          onClick={handleScrollTop}
+          className={`px-3 py-2 bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full shadow-lg text-lg transition-transform duration-600 ${slideUp ? '-translate-y-2' : ''}`}
+          title="Ctrl+,: 最上段へ"
+        >
+          <ArrowUpIcon className="w-6 h-6" />
+        </button>
+        <button
+          onClick={handleScrollBottom}
+          className={`px-3 py-2 bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full shadow-lg text-lg transition-transform duration-600 ${slideDown ? 'translate-y-2' : ''}`}
+          title="Ctrl+.: 最下段へ"
+        >
+          <ArrowDownIcon className="w-6 h-6" />
+        </button>
+        <button
+          onClick={onAddBlock}
+          className={`px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full shadow-lg transition-all text-lg`}
+          title="Ctrl+B:新規ブロックを追加"
+        >
+          <PlusIcon className="w-6 h-6 inline-block mr-0.5 mb-0.5" />ブロックを追加
+        </button>
+      </div>
     </>
   );
 }

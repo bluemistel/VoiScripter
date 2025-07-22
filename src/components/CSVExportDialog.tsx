@@ -11,6 +11,7 @@ interface CSVExportDialogProps {
   onExportCSV: () => void;
   onExportSerifOnly: () => void;
   onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only') => void;
+  onExportCharacterCSV: () => void;
 }
 
 export default function CSVExportDialog({
@@ -20,9 +21,11 @@ export default function CSVExportDialog({
   groups,
   onExportCSV,
   onExportSerifOnly,
-  onExportByGroups
+  onExportByGroups,
+  onExportCharacterCSV
 }: CSVExportDialogProps) {
-  const [exportType, setExportType] = useState<'full' | 'serif-only'>('full');
+  type ExportType = 'full' | 'serif-only' | 'character-setting';
+  const [exportType, setExportType] = useState<ExportType>('full');
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [useGroupExport, setUseGroupExport] = useState(false);
 
@@ -34,7 +37,7 @@ export default function CSVExportDialog({
     );
   };
 
-  const handleExport = () => {
+  const handleExport = (exportType: 'full' | 'serif-only') => {
     if (useGroupExport && selectedGroups.length > 0) {
       onExportByGroups(selectedGroups, exportType);
     } else if (!useGroupExport) {
@@ -57,8 +60,8 @@ export default function CSVExportDialog({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300">
+      <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6 transition-opacity duration-300">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-foreground">CSVエクスポート</h3>
           <button
@@ -72,15 +75,27 @@ export default function CSVExportDialog({
 
         {/* エクスポートタイプ選択 */}
         <div className="mb-4">
-          <h4 className="font-medium text-foreground mb-2">エクスポートタイプ</h4>
+          <span className="text-foreground mb-2 font-semibold">キャラクター設定</span>
           <div className="space-y-2">
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="radio"
+                name="exportType"
+                value="character-setting"
+                checked={exportType === 'character-setting'}
+                onChange={(e) => setExportType(e.target.value as ExportType)}
+                className="text-primary"
+              />
+              <span className="text-foreground">キャラクター設定のエクスポート</span>
+            </label>
+            <span className="text-foreground mb-2 font-semibold">台本のエクスポート</span>
             <label className="flex items-center space-x-2 cursor-pointer">
               <input
                 type="radio"
                 name="exportType"
                 value="full"
                 checked={exportType === 'full'}
-                onChange={(e) => setExportType(e.target.value as 'full' | 'serif-only')}
+                onChange={(e) => setExportType(e.target.value as ExportType)}
                 className="text-primary"
               />
               <span className="text-foreground">CSVエクスポート（話者, セリフ）</span>
@@ -91,7 +106,7 @@ export default function CSVExportDialog({
                 name="exportType"
                 value="serif-only"
                 checked={exportType === 'serif-only'}
-                onChange={(e) => setExportType(e.target.value as 'full' | 'serif-only')}
+                onChange={(e) => setExportType(e.target.value as ExportType)}
                 className="text-primary"
               />
               <span className="text-foreground">セリフだけエクスポート</span>
@@ -100,20 +115,19 @@ export default function CSVExportDialog({
         </div>
 
         {/* グループエクスポートオプション */}
-        <div className="mb-4">
-          <label className="flex items-center space-x-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={useGroupExport}
-              onChange={(e) => setUseGroupExport(e.target.checked)}
-              className="text-primary"
-            />
-            <span className="text-foreground font-medium">グループごとにエクスポート</span>
-          </label>
-        </div>
+        <label className="flex items-center space-x-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={useGroupExport}
+            onChange={(e) => setUseGroupExport(e.target.checked)}
+            className="text-primary"
+            disabled={exportType === 'character-setting'}
+          />
+          <span className="text-foreground font-medium">グループごとにエクスポート</span>
+        </label>
 
         {/* グループ選択 */}
-        {useGroupExport && (
+        {useGroupExport && exportType !== 'character-setting' && (
           <div className="mb-4">
             <h4 className="font-medium text-foreground mb-2">エクスポートするグループを選択</h4>
             <div className="max-h-40 overflow-y-auto border rounded p-2 space-y-1">
@@ -143,17 +157,17 @@ export default function CSVExportDialog({
         )}
 
         {/* エクスポートボタン */}
-        <div className="flex justify-end space-x-2">
+        <div className="flex flex-col space-y-2 mt-4">
           <button
-            onClick={handleClose}
-            className="px-4 py-2 text-sm text-muted-foreground hover:bg-accent rounded"
-          >
-            キャンセル
-          </button>
-          <button
-            onClick={handleExport}
-            disabled={useGroupExport && selectedGroups.length === 0}
-            className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => {
+              if (exportType === 'character-setting') {
+                onExportCharacterCSV();
+                handleClose();
+              } else if (exportType === 'full' || exportType === 'serif-only') {
+                handleExport(exportType as 'full' | 'serif-only');
+              }
+            }}
+            className="w-full px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold"
           >
             エクスポート
           </button>
