@@ -13,13 +13,13 @@ export default function Home() {
   // グループ管理
   const [groups, setGroups] = useState<string[]>([]);
   // プロジェクトID管理
-  const [projectId, setProjectId] = useState<string>(() => {
+  const [projectId, setProjectId] = useState<string>('default');
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const last = localStorage.getItem('voiscripter_lastProject');
-      if (last && last !== 'lastProject') return last;
+      if (last && last !== 'lastProject') setProjectId(last);
     }
-    return 'default';
-  });
+  }, []);
   const [projectList, setProjectList] = useState<string[]>([]);
   const [undoStack, setUndoStack] = useState<Omit<Script, 'characters'>[]>([]);
   const [redoStack, setRedoStack] = useState<Omit<Script, 'characters'>[]>([]);
