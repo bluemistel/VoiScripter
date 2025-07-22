@@ -611,7 +611,8 @@ export default function ScriptEditor({
       <div className="script-editor-container min-h-screen">
         {script.blocks.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
-            <p className="text-lg mb-4">キャラクターのアイコンから話者を追加して下のボタンからブロックを追加します。</p>
+            <p className="text-lg mb-4">1.左上の新規作成から新しいプロジェクトを作成してください。</p>
+            <p className="text-lg mb-4">2.キャラクターのアイコンからキャラクターを追加し、下のボタンからブロックを追加します。</p>
           </div>
         ) : (
           <div className="bg-card rounded-lg shadow p-4 relative h-full flex flex-col justify-between">
