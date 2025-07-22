@@ -344,4 +344,27 @@ ipcMain.handle('loadSettings', async () => {
     console.error('設定読み込みエラー:', error);
     return { saveDirectory: '' };
   }
+});
+
+// CSVファイル保存
+ipcMain.handle('saveCSVFile', async (event, defaultName, csvContent) => {
+  try {
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: 'CSVのエクスポート',
+      defaultPath: defaultName,
+      filters: [
+        { name: 'CSVファイル', extensions: ['csv'] },
+        { name: 'すべてのファイル', extensions: ['*'] }
+      ]
+    });
+    
+    if (!result.canceled && result.filePath) {
+      fs.writeFileSync(result.filePath, csvContent, 'utf8');
+      return result.filePath;
+    }
+    return null;
+  } catch (error) {
+    console.error('CSVファイル保存エラー:', error);
+    throw error;
+  }
 }); 

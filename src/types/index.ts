@@ -40,6 +40,9 @@ declare global {
       loadData: (key: string) => Promise<string | null>;
       listDataKeys: () => Promise<string[]>;
       
+      // CSVファイル保存
+      saveCSVFile: (defaultName: string, csvContent: string) => Promise<string | null>;
+      
       // 設定操作
       saveSettings: (settings: any) => Promise<void>;
       loadSettings: () => Promise<{ saveDirectory: string }>;

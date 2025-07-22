@@ -25,6 +25,8 @@ interface HeaderProps {
   groups: string[];
   onAddGroup: (group: string) => void;
   onDeleteGroup: (group: string) => void;
+  onReorderCharacters?: (newOrder: Character[]) => void;
+  onReorderGroups?: (newOrder: string[]) => void;
 }
 
 export default function Header({
@@ -44,7 +46,9 @@ export default function Header({
   onSaveDirectoryChange,
   groups,
   onAddGroup,
-  onDeleteGroup
+  onDeleteGroup,
+  onReorderCharacters,
+  onReorderGroups
 }: HeaderProps) {
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
   const [isCSVExportDialogOpen, setIsCSVExportDialogOpen] = useState(false);
@@ -109,7 +113,7 @@ export default function Header({
             </button>
             {isImportMenuOpen && (
               <div className="absolute right-0 mt-2 w-48 bg-popover border rounded-lg shadow-lg z-10">
-                <label className="block w-full text-left px-4 py-2 hover:bg-accent text-popover-foreground cursor-pointer">
+                <label className="block w-full text-left px-4 py-2 hover:bg-accent text-foreground cursor-pointer">
                   CSVインポート（話者,セリフ）
                   <input
                     type="file"
@@ -118,7 +122,7 @@ export default function Header({
                     onChange={(e) => handleFileImport(e, 'script')}
                   />
                 </label>
-                <label className="block w-full text-left px-4 py-2 hover:bg-accent text-popover-foreground cursor-pointer">
+                <label className="block w-full text-left px-4 py-2 hover:bg-accent text-foreground cursor-pointer">
                   キャラクター設定のインポート
                   <input
                     type="file"
@@ -158,8 +162,8 @@ export default function Header({
         </div>
       </div>
       {isCharacterModalOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-card border rounded-lg p-6 w-full max-w-2xl mx-4 shadow-xl">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300">
+          <div className="bg-card border rounded-lg p-6 w-full max-w-2xl mx-4 shadow-xl transition-opacity duration-300">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-card-foreground">キャラクター管理</h2>
               <button
@@ -178,17 +182,21 @@ export default function Header({
               groups={groups}
               onAddGroup={onAddGroup}
               onDeleteGroup={onDeleteGroup}
+              onReorderCharacters={onReorderCharacters}
+              onReorderGroups={onReorderGroups}
             />
           </div>
         </div>
       )}
       {isSettingsOpen && (
-        <Settings
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-          saveDirectory={saveDirectory}
-          onSaveDirectoryChange={onSaveDirectoryChange}
-        />
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300">
+          <Settings
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+            saveDirectory={saveDirectory}
+            onSaveDirectoryChange={onSaveDirectoryChange}
+          />
+        </div>
       )}
       <CSVExportDialog
         isOpen={isCSVExportDialogOpen}
@@ -198,6 +206,7 @@ export default function Header({
         onExportCSV={onExportCSV}
         onExportSerifOnly={onExportSerifOnly}
         onExportByGroups={onExportByGroups}
+        onExportCharacterCSV={onExportCharacterCSV}
       />
     </header>
   );

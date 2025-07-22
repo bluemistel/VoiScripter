@@ -13,7 +13,13 @@ export default function Home() {
   // グループ管理
   const [groups, setGroups] = useState<string[]>([]);
   // プロジェクトID管理
-  const [projectId, setProjectId] = useState<string>('default');
+  const [projectId, setProjectId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const last = localStorage.getItem('voiscripter_lastProject');
+      if (last && last !== 'lastProject') return last;
+    }
+    return 'default';
+  });
   const [projectList, setProjectList] = useState<string[]>([]);
   const [undoStack, setUndoStack] = useState<Omit<Script, 'characters'>[]>([]);
   const [redoStack, setRedoStack] = useState<Omit<Script, 'characters'>[]>([]);
@@ -50,6 +56,9 @@ export default function Home() {
     return null;
   };
 
+  // グループ保存フラグ
+  const isFirstGroups = useRef(true);
+
   // 初回マウント時にデータを読み込み
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -84,37 +93,46 @@ export default function Home() {
       
       // groups
       const savedGroups = await loadData('voiscripter_groups');
-      if (savedGroups) {
+      if (savedGroups !== null && savedGroups !== undefined) {
         try {
           const parsedGroups = JSON.parse(savedGroups);
           if (Array.isArray(parsedGroups)) {
-            setGroups(parsedGroups);
+            setGroups(parsedGroups); // 空配列でも必ずセット
+            isFirstGroups.current = false;
+            return;
           } else {
             console.warn('Invalid groups data format:', parsedGroups);
             setGroups([]);
+            isFirstGroups.current = false;
+            return;
           }
         } catch (error) {
           console.error('Groups parse error:', error);
           setGroups([]);
+          isFirstGroups.current = false;
+          return;
+        }
+      }
+      // グループデータが一度も保存されていない場合のみ、キャラクターからグループを抽出
+      // （この分岐は初回のみ実行される）
+      const savedCharsForGroups = await loadData('voiscripter_characters');
+      if (savedCharsForGroups) {
+        try {
+          const parsedChars = JSON.parse(savedCharsForGroups);
+          const extractedGroups = parsedChars
+            .map((char: any) => char.group || 'なし')
+            .filter((group: string) => group !== 'なし')
+            .filter((group: string, index: number, arr: string[]) => arr.indexOf(group) === index);
+          setGroups(extractedGroups);
+          isFirstGroups.current = false;
+        } catch (error) {
+          console.error('Failed to extract groups from characters:', error);
+          setGroups([]);
+          isFirstGroups.current = false;
         }
       } else {
-        // グループデータがない場合、キャラクターからグループを抽出
-        const savedChars = await loadData('voiscripter_characters');
-        if (savedChars) {
-          try {
-            const parsedChars = JSON.parse(savedChars);
-            const extractedGroups = parsedChars
-              .map((char: any) => char.group || 'なし')
-              .filter((group: string) => group !== 'なし')
-              .filter((group: string, index: number, arr: string[]) => arr.indexOf(group) === index);
-            setGroups(extractedGroups);
-          } catch (error) {
-            console.error('Failed to extract groups from characters:', error);
-            setGroups([]);
-          }
-        } else {
-          setGroups([]);
-        }
+        setGroups([]);
+        isFirstGroups.current = false;
       }
       
       // projectId
@@ -127,13 +145,20 @@ export default function Home() {
       setProjectId(validProjectId);
       
       // projectList
-      if (savedDirectory === '') {
+      if (saveDirectory === '') {
         const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory' && k !== 'voiscripter_groups');
-        setProjectList(keys.map(k => k.replace('voiscripter_', '')));
+        const projectKeys = keys.map(k => k.replace('voiscripter_', ''));
+        setProjectList(projectKeys);
       } else if (window.electronAPI) {
-        const keys = await window.electronAPI?.listDataKeys() || [];
-        const projectKeys = keys.filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory' && k !== 'voiscripter_groups');
-        setProjectList(projectKeys.map(k => k.replace('voiscripter_', '')));
+        try {
+          const keys = await window.electronAPI.listDataKeys() || [];
+          const projectKeys = keys.filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory' && k !== 'voiscripter_groups');
+          const projectNames = projectKeys.map(k => k.replace('voiscripter_', ''));
+          setProjectList(projectNames);
+        } catch (error) {
+          console.error('プロジェクトリスト取得エラー:', error);
+          setProjectList([]);
+        }
       }
       
       // script
@@ -195,10 +220,9 @@ export default function Home() {
 
   // groups保存
   useEffect(() => {
+    if (isFirstGroups.current) return;
     if (typeof window === 'undefined') return;
-    if (groups.length > 0 || localStorage.getItem('voiscripter_groups')) {
-      saveData('voiscripter_groups', JSON.stringify(groups));
-    }
+    saveData('voiscripter_groups', JSON.stringify(groups));
   }, [groups, saveDirectory]);
 
   // プロジェクト切替時の復元
@@ -221,12 +245,43 @@ export default function Home() {
       // プロジェクトリストの更新
       if (saveDirectory === '') {
         const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory' && k !== 'voiscripter_groups');
-        setProjectList(keys.map(k => k.replace('voiscripter_', '')));
+        const projectKeys = keys.map(k => k.replace('voiscripter_', ''));
+        setProjectList(projectKeys);
       } else if (window.electronAPI) {
-        const keys = await window.electronAPI?.listDataKeys() || [];
-        const projectKeys = keys.filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory' && k !== 'voiscripter_groups');
-        setProjectList(projectKeys.map(k => k.replace('voiscripter_', '')));
+        try {
+          const keys = await window.electronAPI.listDataKeys() || [];
+          const projectKeys = keys.filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory' && k !== 'voiscripter_groups');
+          const projectNames = projectKeys.map(k => k.replace('voiscripter_', ''));
+          setProjectList(projectNames);
+        } catch (error) {
+          console.error('プロジェクトリスト取得エラー:', error);
+          setProjectList([]);
+        }
       }
+
+      // グループデータの復元
+      isFirstGroups.current = true; // プロジェクト切り替え時は必ずリセット
+      const savedGroups = await loadData('voiscripter_groups');
+      if (savedGroups !== null && savedGroups !== undefined) {
+        try {
+          const parsedGroups = JSON.parse(savedGroups);
+          if (Array.isArray(parsedGroups)) {
+            setGroups(parsedGroups);
+            isFirstGroups.current = false;
+            return;
+          } else {
+            setGroups([]);
+            isFirstGroups.current = false;
+            return;
+          }
+        } catch (error) {
+          setGroups([]);
+          isFirstGroups.current = false;
+          return;
+        }
+      }
+      setGroups([]);
+      isFirstGroups.current = false;
     };
     
     loadProjectData();
@@ -303,7 +358,10 @@ export default function Home() {
 
   const handleCreateProject = (name: string) => {
     setProjectId(name);
-    setProjectList(prev => [...prev, name]);
+    setProjectList(prev => {
+      const newList = [...prev, name];
+      return newList;
+    });
     saveData(`voiscripter_${name}`, JSON.stringify({
       id: '1', title: name, blocks: []
     }));
@@ -380,7 +438,17 @@ export default function Home() {
   const handleSaveDirectoryChange = async (directory: string) => {
     const previousDirectory = saveDirectory;
     setSaveDirectory(directory);
-    localStorage.setItem('voiscripter_saveDirectory', directory);
+    
+    // 設定を保存
+    if (window.electronAPI) {
+      try {
+        await window.electronAPI.saveSettings({ saveDirectory: directory });
+      } catch (error) {
+        console.error('設定保存エラー:', error);
+      }
+    } else {
+      localStorage.setItem('voiscripter_saveDirectory', directory);
+    }
     
     // 保存先が変更された場合、既存データを移動
     if (directory !== '' && previousDirectory === '') {
@@ -390,19 +458,27 @@ export default function Home() {
         for (const key of keys) {
           const data = localStorage.getItem(key);
           if (data) {
-            await window.electronAPI?.saveData(key, data);
+            try {
+              await window.electronAPI.saveData(key, data);
+            } catch (error) {
+              console.error(`データ移動エラー (${key}):`, error);
+            }
           }
         }
       }
     } else if (directory === '' && previousDirectory !== '') {
       // ファイルからlocalStorageに移動
       if (window.electronAPI) {
-        const keys = await window.electronAPI?.listDataKeys() || [];
-        for (const key of keys) {
-          const data = await window.electronAPI?.loadData(key);
-          if (data) {
-            localStorage.setItem(key, data);
+        try {
+          const keys = await window.electronAPI.listDataKeys() || [];
+          for (const key of keys) {
+            const data = await window.electronAPI.loadData(key);
+            if (data) {
+              localStorage.setItem(key, data);
+            }
           }
+        } catch (error) {
+          console.error('データ移動エラー:', error);
         }
       }
     }
@@ -494,7 +570,7 @@ export default function Home() {
   };
 
   // CSVエクスポート（話者,セリフ）
-  const handleExportCSV = () => {
+  const handleExportCSV = async () => {
     const rows = script.blocks
       .filter(block => block.characterId) // ト書きは除外
       .map(block => {
@@ -519,17 +595,29 @@ export default function Home() {
     };
 
     const csv = encodeCSV(rows);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${script.title || 'script'}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const defaultName = `${script.title || 'script'}.csv`;
+    
+    if (window.electronAPI) {
+      try {
+        await window.electronAPI.saveCSVFile(defaultName, csv);
+      } catch (error) {
+        console.error('CSV保存エラー:', error);
+        alert('CSVファイルの保存に失敗しました。');
+      }
+    } else {
+      // ブラウザ環境では従来の方法
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = defaultName;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   };
 
   // セリフだけエクスポート
-  const handleExportSerifOnly = () => {
+  const handleExportSerifOnly = async () => {
     const rows = script.blocks
       .filter(block => block.characterId) // ト書きは除外
       .map(block => [block.text]);
@@ -548,18 +636,30 @@ export default function Home() {
     };
 
     const csv = encodeCSV(rows);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${script.title || 'serif'}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const defaultName = `${script.title || 'serif'}.csv`;
+    
+    if (window.electronAPI) {
+      try {
+        await window.electronAPI.saveCSVFile(defaultName, csv);
+      } catch (error) {
+        console.error('CSV保存エラー:', error);
+        alert('CSVファイルの保存に失敗しました。');
+      }
+    } else {
+      // ブラウザ環境では従来の方法
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = defaultName;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   };
 
   // グループ別エクスポート
-  const handleExportByGroups = (selectedGroups: string[], exportType: 'full' | 'serif-only') => {
-    selectedGroups.forEach(group => {
+  const handleExportByGroups = async (selectedGroups: string[], exportType: 'full' | 'serif-only') => {
+    for (const group of selectedGroups) {
       // グループに属するキャラクターのIDを取得
       const groupCharacterIds = characters
         .filter(char => char.group === group)
@@ -572,7 +672,7 @@ export default function Home() {
 
       if (groupBlocks.length === 0) {
         console.log(`グループ「${group}」にはセリフがありません`);
-        return;
+        continue;
       }
 
       let rows: string[][];
@@ -608,14 +708,25 @@ export default function Home() {
       };
 
       const csv = encodeCSV(rows);
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-    });
+      
+      if (window.electronAPI) {
+        try {
+          await window.electronAPI.saveCSVFile(filename, csv);
+        } catch (error) {
+          console.error(`CSV保存エラー (${group}):`, error);
+          alert(`グループ「${group}」のCSVファイルの保存に失敗しました。`);
+        }
+      } else {
+        // ブラウザ環境では従来の方法
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    }
   };
 
   // キャラクター設定のCSVエクスポート
@@ -814,7 +925,7 @@ export default function Home() {
           <label>プロジェクト: </label>
           <select value={projectId} onChange={e => setProjectId(e.target.value)} className="border rounded p-1">
             {projectList.map(name => (
-              <option key={name} value={name}>{name}</option>
+              <option key={name} value={name} className="dark:text-gray-900">{name}</option>
             ))}
           </select>
           <button onClick={handleNewProject} className="px-2 py-1 bg-primary text-primary-foreground rounded">新規作成</button>
@@ -840,6 +951,8 @@ export default function Home() {
           groups={groups}
           onAddGroup={handleAddGroup}
           onDeleteGroup={handleDeleteGroup}
+          onReorderCharacters={setCharacters}
+          onReorderGroups={setGroups}
         />
         <main className="p-4">
           <div className="max-w-6xl mx-auto">
