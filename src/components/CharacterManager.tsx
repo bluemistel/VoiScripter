@@ -276,8 +276,8 @@ export default function CharacterManager({
                               <img src={character.emotions.normal.iconUrl} alt={character.name} className="w-14 h-14 rounded-full border object-cover" />
                             ) : (
                               <div className="w-14 h-14 rounded-full border bg-muted flex items-center justify-center text-center overflow-hidden">
-                                <span className="text-xs font-bold text-foreground px-1 whitespace-nowrap overflow-hidden text-ellipsis">
-                                  {character.name}
+                                <span className={`text-xs font-bold text-foreground px-1 max-w-[80px] whitespace-nowrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}>
+                                  {character.name.length > 8 ? character.name.slice(0, 8) + '…' : character.name}
                                 </span>
                               </div>
                             )}

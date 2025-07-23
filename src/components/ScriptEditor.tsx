@@ -182,8 +182,8 @@ function SortableBlock({
                 />
               ) : (
                 <div className={`w-16 h-16 rounded-full bg-muted flex items-center justify-center text-center mt-0 mr-2 overflow-hidden transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}>
-                  <span className="text-xs font-bold text-foreground px-1 whitespace-nowrap overflow-hidden text-ellipsis">
-                    {character.name}
+                  <span className={`text-xs font-bold text-foreground px-1 max-w-[80px] whitespace-nowrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}>
+                    {character.name.length > 8 ? character.name.slice(0, 8) + '…' : character.name}
                   </span>
                 </div>
               )

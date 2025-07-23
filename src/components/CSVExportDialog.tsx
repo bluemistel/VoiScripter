@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Character } from '@/types';
 
 interface CSVExportDialogProps {
@@ -8,9 +8,9 @@ interface CSVExportDialogProps {
   onClose: () => void;
   characters: Character[];
   groups: string[];
-  onExportCSV: () => void;
+  onExportCSV: (includeTogaki?: boolean) => void;
   onExportSerifOnly: () => void;
-  onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only') => void;
+  onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean) => void;
   onExportCharacterCSV: () => void;
 }
 
@@ -28,6 +28,12 @@ export default function CSVExportDialog({
   const [exportType, setExportType] = useState<ExportType>('full');
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [useGroupExport, setUseGroupExport] = useState(false);
+  const [includeTogaki, setIncludeTogaki] = useState(false);
+
+  useEffect(() => {
+    // ト書き含めるを切り替えたらグループごとエクスポートもリセット
+    setUseGroupExport(false);
+  }, [includeTogaki]);
 
   const handleGroupToggle = (group: string) => {
     setSelectedGroups(prev => 
@@ -37,12 +43,12 @@ export default function CSVExportDialog({
     );
   };
 
-  const handleExport = (exportType: 'full' | 'serif-only') => {
+  const handleExport = (exportType: 'full' | 'serif-only', includeTogaki: boolean) => {
     if (useGroupExport && selectedGroups.length > 0) {
-      onExportByGroups(selectedGroups, exportType);
+      onExportByGroups(selectedGroups, exportType, includeTogaki);
     } else if (!useGroupExport) {
       if (exportType === 'full') {
-        onExportCSV();
+        onExportCSV(includeTogaki);
       } else {
         onExportSerifOnly();
       }
@@ -114,6 +120,16 @@ export default function CSVExportDialog({
           </div>
         </div>
 
+        {/* ト書きを含めて出力チェックボックス */}
+        <label className="flex items-center space-x-2 cursor-pointer mb-2">
+          <input
+            type="checkbox"
+            checked={includeTogaki}
+            onChange={e => setIncludeTogaki(e.target.checked)}
+            className="text-primary"
+          />
+          <span className="text-foreground font-medium">ト書きを含めて出力</span>
+        </label>
         {/* グループエクスポートオプション */}
         <label className="flex items-center space-x-2 cursor-pointer">
           <input
@@ -164,7 +180,7 @@ export default function CSVExportDialog({
                 onExportCharacterCSV();
                 handleClose();
               } else if (exportType === 'full' || exportType === 'serif-only') {
-                handleExport(exportType as 'full' | 'serif-only');
+                handleExport(exportType as 'full' | 'serif-only', includeTogaki);
               }
             }}
             className="w-full px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold"

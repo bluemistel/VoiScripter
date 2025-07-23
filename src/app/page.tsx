@@ -573,15 +573,15 @@ export default function Home() {
   };
 
   // CSVエクスポート（話者,セリフ）
-  const handleExportCSV = async () => {
+  const handleExportCSV = async (includeTogaki?: boolean) => {
     const rows = script.blocks
-      .filter(block => block.characterId) // ト書きは除外
+      .filter(block => includeTogaki ? true : block.characterId)
       .map(block => {
+        if (!block.characterId) {
+          return ['ト書き', block.text.replace(/\n/g, '\\n')];
+        }
         const char = characters.find(c => c.id === block.characterId);
-        return [
-          char ? char.name : '',
-          block.text
-        ];
+        return [char ? char.name : '', block.text.replace(/\n/g, '\\n')];
       });
     
     // CSVエンコード関数
@@ -661,7 +661,7 @@ export default function Home() {
   };
 
   // グループ別エクスポート
-  const handleExportByGroups = async (selectedGroups: string[], exportType: 'full' | 'serif-only') => {
+  const handleExportByGroups = async (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean) => {
     for (const group of selectedGroups) {
       // グループに属するキャラクターのIDを取得
       const groupCharacterIds = characters
@@ -669,9 +669,16 @@ export default function Home() {
         .map(char => char.id);
 
       // グループに属するキャラクターのブロックのみをフィルタリング
-      const groupBlocks = script.blocks.filter(block => 
-        block.characterId && groupCharacterIds.includes(block.characterId)
+      let groupBlocks = script.blocks.filter(block => 
+        (block.characterId && groupCharacterIds.includes(block.characterId))
       );
+      // ト書きも含める場合
+      if (includeTogaki) {
+        groupBlocks = [
+          ...groupBlocks,
+          ...script.blocks.filter(block => !block.characterId)
+        ];
+      }
 
       if (groupBlocks.length === 0) {
         console.log(`グループ「${group}」にはセリフがありません`);
@@ -684,16 +691,16 @@ export default function Home() {
       if (exportType === 'full') {
         // 話者,セリフ形式
         rows = groupBlocks.map(block => {
+          if (!block.characterId) {
+            return ['ト書き', block.text.replace(/\n/g, '\\n')];
+          }
           const char = characters.find(c => c.id === block.characterId);
-          return [
-            char ? char.name : '',
-            block.text
-          ];
+          return [char ? char.name : '', block.text.replace(/\n/g, '\\n')];
         });
         filename = `${script.title || 'script'}_${group}.csv`;
       } else {
         // セリフだけ
-        rows = groupBlocks.map(block => [block.text]);
+        rows = groupBlocks.map(block => [block.text.replace(/\n/g, '\\n')]);
         filename = `${script.title || 'serif'}_${group}.csv`;
       }
 
@@ -815,7 +822,6 @@ export default function Home() {
       const newBlocks: ScriptBlock[] = dataRows
         .filter(row => row.length >= 2 && (row[0] || row[1])) // 空行を除外
         .map(([speaker, text]) => {
-          // 話者が既存のキャラクターと一致するか確認
           const character = characters.find(c => c.name === speaker);
           
           if (character) {
@@ -824,7 +830,7 @@ export default function Home() {
               id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
               characterId: character.id,
               emotion: 'normal',
-              text: text || ''
+              text: (text || '').replace(/\\n/g, '\n').replace(/\n/g, '\n')
             };
           } else {
             // キャラクターが存在しない場合はト書きとして追加
@@ -832,7 +838,7 @@ export default function Home() {
               id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
               characterId: '',
               emotion: 'normal',
-              text: `【${speaker}】${text || ''}`
+              text: `【${speaker}】${(text || '').replace(/\\n/g, '\n').replace(/\n/g, '\n')}`
             };
           }
         });
