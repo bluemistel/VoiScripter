@@ -358,12 +358,15 @@ export default function Home() {
 
   const handleCreateProject = (name: string) => {
     setProjectId(name);
-    setProjectList(prev => {
-      const newList = [...prev, name];
-      return newList;
-    });
+    setProjectList(prev => prev.includes(name) ? prev : [...prev, name]);
+    // defaultで作業中なら内容を引き継ぐ
+    setScript(prev => ({
+      id: '1',
+      title: name,
+      blocks: projectId === 'default' ? prev.blocks : []
+    }));
     saveData(`voiscripter_${name}`, JSON.stringify({
-      id: '1', title: name, blocks: []
+      id: '1', title: name, blocks: projectId === 'default' ? script.blocks : []
     }));
     saveData('voiscripter_lastProject', name);
   };
@@ -763,7 +766,7 @@ export default function Home() {
   };
 
   // CSVインポート（話者,セリフ）
-  const handleImportCSV = async (file: File) => {
+  const handleImportCSV = async (file: File, options?: { mode: 'append' | 'new'; projectName?: string }) => {
     try {
       const text = await file.text();
       
@@ -804,10 +807,11 @@ export default function Home() {
 
       const rows = parseCSV(text);
 
-      // ヘッダー行をスキップ
-      const dataRows = rows.slice(1);
-
-      // 新しいブロックを作成
+      // 1行目が「話者」「セリフ」などのヘッダーでなければ全行インポート
+      let dataRows = rows;
+      if (rows.length > 0 && (rows[0][0].includes('話者') || rows[0][0].toLowerCase().includes('speaker'))) {
+        dataRows = rows.slice(1);
+      }
       const newBlocks: ScriptBlock[] = dataRows
         .filter(row => row.length >= 2 && (row[0] || row[1])) // 空行を除外
         .map(([speaker, text]) => {
@@ -833,12 +837,22 @@ export default function Home() {
           }
         });
 
-      setScript(prev => ({
-        ...prev,
-        blocks: [...prev.blocks, ...newBlocks]
-      }));
-
-      alert(`${newBlocks.length}個のブロックをインポートしました。`);
+      if (options?.mode === 'new' && options.projectName) {
+        // 新規プロジェクトデータを先に保存
+        saveData(`voiscripter_${options.projectName}`, JSON.stringify({ id: '1', title: options.projectName, blocks: newBlocks }));
+        if (typeof options.projectName === 'string') {
+          setProjectList(prev => prev.includes(options.projectName!) ? prev : [...prev, options.projectName!]);
+        }
+        setProjectId(options.projectName);
+        alert(`${newBlocks.length}個のブロックを新規プロジェクト「${options.projectName}」にインポートしました。`);
+      } else {
+        // 追加
+        setScript(prev => ({
+          ...prev,
+          blocks: [...prev.blocks, ...newBlocks]
+        }));
+        alert(`${newBlocks.length}個のブロックを現在のプロジェクトにインポートしました。`);
+      }
     } catch (error) {
       console.error('CSVインポートエラー:', error);
       alert('CSVファイルのインポートに失敗しました。');
@@ -914,7 +928,6 @@ export default function Home() {
       alert('キャラクター設定のCSVファイルのインポートに失敗しました。');
     }
   };
-
 
 
   return (

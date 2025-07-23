@@ -17,7 +17,7 @@ interface HeaderProps {
   onExportSerifOnly: () => void;
   onExportCharacterCSV: () => void;
   onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only') => void;
-  onImportCSV: (file: File) => void;
+  onImportCSV: (file: File, options?: { mode: 'append' | 'new'; projectName?: string }) => void;
   onImportCharacterCSV: (file: File) => void;
   isDarkMode: boolean;
   saveDirectory: string;
@@ -27,6 +27,31 @@ interface HeaderProps {
   onDeleteGroup: (group: string) => void;
   onReorderCharacters?: (newOrder: Character[]) => void;
   onReorderGroups?: (newOrder: string[]) => void;
+}
+
+// CSVインポート時の選択ダイアログ
+function ImportChoiceDialog({ isOpen, onClose, onImportToCurrent, onImportToNew }: { isOpen: boolean, onClose: () => void, onImportToCurrent: () => void, onImportToNew: (name: string) => void }) {
+  const [newProjectName, setNewProjectName] = useState('');
+  useEffect(() => {
+    if (!isOpen) setNewProjectName('');
+  }, [isOpen]);
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+        <h3 className="text-lg font-semibold text-foreground mb-4">CSVインポート先の選択</h3>
+        <div className="space-y-4">
+          <button onClick={() => { setNewProjectName(''); onImportToCurrent(); }} className="w-full px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold">現在のプロジェクトに追加</button>
+          <div>
+            <div className="mb-2 text-foreground">新しいプロジェクトを作成してインポート</div>
+            <input type="text" value={newProjectName} onChange={e => setNewProjectName(e.target.value)} placeholder="プロジェクト名" className="w-full p-2 border rounded mb-2" />
+            <button onClick={() => { onImportToNew(newProjectName); setNewProjectName(''); }} disabled={!newProjectName.trim()} className="w-full px-4 py-2 bg-secondary text-secondary-foreground rounded hover:bg-secondary/90 font-semibold disabled:opacity-50">新規作成してインポート</button>
+          </div>
+        </div>
+        <button onClick={() => { setNewProjectName(''); onClose(); }} className="absolute top-2 right-4 text-2xl text-muted-foreground hover:text-foreground">×</button>
+      </div>
+    </div>
+  );
 }
 
 export default function Header({
@@ -54,6 +79,9 @@ export default function Header({
   const [isCSVExportDialogOpen, setIsCSVExportDialogOpen] = useState(false);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isImportChoiceDialogOpen, setIsImportChoiceDialogOpen] = useState(false);
+  const [pendingImportFile, setPendingImportFile] = useState<File|null>(null);
+  const [pendingImportType, setPendingImportType] = useState<'script'|'character'|null>(null);
   
   const importMenuRef = useRef<HTMLDivElement>(null);
 
@@ -78,14 +106,11 @@ export default function Header({
   const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>, type: 'script' | 'character') => {
     const file = event.target.files?.[0];
     if (file) {
-      if (type === 'script') {
-        onImportCSV(file);
-      } else {
-        onImportCharacterCSV(file);
-      }
+      setPendingImportFile(file);
+      setPendingImportType(type);
+      setIsImportChoiceDialogOpen(true);
       setIsImportMenuOpen(false);
     }
-    // ファイル選択をリセット
     event.target.value = '';
   };
 
@@ -208,6 +233,34 @@ export default function Header({
         onExportByGroups={onExportByGroups}
         onExportCharacterCSV={onExportCharacterCSV}
       />
+      <ImportChoiceDialog
+         isOpen={isImportChoiceDialogOpen && !!pendingImportFile && !!pendingImportType}
+         onClose={() => {
+           setIsImportChoiceDialogOpen(false);
+           setPendingImportFile(null);
+           setPendingImportType(null);
+         }}
+         onImportToCurrent={() => {
+           if (pendingImportFile && pendingImportType === 'script') {
+             onImportCSV(pendingImportFile, { mode: 'append' });
+           } else if (pendingImportFile && pendingImportType === 'character') {
+             onImportCharacterCSV(pendingImportFile);
+           }
+           setIsImportChoiceDialogOpen(false);
+           setPendingImportFile(null);
+           setPendingImportType(null);
+         }}
+         onImportToNew={(name) => {
+           if (pendingImportFile && pendingImportType === 'script') {
+             onImportCSV(pendingImportFile, { mode: 'new', projectName: name });
+           } else if (pendingImportFile && pendingImportType === 'character') {
+             onImportCharacterCSV(pendingImportFile);
+           }
+           setIsImportChoiceDialogOpen(false);
+           setPendingImportFile(null);
+           setPendingImportType(null);
+         }}
+       />
     </header>
   );
 }
