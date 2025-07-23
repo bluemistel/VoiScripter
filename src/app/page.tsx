@@ -296,7 +296,8 @@ export default function Home() {
     }
     if (typeof window === 'undefined') return;
     setUndoStack(prev => {
-      const newStack = [...prev, script];
+      let newStack = [...prev, script];
+      if (newStack.length > 50) newStack = newStack.slice(newStack.length - 50);
       saveData(`voiscripter_${projectId}_undo`, JSON.stringify(newStack));
       return newStack;
     });
@@ -539,10 +540,16 @@ export default function Home() {
       emotion,
       text: ''
     };
-    setScript(prev => ({
-      ...prev,
-      blocks: [...prev.blocks, newBlock]
-    }));
+    // 追加時はundoStackに積まれるのはuseEffectの1回だけになるようにする
+    setScript(prev => {
+      if (prev.blocks.length > 0 && prev.blocks[prev.blocks.length - 1].id === newBlock.id) {
+        return prev; // すでに追加済みなら何もしない
+      }
+      return {
+        ...prev,
+        blocks: [...prev.blocks, newBlock]
+      };
+    });
   };
 
   // ブロック削除

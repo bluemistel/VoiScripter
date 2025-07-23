@@ -294,6 +294,22 @@ export default function ScriptEditor({
         }
       });
     }, 0);
+    // 最下段にブロックが追加された場合はスクロール位置を調整
+    if (script.blocks.length > 0) {
+      const lastIdx = script.blocks.length - 1;
+      const lastRef = textareaRefs.current[lastIdx];
+      if (lastRef) {
+        const rect = lastRef.getBoundingClientRect();
+        const windowHeight = window.innerHeight;
+        // ブロックが下端に半分以上隠れている場合のみスクロール
+        if (rect.bottom > windowHeight - 40) {
+          window.scrollTo({
+            top: window.scrollY + rect.bottom - windowHeight + 80,
+            behavior: 'smooth'
+          });
+        }
+      }
+    }
   }, [script.blocks.length]);
 
   // コンテンツの高さに応じてボタンの位置を調整
