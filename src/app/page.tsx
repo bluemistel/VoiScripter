@@ -966,6 +966,25 @@ export default function Home() {
           onDeleteGroup={handleDeleteGroup}
           onReorderCharacters={setCharacters}
           onReorderGroups={setGroups}
+          projectName={script.title}
+          onRenameProject={(newName) => {
+            if (!newName.trim() || newName === script.title) return;
+            // プロジェクトリスト更新
+            setProjectList(prev => prev.map(p => p === script.title ? newName : p));
+            // プロジェクトID更新
+            setProjectId(newName);
+            // スクリプトタイトル更新
+            setScript(prev => ({ ...prev, title: newName }));
+            // 保存先も更新
+            saveData(`voiscripter_${newName}`, JSON.stringify({ ...script, title: newName }));
+            saveData('voiscripter_lastProject', newName);
+            // 旧プロジェクトデータ削除（任意）
+            if (saveDirectory === '') {
+              localStorage.removeItem(`voiscripter_${script.title}`);
+            } else if (window.electronAPI) {
+              window.electronAPI?.saveData(`voiscripter_${script.title}`, '');
+            }
+          }}
         />
         <main className="p-4">
           <div className="max-w-6xl mx-auto">

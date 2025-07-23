@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { SunIcon, MoonIcon, UsersIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
+import { SunIcon, MoonIcon, UsersIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, Cog6ToothIcon, PencilIcon } from '@heroicons/react/24/outline';
 import CharacterManager from './CharacterManager';
 import Settings from './Settings';
 import CSVExportDialog from './CSVExportDialog';
@@ -27,6 +27,8 @@ interface HeaderProps {
   onDeleteGroup: (group: string) => void;
   onReorderCharacters?: (newOrder: Character[]) => void;
   onReorderGroups?: (newOrder: string[]) => void;
+  projectName: string;
+  onRenameProject: (newName: string) => void;
 }
 
 // CSVインポート時の選択ダイアログ
@@ -54,6 +56,25 @@ function ImportChoiceDialog({ isOpen, onClose, onImportToCurrent, onImportToNew 
   );
 }
 
+// プロジェクト名変更ダイアログ
+function ProjectRenameDialog({ isOpen, onClose, currentName, onRename }: { isOpen: boolean, onClose: () => void, currentName: string, onRename: (newName: string) => void }) {
+  const [newName, setNewName] = useState(currentName);
+  useEffect(() => { setNewName(currentName); }, [currentName, isOpen]);
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+        <h3 className="text-lg font-semibold text-foreground mb-4">プロジェクト名の変更</h3>
+        <input type="text" value={newName} onChange={e => setNewName(e.target.value)} className="w-full p-2 border rounded mb-4" />
+        <div className="flex justify-end space-x-2">
+          <button onClick={onClose} className="px-4 py-2 text-muted-foreground hover:bg-accent rounded">キャンセル</button>
+          <button onClick={() => { onRename(newName); onClose(); }} disabled={!newName.trim()} className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold disabled:opacity-50">変更</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Header({
   characters,
   onAddCharacter,
@@ -73,7 +94,9 @@ export default function Header({
   onAddGroup,
   onDeleteGroup,
   onReorderCharacters,
-  onReorderGroups
+  onReorderGroups,
+  projectName,
+  onRenameProject
 }: HeaderProps) {
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
   const [isCSVExportDialogOpen, setIsCSVExportDialogOpen] = useState(false);
@@ -82,6 +105,7 @@ export default function Header({
   const [isImportChoiceDialogOpen, setIsImportChoiceDialogOpen] = useState(false);
   const [pendingImportFile, setPendingImportFile] = useState<File|null>(null);
   const [pendingImportType, setPendingImportType] = useState<'script'|'character'|null>(null);
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   
   const importMenuRef = useRef<HTMLDivElement>(null);
 
@@ -119,6 +143,16 @@ export default function Header({
       <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-16">
         <h1 className="text-2xl font-bold text-primary tracking-tight ">
           VoiScripter.
+          <span className="ml-4 pr-6 text-lg font-normal text-foreground align-middle group relative">
+            {projectName}
+            <button
+              onClick={() => setIsRenameDialogOpen(true)}
+              className="ml-2 p-1 rounded hover:bg-accent align-middle hidden group-hover:inline-block absolute top-1/2 -translate-y-1/2"
+              title="プロジェクト名を変更"
+            >
+              <PencilIcon className="w-5 h-5 inline-block" />
+            </button>
+          </span>
         </h1>
         <div className="flex items-center space-x-2">
           <button
@@ -261,6 +295,12 @@ export default function Header({
            setPendingImportType(null);
          }}
        />
+      <ProjectRenameDialog
+        isOpen={isRenameDialogOpen}
+        onClose={() => setIsRenameDialogOpen(false)}
+        currentName={projectName}
+        onRename={onRenameProject}
+      />
     </header>
   );
 }
