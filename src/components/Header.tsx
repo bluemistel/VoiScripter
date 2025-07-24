@@ -222,7 +222,7 @@ export default function Header({
       </div>
       {isCharacterModalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300">
-          <div className="bg-card border rounded-lg p-6 w-full max-w-2xl mx-4 shadow-xl transition-opacity duration-300">
+          <div className="bg-card border rounded-lg p-6 w-full max-w-3xl mx-4 shadow-xl transition-opacity duration-300">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-card-foreground">キャラクター管理</h2>
               <button

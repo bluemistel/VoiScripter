@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { XMarkIcon, Cog6ToothIcon, QuestionMarkCircleIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 
 interface SettingsProps {
@@ -18,6 +18,20 @@ export default function Settings({
 }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<'settings' | 'help' | 'license'>('settings');
   const [isSelectingDirectory, setIsSelectingDirectory] = useState(false);
+  const [fontFamily, setFontFamily] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('fontFamily') || 'mplus';
+    }
+    return 'mplus';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('fontFamily', fontFamily);
+      document.body.classList.remove('font-mplus', 'font-noto', 'font-sawarabi');
+      document.body.classList.add(`font-${fontFamily}`);
+    }
+  }, [fontFamily]);
 
   const handleDirectorySelect = async () => {
     if (typeof window === 'undefined' || !window.electronAPI) {
@@ -46,7 +60,7 @@ export default function Settings({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-background border rounded-lg shadow-lg w-full max-w-2xl mx-4 h-[750px] overflow-hidden">
+      <div className="bg-background border rounded-lg shadow-lg w-full max-w-3xl mx-4 h-[750px] overflow-hidden">
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-lg font-semibold text-foreground">設定</h2>
           <button
@@ -99,6 +113,23 @@ export default function Settings({
           <div className="flex-1 p-6 overflow-y-auto">
             {activeTab === 'settings' && (
               <div className="space-y-6">
+                {/* フォント選択セクション */}
+                <div>
+                  <h3 className="text-lg font-medium text-foreground mb-4">フォント</h3>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-foreground mb-2">表示フォント</label>
+                    <select
+                      className="p-2 border rounded bg-background text-foreground"
+                      value={fontFamily}
+                      onChange={e => setFontFamily(e.target.value)}
+                    >
+                      <option value="mplus">M PLUS 1p（デフォルト）</option>
+                      <option value="noto">Noto Sans JP</option>
+                      <option value="sawarabi">Sawarabi Gothic</option>
+                    </select>
+                  </div>
+                </div>
+                {/* データの保存先セクション */}
                 <div>
                   <h3 className="text-lg font-medium text-foreground mb-4">データの保存先</h3>
                   <div className="space-y-4">

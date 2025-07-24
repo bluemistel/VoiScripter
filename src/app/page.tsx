@@ -839,6 +839,14 @@ export default function Home() {
               emotion: 'normal',
               text: (text || '').replace(/\\n/g, '\n').replace(/\n/g, '\n')
             };
+          } else if(speaker === 'ト書き'){
+            // 話者がト書きの場合は話者情報を追加しない
+            return {
+              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+              characterId: '',
+              emotion: 'normal',
+              text: (text || '').replace(/\\n/g, '\n').replace(/\n/g, '\n')
+            };
           } else {
             // キャラクターが存在しない場合はト書きとして追加
             return {
@@ -945,7 +953,7 @@ export default function Home() {
 
   return (
     <div id="root">
-      <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
+      <div className="min-h-auto bg-background text-foreground transition-colors duration-300">
         {/* プロジェクト切替UI */}
         <div className="flex items-center gap-2 p-2">
           <label>プロジェクト: </label>

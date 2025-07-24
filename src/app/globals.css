@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@400;700&family=Noto+Sans+JP:wght@400;700&family=Sawarabi+Gothic&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -30,6 +31,18 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  body.font-mplus {
+    font-family: 'M PLUS 1p', sans-serif;
+  }
+
+  body.font-noto {
+    font-family: 'Noto Sans JP', sans-serif;
+  }
+
+  body.font-sawarabi {
+    font-family: 'Sawarabi Gothic', sans-serif;
   }
   
   html.dark {

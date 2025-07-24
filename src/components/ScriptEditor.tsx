@@ -111,7 +111,7 @@ function SortableBlock({
               value={block.text}
               onChange={e => onUpdate({ text: e.target.value })}
               placeholder="ト書きを入力"
-              className="w-full p-2 pt-2 border rounded min-h-[40px] bg-muted text-foreground focus:ring-1 focus:ring-ring text-sm italic focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400 resize-none"
+              className="w-full p-2 pt-2 border rounded min-h-[40px] bg-muted text-foreground focus:ring-1 focus:ring-ring text-sm italic focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400 resize-none overflow-hidden"
               rows={1}
               style={{ height: 'auto', borderRadius: '20px 20px 20px 0' }}
               onInput={e => {
@@ -182,7 +182,7 @@ function SortableBlock({
                 />
               ) : (
                 <div className={`w-16 h-16 rounded-full bg-muted flex items-center justify-center text-center mt-0 mr-2 overflow-hidden transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}>
-                  <span className={`text-xs font-bold text-foreground px-1 max-w-[80px] whitespace-nowrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}>
+                  <span className={`text-xs font-bold text-foreground px-1 max-w-[80px] whitespace-no-wrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}>
                     {character.name.length > 8 ? character.name.slice(0, 8) + '…' : character.name}
                   </span>
                 </div>
@@ -194,7 +194,7 @@ function SortableBlock({
                 value={block.text}
                 onChange={e => onUpdate({ text: e.target.value })}
                 placeholder="セリフを入力"
-                className="rounded-2xl border p-2 bg-card shadow-md min-h-[60px] text-sm w-full text-foreground focus:ring-1 focus:ring-ring focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400 resize-none"
+                className="rounded-2xl border p-2 bg-card shadow-md min-h-[60px] text-sm w-full text-foreground focus:ring-1 focus:ring-ring focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400 resize-none overflow-hidden"
                 rows={1}
                 style={{ height: 'auto', borderRadius: '20px 20px 20px 0' }}
                 onInput={e => {
@@ -624,7 +624,7 @@ export default function ScriptEditor({
 
   return (
     <>
-      <div className="script-editor-container min-h-screen">
+      <div className="script-editor-container min-h-auto">
         {script.blocks.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
             <p className="text-lg mb-4">1.左上の新規作成から新しいプロジェクトを作成してください。</p>

@@ -42,9 +42,18 @@ export default function RootLayout({
     }
   }, []);
 
+  // useEffectでbodyのclassListをlocalStorageのfontFamily値で上書きする
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const fontFamily = localStorage.getItem('fontFamily') || 'mplus';
+      document.body.classList.remove('font-mplus', 'font-noto', 'font-sawarabi');
+      document.body.classList.add(`font-${fontFamily}`);
+    }
+  }, []);
+
   return (
     <html lang="ja">
-      <body>{children}</body>
+      <body className="font-mplus">{children}</body>
     </html>
   )
 }
