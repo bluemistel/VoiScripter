@@ -59,13 +59,34 @@ function ImportChoiceDialog({ isOpen, onClose, onImportToCurrent, onImportToNew 
 // プロジェクト名変更ダイアログ
 function ProjectRenameDialog({ isOpen, onClose, currentName, onRename }: { isOpen: boolean, onClose: () => void, currentName: string, onRename: (newName: string) => void }) {
   const [newName, setNewName] = useState(currentName);
-  useEffect(() => { setNewName(currentName); }, [currentName, isOpen]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  
+  useEffect(() => { 
+    setNewName(currentName); 
+  }, [currentName, isOpen]);
+  
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      // ダイアログが開いた時にフォーカスを設定
+      setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 100);
+    }
+  }, [isOpen]);
+  
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
         <h3 className="text-lg font-semibold text-foreground mb-4">プロジェクト名の変更</h3>
-        <input type="text" value={newName} onChange={e => setNewName(e.target.value)} className="w-full p-2 border rounded mb-4" />
+        <input 
+          ref={inputRef}
+          type="text" 
+          value={newName} 
+          onChange={e => setNewName(e.target.value)} 
+          className="w-full p-2 border rounded mb-4" 
+        />
         <div className="flex justify-end space-x-2">
           <button onClick={onClose} className="px-4 py-2 text-muted-foreground hover:bg-accent rounded">キャンセル</button>
           <button onClick={() => { onRename(newName); onClose(); }} disabled={!newName.trim()} className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold disabled:opacity-50">変更</button>

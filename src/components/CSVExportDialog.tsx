@@ -35,6 +35,13 @@ export default function CSVExportDialog({
     setUseGroupExport(false);
   }, [includeTogaki]);
 
+  // キャラクター設定選択時にト書き含めるをリセット
+  useEffect(() => {
+    if (exportType === 'character-setting') {
+      setIncludeTogaki(false);
+    }
+  }, [exportType]);
+
   const handleGroupToggle = (group: string) => {
     setSelectedGroups(prev => 
       prev.includes(group) 
@@ -121,17 +128,20 @@ export default function CSVExportDialog({
         </div>
 
         {/* ト書きを含めて出力チェックボックス */}
-        <label className="flex items-center space-x-2 cursor-pointer mb-2">
+        <label className={`flex items-center space-x-2 cursor-pointer mb-2 ${exportType === 'character-setting' ? 'opacity-50' : ''}`}>
           <input
             type="checkbox"
             checked={includeTogaki}
             onChange={e => setIncludeTogaki(e.target.checked)}
             className="text-primary"
+            disabled={exportType === 'character-setting'}
           />
-          <span className="text-foreground font-medium">ト書きを含めて出力</span>
+          <span className={`font-medium ${exportType === 'character-setting' ? 'text-muted-foreground' : 'text-foreground'}`}>
+            ト書きを含めて出力
+          </span>
         </label>
         {/* グループエクスポートオプション */}
-        <label className="flex items-center space-x-2 cursor-pointer">
+        <label className={`flex items-center space-x-2 cursor-pointer mb-2 ${exportType === 'character-setting' ? 'opacity-50' : ''}`}>
           <input
             type="checkbox"
             checked={useGroupExport}
@@ -139,7 +149,9 @@ export default function CSVExportDialog({
             className="text-primary"
             disabled={exportType === 'character-setting'}
           />
-          <span className="text-foreground font-medium">グループごとにエクスポート</span>
+          <span className={`font-medium ${exportType === 'character-setting' ? 'text-muted-foreground' : 'text-foreground'}`}>
+            グループごとにエクスポート
+          </span>
         </label>
 
         {/* グループ選択 */}

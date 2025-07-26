@@ -294,19 +294,26 @@ export default function ScriptEditor({
         }
       });
     }, 0);
-    // 最下段にブロックが追加された場合はスクロール位置を調整
-    if (script.blocks.length > 0) {
+    
+    // 最下段にブロックが追加された場合のみスクロール位置を調整
+    if (script.blocks.length > 0 && script.blocks.length > prevBlockCount.current) {
       const lastIdx = script.blocks.length - 1;
       const lastRef = textareaRefs.current[lastIdx];
       if (lastRef) {
-        const rect = lastRef.getBoundingClientRect();
+        // 下方向にスクロールが可能かチェック
+        const documentHeight = document.documentElement.scrollHeight;
         const windowHeight = window.innerHeight;
-        // ブロックが下端に半分以上隠れている場合のみスクロール
-        if (rect.bottom > windowHeight - 40) {
-          window.scrollTo({
-            top: window.scrollY + rect.bottom - windowHeight + 80,
-            behavior: 'smooth'
-          });
+        const currentScrollY = window.scrollY;
+        const canScrollDown = currentScrollY + windowHeight < documentHeight;
+        
+        if (canScrollDown) {
+          // 最下段までスクロール
+          setTimeout(() => {
+            window.scrollTo({
+              top: documentHeight - windowHeight,
+              behavior: 'smooth'
+            });
+          }, 50); // 少し遅延を入れてDOMの更新を待つ
         }
       }
     }
@@ -611,7 +618,7 @@ export default function ScriptEditor({
   // ト書き追加
   const handleAddTogaki = (insertIndex: number) => {
     const newBlock: ScriptBlock = {
-      id: Date.now().toString(),
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       characterId: '',
       emotion: 'normal',
       text: ''

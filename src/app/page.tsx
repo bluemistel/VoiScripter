@@ -289,12 +289,22 @@ export default function Home() {
 
   // script変更時に保存＆Undoスタック
   const isFirstRender = useRef(true);
+  const isUndoRedoOperation = useRef(false);
+  
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
     if (typeof window === 'undefined') return;
+    
+    // Undo/Redo操作中はUndoスタックに追加しない
+    if (isUndoRedoOperation.current) {
+      isUndoRedoOperation.current = false;
+      saveData(`voiscripter_${projectId}`, JSON.stringify(script));
+      return;
+    }
+    
     setUndoStack(prev => {
       let newStack = [...prev, script];
       if (newStack.length > 50) newStack = newStack.slice(newStack.length - 50);
@@ -317,6 +327,7 @@ export default function Home() {
       if (e.ctrlKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (undoStack.length > 0) {
+          isUndoRedoOperation.current = true;
           setRedoStack(r => {
             const newRedo = [script, ...r];
             if (typeof window !== 'undefined') saveData(`voiscripter_${projectId}_redo`, JSON.stringify(newRedo));
@@ -333,6 +344,7 @@ export default function Home() {
       } else if (e.ctrlKey && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         if (redoStack.length > 0) {
+          isUndoRedoOperation.current = true;
           const next = redoStack[0];
           setUndoStack(u => {
             const newUndo = [...u, script];
