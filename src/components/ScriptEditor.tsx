@@ -296,7 +296,9 @@ export default function ScriptEditor({
     }, 0);
     
     // 最下段にブロックが追加された場合のみスクロール位置を調整
-    if (script.blocks.length > 0 && script.blocks.length > prevBlockCount.current) {
+    const prevIdx = script.blocks.findIndex(block => block.id === selectedBlockId);  // 増える前のインデックス
+    const maxBlockCount = Math.max(script.blocks.length, prevBlockCount.current);
+    if (script.blocks.length > 0 && maxBlockCount <= script.blocks.length && prevBlockCount.current <= prevIdx + 1) {
       const lastIdx = script.blocks.length - 1;
       const lastRef = textareaRefs.current[lastIdx];
       if (lastRef) {
@@ -310,10 +312,10 @@ export default function ScriptEditor({
         
         // 新しく追加されたブロックが画面外にあるかチェック
         const rect = lastRef.getBoundingClientRect();
-        const isBlockVisible = rect.top < windowHeight && rect.bottom > 0;
+        const isBlockVisible = rect.bottom > windowHeight && rect.bottom > 0;
         
         // 最下段にブロックが追加された場合のみ、最下段までスクロール
-        if (canScrollToBottom && !isBlockVisible) {
+        if (canScrollToBottom && isBlockVisible) {
           setTimeout(() => {
             window.scrollTo({
               top: documentHeight - windowHeight,
