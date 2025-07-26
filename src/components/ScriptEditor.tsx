@@ -300,14 +300,20 @@ export default function ScriptEditor({
       const lastIdx = script.blocks.length - 1;
       const lastRef = textareaRefs.current[lastIdx];
       if (lastRef) {
-        // 下方向にスクロールが可能かチェック
-        const documentHeight = document.documentElement.scrollHeight;
-        const windowHeight = window.innerHeight;
+        // 現在のスクロール位置を取得
         const currentScrollY = window.scrollY;
-        const canScrollDown = currentScrollY + windowHeight < documentHeight;
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
         
-        if (canScrollDown) {
-          // 最下段までスクロール
+        // 最下段にスクロールが可能かチェック
+        const canScrollToBottom = currentScrollY + windowHeight < documentHeight;
+        
+        // 新しく追加されたブロックが画面外にあるかチェック
+        const rect = lastRef.getBoundingClientRect();
+        const isBlockVisible = rect.top < windowHeight && rect.bottom > 0;
+        
+        // 最下段にブロックが追加された場合のみ、最下段までスクロール
+        if (canScrollToBottom && !isBlockVisible) {
           setTimeout(() => {
             window.scrollTo({
               top: documentHeight - windowHeight,
