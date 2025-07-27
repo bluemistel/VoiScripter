@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { XMarkIcon, Cog6ToothIcon, QuestionMarkCircleIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, Cog6ToothIcon, QuestionMarkCircleIcon, InformationCircleIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -16,7 +16,7 @@ export default function Settings({
   saveDirectory,
   onSaveDirectoryChange
 }: SettingsProps) {
-  const [activeTab, setActiveTab] = useState<'settings' | 'help' | 'license'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'help' | 'license' | 'changelog'>('settings');
   const [isSelectingDirectory, setIsSelectingDirectory] = useState(false);
   const [fontFamily, setFontFamily] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -95,6 +95,17 @@ export default function Settings({
             >
               <QuestionMarkCircleIcon className="w-5 h-5" />
               <span>ヘルプ</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('changelog')}
+              className={`w-full p-3 text-left flex items-center space-x-2 transition-colors ${
+                activeTab === 'changelog' 
+                  ? 'bg-primary text-primary-foreground' 
+                  : 'hover:bg-accent'
+              }`}
+            >
+              <DocumentTextIcon className="w-5 h-5" />
+              <span>更新履歴</span>
             </button>
             <button
               onClick={() => setActiveTab('license')}
@@ -215,12 +226,44 @@ export default function Settings({
               </div>
             )}
 
-              {activeTab === 'license' && (
+            {activeTab === 'changelog' && (
+              <div className="flex flex-col max-h-[60vh] overflow-y-auto pr-2">
+                <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.1.1</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• スクロール位置の補正機能を改善</li>
+                      <li>• テキストブロックの挿入時のフォーカス処理を修正</li>
+                      <li>• キーボードショートカットの動作を最適化</li>
+                      <li>• 設定画面に更新履歴タブを追加</li>
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.1.0</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• 初回リリース</li>
+                      <li>• 基本的なテキストブロック編集機能</li>
+                      <li>• キャラクター管理機能</li>
+                      <li>• CSVエクスポート/インポート機能</li>
+                      <li>• プロジェクト管理機能</li>
+                      <li>• ドラッグ&ドロップによるブロック並び替え</li>
+                      <li>• キーボードショートカット対応</li>
+                      <li>• ダークモード対応</li>
+                      <li>• デスクトップアプリ対応(開発中)</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'license' && (
                 <div className="mt-6">
                   <h4 className="font-medium text-foreground mb-2">このアプリについて</h4>
                   <div className="text-sm text-muted-foreground space-y-1 ml-4">
                     <div className="mb-2">
-                      <span className="font-bold text-foreground">VoiScripter</span> v0.1.0
+                      <span className="font-bold text-foreground">VoiScripter</span>
                     </div>
                     <div className="ml-2">
                         <span>本アプリの不具合により何らかの損害が発生した場合でも、作者は一切の責任を負いません。自己責任でのご使用をお願いいたします。
