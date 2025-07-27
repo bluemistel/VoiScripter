@@ -354,13 +354,32 @@ export default function ScriptEditor({
 
   // 最後に追加されたブロックに自動フォーカス
   const prevBlockCount = useRef(script.blocks.length);
+  const insertIdx = useRef<number>(-1);
+  
   useEffect(() => {
     if (script.blocks.length > prevBlockCount.current) {
       // 手動フォーカスターゲットがある場合は自動フォーカスをスキップ
       if (manualFocusTarget) {
+        console.log('Skipping auto focus due to manual focus target');
         setManualFocusTarget(null);
+        prevBlockCount.current = script.blocks.length;
         return;
       }
+      
+      // 挿入されたインデックスがある場合はそのインデックスにフォーカス
+      if (insertIdx.current >= 0) {
+        console.log(`Auto focusing inserted block at index: ${insertIdx.current}`);
+        setTimeout(() => {
+          textareaRefs.current[insertIdx.current]?.focus();
+          setSelectedBlockId(script.blocks[insertIdx.current]?.id || null);
+          insertIdx.current = -1; // リセット
+        }, 10);
+        prevBlockCount.current = script.blocks.length;
+        return;
+      }
+      
+      // 通常の最後のブロックへの自動フォーカス
+      console.log('Auto focusing last block');
       setTimeout(() => {
         const lastIdx = script.blocks.length - 1;
         textareaRefs.current[lastIdx]?.focus();
@@ -405,8 +424,42 @@ export default function ScriptEditor({
   useEffect(() => {
     if (manualFocusTarget) {
       setTimeout(() => {
+        // フォーカス設定前のスクロール位置を保存
+        const scrollYBeforeFocus = window.scrollY;
+        
         textareaRefs.current[manualFocusTarget.index]?.focus();
         setSelectedBlockId(manualFocusTarget.id);
+        
+        // フォーカス設定後にスクロール位置を復元（自動スクロールを防ぐ）
+        setTimeout(() => {
+          if (window.scrollY !== scrollYBeforeFocus) {
+            window.scrollTo(0, scrollYBeforeFocus);
+          }
+          // スクロールが必要な場合のみensureBlockVisibleを呼び出し
+          const targetRef = textareaRefs.current[manualFocusTarget.index];
+          if (targetRef) {
+            const rect = targetRef.getBoundingClientRect();
+            const windowHeight = window.innerHeight;
+            const headerHeight = 64;
+            
+            console.log(`Manual focus target ${manualFocusTarget.index} rect:`, rect);
+            console.log(`Window height: ${windowHeight}, Header height: ${headerHeight}`);
+            console.log(`rect.bottom: ${rect.bottom}, rect.top: ${rect.top}`);
+            console.log(`Bottom condition: ${rect.bottom > windowHeight}, Top condition: ${rect.top < headerHeight}`);
+            
+            // ブロックが画面内に完全に収まっているかを判定
+            const isBlockFullyVisible = rect.top >= headerHeight && rect.bottom <= windowHeight;
+            
+            // スクロールが必要な場合のみ処理を実行
+            if (!isBlockFullyVisible) {
+              console.log(`Scrolling needed for manual focus target ${manualFocusTarget.index}`);
+              ensureBlockVisible(manualFocusTarget.index, 50);
+            } else {
+              console.log(`No scrolling needed for manual focus target ${manualFocusTarget.index}`);
+            }
+          }
+        }, 10);
+        
         setManualFocusTarget(null);
       }, 10);
     }
@@ -437,21 +490,79 @@ export default function ScriptEditor({
   const scrollToBlock = (index: number) => {
     if (textareaRefs.current[index]) {
       textareaRefs.current[index]?.focus();
-      textareaRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setSelectedBlockId(script.blocks[index]?.id || null);
+      ensureBlockVisible(index, 50);
     }
   };
+
+  // ブロックがウィンドウの表示領域に収まるようにスクロール位置を調整する関数
+  const ensureBlockVisible = (index: number, delay: number = 10) => {
+    console.log(`ensureBlockVisible called for index: ${index}, delay: ${delay}`);
+    setTimeout(() => {
+      const targetRef = textareaRefs.current[index];
+      if (targetRef) {
+        const rect = targetRef.getBoundingClientRect();
+        const windowHeight = window.innerHeight;
+        const currentScrollY = window.scrollY;
+        
+        // ヘッダーの高さを取得（固定ヘッダーの場合）
+        const headerHeight = 64; // ヘッダーの高さ（px）
+        
+        console.log(`Block ${index} rect:`, rect);
+        console.log(`Window height: ${windowHeight}, Current scroll Y: ${currentScrollY}`);
+        console.log(`rect.bottom: ${rect.bottom}, windowHeight: ${windowHeight}`);
+        console.log(`rect.top: ${rect.top}`);
+        
+        // ブロックが画面外にある場合のみスクロール
+        if (rect.bottom > windowHeight) {
+          console.log(`Scrolling down for block ${index}`);
+          // 下方向にスクロールが必要な場合
+          const scrollOffset = rect.bottom - windowHeight + 20; // 20pxのマージン
+          console.log(`Scroll offset: ${scrollOffset}`);
+          window.scrollBy({
+            top: scrollOffset,
+            behavior: 'smooth'
+          });
+        } else if (rect.top < headerHeight) {
+          console.log(`Scrolling up for block ${index}`);
+          // 上方向にスクロールが必要な場合（ヘッダーの高さを考慮）
+          const scrollOffset = rect.top - headerHeight - 20; // ヘッダーの高さ + 20pxのマージン
+          console.log(`Scroll offset: ${scrollOffset}`);
+          window.scrollBy({
+            top: scrollOffset,
+            behavior: 'smooth'
+          });
+        } else {
+          console.log(`Block ${index} is already visible, no scroll needed`);
+        }
+      } else {
+        console.log(`Target ref for index ${index} is null`);
+      }
+    }, delay);
+  };
+
   const handleScrollTop = () => {
     setSlideUp(true);
     setTimeout(() => setSlideUp(false), 300);
     scrollToY(0, 500);
-    scrollToBlock(0);
+    setTimeout(() => {
+      if (textareaRefs.current[0]) {
+        textareaRefs.current[0]?.focus();
+        setSelectedBlockId(script.blocks[0]?.id || null);
+      }
+    }, 500);
   };
   const handleScrollBottom = () => {
     setSlideDown(true);
     setTimeout(() => setSlideDown(false), 300);
     scrollToY(document.body.scrollHeight, 500);
-    scrollToBlock(script.blocks.length - 1);
+    setTimeout(() => {
+      const lastIdx = script.blocks.length - 1;
+      if (textareaRefs.current[lastIdx]) {
+        textareaRefs.current[lastIdx]?.focus();
+        setSelectedBlockId(script.blocks[lastIdx]?.id || null);
+      }
+    }, 500);
   };
 
   // ショートカットキー
@@ -478,6 +589,7 @@ export default function ScriptEditor({
           emotion: 'normal',
           text: ''
         };
+        insertIdx.current = idx; // 挿入インデックスを設定
         onInsertBlock(newBlock, idx);
         setTimeout(() => {
           setManualFocusTarget({ index: idx, id: newBlock.id });
@@ -537,7 +649,14 @@ export default function ScriptEditor({
             const lineCount = before.split('\n').length;
             if (lineCount === 1) {
               e.preventDefault();
+              const scrollYBeforeFocus = window.scrollY;
               textareaRefs.current[activeIdx - 1]?.focus();
+              setTimeout(() => {
+                if (window.scrollY !== scrollYBeforeFocus) {
+                  window.scrollTo(0, scrollYBeforeFocus);
+                }
+                ensureBlockVisible(activeIdx - 1);
+              }, 10);
             }
           }
         }
@@ -555,7 +674,14 @@ export default function ScriptEditor({
             // 現在のカーソル位置が最下段か判定
             if (currentLine === totalLines) {
               e.preventDefault();
+              const scrollYBeforeFocus = window.scrollY;
               textareaRefs.current[activeIdx + 1]?.focus();
+              setTimeout(() => {
+                if (window.scrollY !== scrollYBeforeFocus) {
+                  window.scrollTo(0, scrollYBeforeFocus);
+                }
+                ensureBlockVisible(activeIdx + 1);
+              }, 10);
             }
           }
         }
@@ -571,10 +697,11 @@ export default function ScriptEditor({
             emotion: currentBlock.emotion,
             text: ''
           };
+          insertIdx.current = activeIdx + 1; // 挿入インデックスを設定
           onInsertBlock(newBlock, activeIdx + 1);
           setTimeout(() => {
             setManualFocusTarget({ index: activeIdx + 1, id: newBlock.id });
-          }, 10); // タイミングを調整
+          }, 50); // タイミングを調整（50msに延長）
         }
       }
       // Ctrl+↑: ブロック上移動
@@ -585,6 +712,7 @@ export default function ScriptEditor({
           setSelectedBlockId(script.blocks[activeIdx - 1]?.id || ''); // 追加
           setTimeout(() => {
             setManualFocusTarget({ index: activeIdx - 1, id: script.blocks[activeIdx - 1]?.id || '' });
+            ensureBlockVisible(activeIdx - 1, 50);
           }, 10); // タイミングを調整
         }
       }
@@ -596,6 +724,7 @@ export default function ScriptEditor({
           setSelectedBlockId(script.blocks[activeIdx + 1]?.id || ''); // 追加
           setTimeout(() => {
             setManualFocusTarget({ index: activeIdx + 1, id: script.blocks[activeIdx + 1]?.id || '' });
+            ensureBlockVisible(activeIdx + 1, 50);
           }, 10); // タイミングを調整
         }
       }
@@ -631,10 +760,11 @@ export default function ScriptEditor({
       emotion: 'normal',
       text: ''
     };
+    insertIdx.current = insertIndex; // 挿入インデックスを設定
     onInsertBlock(newBlock, insertIndex);
     setTimeout(() => {
-      textareaRefs.current[insertIndex]?.focus();
-    }, 0);
+      setManualFocusTarget({ index: insertIndex, id: newBlock.id });
+    }, 10);
   };
 
   return (
@@ -670,6 +800,7 @@ export default function ScriptEditor({
                           id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                           text: block.text // 元のテキストを保持
                         };
+                        insertIdx.current = index + 1; // 複製ブロックの挿入インデックスを設定
                         onInsertBlock(newBlock, index + 1);
                         setTimeout(() => {
                           setManualFocusTarget({ index: index + 1, id: newBlock.id });
