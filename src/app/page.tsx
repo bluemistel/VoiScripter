@@ -38,7 +38,24 @@ export default function Home() {
   const saveData = (key: string, data: string) => {
     if (saveDirectory === '') {
       // localStorageに保存
-      localStorage.setItem(key, data);
+      try {
+        localStorage.setItem(key, data);
+      } catch (error) {
+        console.error('localStorage save error:', error);
+        // QuotaExceededErrorの場合、古いデータを削除して再試行
+        if (error instanceof Error && error.name === 'QuotaExceededError') {
+          try {
+            // 古いundo/redoデータを削除
+            const keys = Object.keys(localStorage);
+            const undoRedoKeys = keys.filter(k => k.includes('_undo') || k.includes('_redo'));
+            undoRedoKeys.forEach(k => localStorage.removeItem(k));
+            // 再試行
+            localStorage.setItem(key, data);
+          } catch (retryError) {
+            console.error('Retry save failed:', retryError);
+          }
+        }
+      }
     } else if (window.electronAPI) {
       // ファイルに保存
       window.electronAPI?.saveData(key, data);
@@ -140,7 +157,7 @@ export default function Home() {
       const lastProject = await loadData('voiscripter_lastProject');
       // lastProjectが有効なプロジェクト名かチェック
       let validProjectId = 'default';
-      if (lastProject && lastProject !== 'lastProject') {
+      if (lastProject && lastProject !== 'lastProject' && lastProject.trim() !== '') {
         validProjectId = lastProject;
       }
       setProjectId(validProjectId);
@@ -166,9 +183,26 @@ export default function Home() {
       const savedScript = await loadData(`voiscripter_${validProjectId}`);
       if (savedScript) {
         try {
-          setScript(JSON.parse(savedScript));
+          const parsedScript = JSON.parse(savedScript);
+          // 基本的な構造チェック
+          if (parsedScript && typeof parsedScript === 'object' && Array.isArray(parsedScript.blocks)) {
+            setScript(parsedScript);
+          } else {
+            throw new Error('Invalid script structure');
+          }
         } catch (error) {
           console.error('Script parse error:', error);
+          alert('無効な台本形式です。または台本が壊れています。');
+          // 無効なデータを削除してから空のプロジェクトを設定
+          try {
+            if (saveDirectory === '') {
+              localStorage.removeItem(`voiscripter_${validProjectId}`);
+              localStorage.removeItem(`voiscripter_${validProjectId}_undo`);
+              localStorage.removeItem(`voiscripter_${validProjectId}_redo`);
+            }
+          } catch (cleanupError) {
+            console.error('Cleanup error:', cleanupError);
+          }
           setScript({
             id: '1', title: '新しい台本', blocks: []
           });
@@ -187,7 +221,13 @@ export default function Home() {
       const u = await loadData(`voiscripter_${validProjectId}_undo`);
       if (u) {
         try {
-          setUndoStack(JSON.parse(u));
+          const parsedUndo = JSON.parse(u);
+          if (Array.isArray(parsedUndo)) {
+            setUndoStack(parsedUndo);
+          } else {
+            console.error('Invalid undo stack format');
+            setUndoStack([]);
+          }
         } catch (error) {
           console.error('Undo stack parse error:', error);
           setUndoStack([]);
@@ -197,7 +237,13 @@ export default function Home() {
       const r = await loadData(`voiscripter_${validProjectId}_redo`);
       if (r) {
         try {
-          setRedoStack(JSON.parse(r));
+          const parsedRedo = JSON.parse(r);
+          if (Array.isArray(parsedRedo)) {
+            setRedoStack(parsedRedo);
+          } else {
+            console.error('Invalid redo stack format');
+            setRedoStack([]);
+          }
         } catch (error) {
           console.error('Redo stack parse error:', error);
           setRedoStack([]);
@@ -781,10 +827,11 @@ export default function Home() {
   // キャラクター設定のCSVエクスポート
   const handleExportCharacterCSV = () => {
     const rows = [
-      ['名前', 'アイコン'],
+      ['名前', 'アイコン', 'グループ'],
       ...characters.map(char => [
         char.name,
-        char.emotions.normal.iconUrl
+        char.emotions.normal.iconUrl,
+        char.group
       ])
     ];
     
@@ -945,7 +992,17 @@ export default function Home() {
       }
     } catch (error) {
       console.error('CSVインポートエラー:', error);
-      alert('CSVファイルのインポートに失敗しました。');
+      alert('無効な台本形式です。または台本が壊れています。');
+      // 空のプロジェクトを読み込む
+      try {
+        setScript({
+          id: '1',
+          title: '新しい台本',
+          blocks: []
+        });
+      } catch (setError) {
+        console.error('Failed to set empty script:', setError);
+      }
     }
   };
 
@@ -997,7 +1054,7 @@ export default function Home() {
       // 新しいキャラクターを作成
       const newCharacters: Character[] = dataRows
         .filter(row => row.length >= 1 && row[0].trim() !== '') // 名前が空の行をスキップ
-        .map(([name, iconUrl]) => {
+        .map(([name, iconUrl, group]) => {
           const emotions = {
             normal: { iconUrl: iconUrl || '' }
           } as const;
@@ -1005,7 +1062,7 @@ export default function Home() {
           return {
             id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
             name: name,
-            group: 'なし',
+            group: group || 'なし',
             emotions
           };
         });

@@ -42,8 +42,17 @@ function ImportChoiceDialog({ isOpen, onClose, onImportToCurrent, onImportToNew 
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
-        <h3 className="text-lg font-semibold text-foreground mb-4">CSVインポート先の選択</h3>
+      <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6 relative">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-foreground">CSVインポート先の選択</h3>
+          <button
+            onClick={() => { setNewProjectName(''); onClose(); }}
+            className="text-muted-foreground hover:text-foreground text-2xl"
+            title="キャンセル"
+          >
+            ×
+          </button>
+        </div>
         <div className="space-y-4">
           <button onClick={() => { setNewProjectName(''); onImportToCurrent(); }} className="w-full px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold">現在のプロジェクトに追加</button>
           <div>
@@ -52,7 +61,6 @@ function ImportChoiceDialog({ isOpen, onClose, onImportToCurrent, onImportToNew 
             <button onClick={() => { onImportToNew(newProjectName); setNewProjectName(''); }} disabled={!newProjectName.trim()} className="w-full px-4 py-2 bg-secondary text-secondary-foreground rounded hover:bg-secondary/90 font-semibold disabled:opacity-50">新規作成してインポート</button>
           </div>
         </div>
-        <button onClick={() => { setNewProjectName(''); onClose(); }} className="absolute top-2 right-4 text-2xl text-muted-foreground hover:text-foreground">×</button>
       </div>
     </div>
   );
@@ -152,13 +160,33 @@ export default function Header({
     onThemeChange(!isDarkMode);
   };
 
-  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>, type: 'script' | 'character') => {
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>, type: 'script' | 'character') => {
     const file = event.target.files?.[0];
     if (file) {
-      setPendingImportFile(file);
-      setPendingImportType(type);
-      setIsImportChoiceDialogOpen(true);
-      setIsImportMenuOpen(false);
+      // ファイルの内容を読み込んでヘッダー行をチェック
+      try {
+        const text = await file.text();
+        const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+        const firstLine = lines[0] || '';
+        const firstColumn = firstLine.split(',')[0]?.trim() || '';
+        
+        // 1列目の1カラム目が「名前」ならキャラクター設定のインポート
+        const isCharacterImport = firstColumn === '名前';
+        
+        if (isCharacterImport) {
+          // キャラクター設定のインポート
+          onImportCharacterCSV(file);
+        } else {
+          // 台本のインポート
+          setPendingImportFile(file);
+          setPendingImportType('script');
+          setIsImportChoiceDialogOpen(true);
+          setIsImportMenuOpen(false);
+        }
+      } catch (error) {
+        console.error('ファイル読み込みエラー:', error);
+        alert('ファイルの読み込みに失敗しました。');
+      }
     }
     event.target.value = '';
   };
