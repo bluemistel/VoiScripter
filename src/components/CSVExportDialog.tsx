@@ -8,10 +8,12 @@ interface CSVExportDialogProps {
   onClose: () => void;
   characters: Character[];
   groups: string[];
-  onExportCSV: (includeTogaki?: boolean) => void;
-  onExportSerifOnly: () => void;
-  onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean) => void;
+  selectedBlockIds: string[];
+  onExportCSV: (includeTogaki?: boolean, selectedOnly?: boolean) => void;
+  onExportSerifOnly: (selectedOnly?: boolean) => void;
+  onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean, selectedOnly?: boolean) => void;
   onExportCharacterCSV: () => void;
+  onExportToClipboard: (serifOnly?: boolean, selectedOnly?: boolean) => void;
 }
 
 export default function CSVExportDialog({
@@ -19,28 +21,48 @@ export default function CSVExportDialog({
   onClose,
   characters,
   groups,
+  selectedBlockIds,
   onExportCSV,
   onExportSerifOnly,
   onExportByGroups,
-  onExportCharacterCSV
+  onExportCharacterCSV,
+  onExportToClipboard
 }: CSVExportDialogProps) {
   type ExportType = 'full' | 'serif-only' | 'character-setting';
   const [exportType, setExportType] = useState<ExportType>('full');
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [useGroupExport, setUseGroupExport] = useState(false);
   const [includeTogaki, setIncludeTogaki] = useState(false);
+  const [exportSelectedOnly, setExportSelectedOnly] = useState(false);
+  const [exportToClipboard, setExportToClipboard] = useState(false);
+  const [activeTab, setActiveTab] = useState<'script' | 'character'>('script');
 
-  useEffect(() => {
-    // ト書き含めるを切り替えたらグループごとエクスポートもリセット
-    setUseGroupExport(false);
-  }, [includeTogaki]);
+  // このuseEffectを削除して、ト書き含めるの切り替えでグループごとエクスポートがリセットされないようにする
 
   // キャラクター設定選択時にト書き含めるをリセット
   useEffect(() => {
     if (exportType === 'character-setting') {
       setIncludeTogaki(false);
+      setExportSelectedOnly(false);
+      setExportToClipboard(false);
     }
   }, [exportType]);
+
+  // 選択ブロックがない場合は選択ブロックのみエクスポートを無効化
+  useEffect(() => {
+    if (selectedBlockIds.length === 0) {
+      setExportSelectedOnly(false);
+    }
+  }, [selectedBlockIds]);
+
+  // タブ切り替え時にエクスポートタイプをリセット
+  useEffect(() => {
+    if (activeTab === 'character') {
+      setExportType('character-setting');
+    } else {
+      setExportType('full');
+    }
+  }, [activeTab]);
 
   const handleGroupToggle = (group: string) => {
     setSelectedGroups(prev => 
@@ -51,13 +73,16 @@ export default function CSVExportDialog({
   };
 
   const handleExport = (exportType: 'full' | 'serif-only', includeTogaki: boolean) => {
-    if (useGroupExport && selectedGroups.length > 0) {
-      onExportByGroups(selectedGroups, exportType, includeTogaki);
+    if (exportToClipboard) {
+      // クリップボードに出力
+      onExportToClipboard(exportType === 'serif-only', exportSelectedOnly);
+    } else if (useGroupExport && selectedGroups.length > 0) {
+      onExportByGroups(selectedGroups, exportType, includeTogaki, exportSelectedOnly);
     } else if (!useGroupExport) {
       if (exportType === 'full') {
-        onExportCSV(includeTogaki);
+        onExportCSV(includeTogaki, exportSelectedOnly);
       } else {
-        onExportSerifOnly();
+        onExportSerifOnly(exportSelectedOnly);
       }
     }
     onClose();
@@ -67,6 +92,9 @@ export default function CSVExportDialog({
     setSelectedGroups([]);
     setUseGroupExport(false);
     setExportType('full');
+    setExportSelectedOnly(false);
+    setExportToClipboard(false);
+    setActiveTab('script');
     onClose();
   };
 
@@ -86,101 +114,164 @@ export default function CSVExportDialog({
           </button>
         </div>
 
-        {/* エクスポートタイプ選択 */}
-        <div className="mb-4">
-          <span className="text-foreground mb-2 font-semibold">キャラクター設定</span>
-          <div className="space-y-2">
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input
-                type="radio"
-                name="exportType"
-                value="character-setting"
-                checked={exportType === 'character-setting'}
-                onChange={(e) => setExportType(e.target.value as ExportType)}
-                className="text-primary"
-              />
-              <span className="text-foreground">キャラクター設定のエクスポート</span>
-            </label>
-            <span className="text-foreground mb-2 font-semibold">台本のエクスポート</span>
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input
-                type="radio"
-                name="exportType"
-                value="full"
-                checked={exportType === 'full'}
-                onChange={(e) => setExportType(e.target.value as ExportType)}
-                className="text-primary"
-              />
-              <span className="text-foreground">CSVエクスポート（話者, セリフ）</span>
-            </label>
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input
-                type="radio"
-                name="exportType"
-                value="serif-only"
-                checked={exportType === 'serif-only'}
-                onChange={(e) => setExportType(e.target.value as ExportType)}
-                className="text-primary"
-              />
-              <span className="text-foreground">セリフだけエクスポート</span>
-            </label>
-          </div>
+        {/* タブ切り替え */}
+        <div className="flex border-b mb-4">
+          <button
+            onClick={() => setActiveTab('script')}
+            className={`flex-1 px-4 py-2 font-medium transition-colors ${
+              activeTab === 'script'
+                ? 'text-primary border-b-2 border-primary'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            台本
+          </button>
+          <button
+            onClick={() => setActiveTab('character')}
+            className={`flex-1 px-4 py-2 font-medium transition-colors ${
+              activeTab === 'character'
+                ? 'text-primary border-b-2 border-primary'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            キャラクター設定
+          </button>
         </div>
 
-        {/* ト書きを含めて出力チェックボックス */}
-        <label className={`flex items-center space-x-2 cursor-pointer mb-2 ${exportType === 'character-setting' ? 'opacity-50' : ''}`}>
-          <input
-            type="checkbox"
-            checked={includeTogaki}
-            onChange={e => setIncludeTogaki(e.target.checked)}
-            className="text-primary"
-            disabled={exportType === 'character-setting'}
-          />
-          <span className={`font-medium ${exportType === 'character-setting' ? 'text-muted-foreground' : 'text-foreground'}`}>
-            ト書きを含めて出力
-          </span>
-        </label>
-        {/* グループエクスポートオプション */}
-        <label className={`flex items-center space-x-2 cursor-pointer mb-2 ${exportType === 'character-setting' ? 'opacity-50' : ''}`}>
-          <input
-            type="checkbox"
-            checked={useGroupExport}
-            onChange={(e) => setUseGroupExport(e.target.checked)}
-            className="text-primary"
-            disabled={exportType === 'character-setting'}
-          />
-          <span className={`font-medium ${exportType === 'character-setting' ? 'text-muted-foreground' : 'text-foreground'}`}>
-            グループごとにエクスポート
-          </span>
-        </label>
-
-        {/* グループ選択 */}
-        {useGroupExport && exportType !== 'character-setting' && (
-          <div className="mb-4">
-            <h4 className="font-medium text-foreground mb-2">エクスポートするグループを選択</h4>
-            <div className="max-h-40 overflow-y-auto border rounded p-2 space-y-1">
-              {groups.length === 0 ? (
-                <p className="text-muted-foreground text-sm">グループがありません</p>
-              ) : (
-                groups.map(group => (
-                  <label key={group} className="flex items-center space-x-2 cursor-pointer p-1 hover:bg-accent rounded">
-                    <input
-                      type="checkbox"
-                      checked={selectedGroups.includes(group)}
-                      onChange={() => handleGroupToggle(group)}
-                      className="text-primary"
-                    />
-                    <span className="text-foreground text-sm">{group}</span>
-                    <span className="text-muted-foreground text-xs">
-                      ({characters.filter(c => c.group === group).length}人)
-                    </span>
-                  </label>
-                ))
-              )}
+        {/* 台本タブの内容 */}
+        {activeTab === 'script' && (
+          <>
+            {/* エクスポートタイプ選択 */}
+            <div className="mb-4">
+              <span className="text-foreground mb-2 font-semibold">台本のエクスポート</span>
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="exportType"
+                    value="full"
+                    checked={exportType === 'full'}
+                    onChange={(e) => setExportType(e.target.value as ExportType)}
+                    className="text-primary"
+                  />
+                  <span className="text-foreground">CSVエクスポート（話者, セリフ）</span>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="exportType"
+                    value="serif-only"
+                    checked={exportType === 'serif-only'}
+                    onChange={(e) => setExportType(e.target.value as ExportType)}
+                    className="text-primary"
+                  />
+                  <span className="text-foreground">セリフだけエクスポート</span>
+                </label>
+              </div>
             </div>
-            {selectedGroups.length === 0 && useGroupExport && (
-              <p className="text-destructive text-xs mt-1">グループを選択してください</p>
+
+            {/* ト書きを含めて出力チェックボックス */}
+            <label className="flex items-center space-x-2 cursor-pointer mb-2">
+              <input
+                type="checkbox"
+                checked={includeTogaki}
+                onChange={e => setIncludeTogaki(e.target.checked)}
+                className="text-primary"
+              />
+              <span className="font-medium text-foreground">
+                ト書きを含めて出力
+              </span>
+            </label>
+
+            {/* 選択ブロックのみエクスポート */}
+            <label className={`flex items-center space-x-2 cursor-pointer mb-2 ${selectedBlockIds.length === 0 ? 'opacity-50' : ''}`}>
+              <input
+                type="checkbox"
+                checked={exportSelectedOnly}
+                onChange={e => setExportSelectedOnly(e.target.checked)}
+                className="text-primary"
+                disabled={selectedBlockIds.length === 0}
+              />
+              <span className={`font-medium ${selectedBlockIds.length === 0 ? 'text-muted-foreground' : 'text-foreground'}`}>
+                選択ブロックのみエクスポート {selectedBlockIds.length > 0 && `(${selectedBlockIds.length}個)`}
+              </span>
+            </label>
+
+            {/* グループごとにエクスポートオプション */}
+            <label className="flex items-center space-x-2 cursor-pointer mb-2">
+              <input
+                type="checkbox"
+                checked={useGroupExport}
+                onChange={(e) => setUseGroupExport(e.target.checked)}
+                className="text-primary"
+              />
+              <span className="font-medium text-foreground">
+                グループごとにエクスポート
+              </span>
+            </label>
+
+            {/* クリップボードに出力 */}
+            <label className="flex items-center space-x-2 cursor-pointer mb-2">
+              <input
+                type="checkbox"
+                checked={exportToClipboard}
+                onChange={e => setExportToClipboard(e.target.checked)}
+                className="text-primary"
+              />
+              <span className="font-medium text-foreground">
+                クリップボードに出力
+              </span>
+            </label>
+
+            {/* グループ選択 */}
+            {useGroupExport && (
+              <div className="mb-4">
+                <h4 className="font-medium text-foreground mb-2">エクスポートするグループを選択</h4>
+                <div className="max-h-40 overflow-y-auto border rounded p-2 space-y-1">
+                  {groups.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">グループがありません</p>
+                  ) : (
+                    groups.map(group => (
+                      <label key={group} className="flex items-center space-x-2 cursor-pointer p-1 hover:bg-accent rounded">
+                        <input
+                          type="checkbox"
+                          checked={selectedGroups.includes(group)}
+                          onChange={() => handleGroupToggle(group)}
+                          className="text-primary"
+                        />
+                        <span className="text-foreground text-sm">{group}</span>
+                        <span className="text-muted-foreground text-xs">
+                          ({characters.filter(c => c.group === group).length}人)
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+                {selectedGroups.length === 0 && useGroupExport && (
+                  <p className="text-destructive text-xs mt-1">グループを選択してください</p>
+                )}
+              </div>
             )}
+          </>
+        )}
+
+        {/* キャラクター設定タブの内容 */}
+        {activeTab === 'character' && (
+          <div className="mb-4">
+            <span className="text-foreground mb-2 font-semibold">キャラクター設定</span>
+            <div className="space-y-2">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="exportType"
+                  value="character-setting"
+                  checked={exportType === 'character-setting'}
+                  onChange={(e) => setExportType(e.target.value as ExportType)}
+                  className="text-primary"
+                />
+                <span className="text-foreground">キャラクター設定のエクスポート</span>
+              </label>
+            </div>
           </div>
         )}
 
@@ -197,7 +288,7 @@ export default function CSVExportDialog({
             }}
             className="w-full px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold"
           >
-            エクスポート
+            {exportToClipboard ? 'クリップボードに出力' : 'エクスポート'}
           </button>
         </div>
       </div>

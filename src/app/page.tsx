@@ -28,6 +28,7 @@ export default function Home() {
     title: '新しい台本',
     blocks: []
   });
+  const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   // データ保存先設定
   const [saveDirectory, setSaveDirectory] = useState<string>('');
   // プロジェクトダイアログ
@@ -592,8 +593,15 @@ export default function Home() {
   };
 
   // CSVエクスポート（話者,セリフ）
-  const handleExportCSV = async (includeTogaki?: boolean) => {
-    const rows = script.blocks
+  const handleExportCSV = async (includeTogaki?: boolean, selectedOnly?: boolean) => {
+    let targetBlocks = script.blocks;
+    
+    // 選択ブロックのみの場合
+    if (selectedOnly && selectedBlockIds.length > 0) {
+      targetBlocks = script.blocks.filter(block => selectedBlockIds.includes(block.id));
+    }
+    
+    const rows = targetBlocks
       .filter(block => includeTogaki ? true : block.characterId)
       .map(block => {
         if (!block.characterId) {
@@ -639,8 +647,15 @@ export default function Home() {
   };
 
   // セリフだけエクスポート
-  const handleExportSerifOnly = async () => {
-    const rows = script.blocks
+  const handleExportSerifOnly = async (selectedOnly?: boolean) => {
+    let targetBlocks = script.blocks;
+    
+    // 選択ブロックのみの場合
+    if (selectedOnly && selectedBlockIds.length > 0) {
+      targetBlocks = script.blocks.filter(block => selectedBlockIds.includes(block.id));
+    }
+    
+    const rows = targetBlocks
       .filter(block => block.characterId) // ト書きは除外
       .map(block => [block.text]);
     
@@ -680,7 +695,7 @@ export default function Home() {
   };
 
   // グループ別エクスポート
-  const handleExportByGroups = async (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean) => {
+  const handleExportByGroups = async (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean, selectedOnly?: boolean) => {
     for (const group of selectedGroups) {
       // グループに属するキャラクターのIDを取得
       const groupCharacterIds = characters
@@ -697,6 +712,11 @@ export default function Home() {
           ...groupBlocks,
           ...script.blocks.filter(block => !block.characterId)
         ];
+      }
+
+      // 選択ブロックのみの場合
+      if (selectedOnly && selectedBlockIds.length > 0) {
+        groupBlocks = groupBlocks.filter(block => selectedBlockIds.includes(block.id));
       }
 
       if (groupBlocks.length === 0) {
@@ -789,6 +809,43 @@ export default function Home() {
     a.download = `characters.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  // クリップボードに出力
+  const handleExportToClipboard = async (serifOnly?: boolean, selectedOnly?: boolean) => {
+    let targetBlocks = script.blocks;
+    
+    // 選択ブロックのみの場合
+    if (selectedOnly && selectedBlockIds.length > 0) {
+      targetBlocks = script.blocks.filter(block => selectedBlockIds.includes(block.id));
+    }
+    
+    let text: string;
+    
+    if (serifOnly) {
+      // セリフだけ
+      text = targetBlocks
+        .filter(block => block.characterId) // ト書きは除外
+        .map(block => block.text)
+        .join('\n');
+    } else {
+      // 話者とセリフ
+      text = targetBlocks
+        .filter(block => block.characterId) // ト書きは除外
+        .map(block => {
+          const char = characters.find(c => c.id === block.characterId);
+          return `${char ? char.name : ''}: ${block.text}`;
+        })
+        .join('\n');
+    }
+    
+    try {
+      await navigator.clipboard.writeText(text);
+      alert('クリップボードにコピーしました。');
+    } catch (error) {
+      console.error('クリップボード出力エラー:', error);
+      alert('クリップボードへの出力に失敗しました。');
+    }
   };
 
   // CSVインポート（話者,セリフ）
@@ -989,6 +1046,7 @@ export default function Home() {
           onExportSerifOnly={handleExportSerifOnly}
           onExportCharacterCSV={handleExportCharacterCSV}
           onExportByGroups={handleExportByGroups}
+          onExportToClipboard={handleExportToClipboard}
           onImportCSV={handleImportCSV}
           onImportCharacterCSV={handleImportCharacterCSV}
           isDarkMode={isDarkMode}
@@ -1000,6 +1058,7 @@ export default function Home() {
           onReorderCharacters={setCharacters}
           onReorderGroups={setGroups}
           projectName={script.title}
+          selectedBlockIds={selectedBlockIds}
           onRenameProject={(newName) => {
             if (!newName.trim() || newName === script.title) return;
             // プロジェクトリスト更新
@@ -1028,6 +1087,16 @@ export default function Home() {
               onDeleteBlock={handleDeleteBlock}
               onInsertBlock={handleInsertBlock}
               onMoveBlock={handleMoveBlock}
+              selectedBlockIds={selectedBlockIds}
+              onSelectedBlockIdsChange={setSelectedBlockIds}
+              onOpenCSVExport={() => {
+                // CSVエクスポートダイアログを開く処理
+                // HeaderコンポーネントのCSVエクスポートボタンをクリックする
+                const csvExportButton = document.querySelector('[title="CSVエクスポート"]') as HTMLButtonElement;
+                if (csvExportButton) {
+                  csvExportButton.click();
+                }
+              }}
             />
           </div>
         </main>

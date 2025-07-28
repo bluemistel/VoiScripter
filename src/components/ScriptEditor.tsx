@@ -34,6 +34,9 @@ interface ScriptEditorProps {
   onDeleteBlock: (blockId: string) => void;
   onInsertBlock: (block: ScriptBlock, index: number) => void;
   onMoveBlock: (fromIndex: number, toIndex: number) => void;
+  selectedBlockIds: string[];
+  onSelectedBlockIdsChange: (selectedBlockIds: string[]) => void;
+  onOpenCSVExport: () => void;
 }
 
 interface SortableBlockProps {
@@ -45,6 +48,7 @@ interface SortableBlockProps {
   onDuplicate: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onClick: (event: React.MouseEvent) => void;
 }
 
 function SortableBlock({
@@ -56,6 +60,7 @@ function SortableBlock({
   onDuplicate,
   onMoveUp,
   onMoveDown,
+  onClick,
   textareaRef,
   isSelected
 }: SortableBlockProps & { textareaRef: (el: HTMLTextAreaElement | null) => void; isSelected: boolean }) {
@@ -90,11 +95,15 @@ function SortableBlock({
     prevCharacterId.current = block.characterId;
   }, [block.characterId]);
 
+  // textareaのfocus状態を管理
+  const [isTextareaFocused, setIsTextareaFocused] = useState(false);
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-start space-x-2 p-2 border rounded-lg shadow mb-2 transition-colors `}
+      className={`flex items-start space-x-2 p-2 border rounded-lg shadow mb-2 transition-colors ${isSelected && !isTextareaFocused ? 'ring-2 ring-primary ring-opacity-50' : ''}`}
+      onClick={onClick}
     >
       <div
         {...attributes}
@@ -114,6 +123,8 @@ function SortableBlock({
               className="w-full p-2 pt-2 border rounded min-h-[40px] bg-muted text-foreground focus:ring-1 focus:ring-ring text-sm italic focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400 resize-none overflow-hidden"
               rows={1}
               style={{ height: 'auto', borderRadius: '20px 20px 20px 0' }}
+              onFocus={() => setIsTextareaFocused(true)}
+              onBlur={() => setIsTextareaFocused(false)}
               onInput={e => {
                 const target = e.target as HTMLTextAreaElement;
                 target.style.height = 'auto';
@@ -197,6 +208,8 @@ function SortableBlock({
                 className="rounded-2xl border p-2 bg-card shadow-md min-h-[60px] text-sm w-full text-foreground focus:ring-1 focus:ring-ring focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400 resize-none overflow-hidden"
                 rows={1}
                 style={{ height: 'auto', borderRadius: '20px 20px 20px 0' }}
+                onFocus={() => setIsTextareaFocused(true)}
+                onBlur={() => setIsTextareaFocused(false)}
                 onInput={e => {
                   const target = e.target as HTMLTextAreaElement;
                   target.style.height = 'auto';
@@ -267,7 +280,10 @@ export default function ScriptEditor({
   onAddBlock,
   onDeleteBlock,
   onInsertBlock,
-  onMoveBlock
+  onMoveBlock,
+  selectedBlockIds,
+  onSelectedBlockIdsChange,
+  onOpenCSVExport
 }: ScriptEditorProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -279,9 +295,58 @@ export default function ScriptEditor({
   // テキストエリアref配列
   const textareaRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
   const [isButtonFixed, setIsButtonFixed] = useState(false);
-  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [manualFocusTarget, setManualFocusTarget] = useState<{ index: number; id: string } | null>(null);
   
+  // マウス選択用の状態
+  const [lastClickedIndex, setLastClickedIndex] = useState<number>(-1);
+  
+  // ブロック選択の処理
+  const handleBlockClick = (blockId: string, index: number, event: React.MouseEvent) => {
+    // textarea内のクリックは無視
+    if ((event.target as HTMLElement).tagName === 'TEXTAREA') {
+      return;
+    }
+
+    event.preventDefault();
+    
+    // Shiftキーを押しながらの選択時にブラウザの選択状態を無効化
+    if (event.shiftKey) {
+      event.preventDefault();
+      // ブラウザの選択状態をクリア
+      if (window.getSelection) {
+        window.getSelection()?.removeAllRanges();
+      }
+    }
+    
+    if (event.ctrlKey || event.metaKey) {
+      // Ctrl+クリック: 追加選択
+      onSelectedBlockIdsChange(
+        selectedBlockIds.includes(blockId) 
+          ? selectedBlockIds.filter(id => id !== blockId)
+          : [...selectedBlockIds, blockId]
+      );
+      setLastClickedIndex(index);
+    } else if (event.shiftKey && lastClickedIndex >= 0) {
+      // Shift+クリック: 範囲選択
+      const start = Math.min(lastClickedIndex, index);
+      const end = Math.max(lastClickedIndex, index);
+      const rangeBlockIds = script.blocks
+        .slice(start, end + 1)
+        .map(block => block.id);
+      onSelectedBlockIdsChange(rangeBlockIds);
+    } else {
+      // 通常のクリック: 単一選択
+      onSelectedBlockIdsChange([blockId]);
+      setLastClickedIndex(index);
+    }
+  };
+
+  // 選択状態のクリア
+  const clearSelection = () => {
+    onSelectedBlockIdsChange([]);
+    setLastClickedIndex(-1);
+  };
+
   useEffect(() => {
     // ブロック数が変わったらref配列を調整
     textareaRefs.current = textareaRefs.current.slice(0, script.blocks.length);
@@ -296,7 +361,7 @@ export default function ScriptEditor({
     }, 0);
     
     // 最下段にブロックが追加された場合のみスクロール位置を調整
-    const prevIdx = script.blocks.findIndex(block => block.id === selectedBlockId);  // 増える前のインデックス
+    const prevIdx = script.blocks.findIndex(block => block.id === selectedBlockIds[0]);  // 増える前のインデックス
     const maxBlockCount = Math.max(script.blocks.length, prevBlockCount.current);
     if (script.blocks.length > 0 && maxBlockCount <= script.blocks.length && prevBlockCount.current <= prevIdx + 1) {
       const lastIdx = script.blocks.length - 1;
@@ -325,7 +390,7 @@ export default function ScriptEditor({
         }
       }
     }
-  }, [script.blocks.length]);
+  }, [script.blocks.length, selectedBlockIds]);
 
   // コンテンツの高さに応じてボタンの位置を調整
   useEffect(() => {
@@ -352,6 +417,39 @@ export default function ScriptEditor({
     };
   }, [script.blocks]);
 
+  // フォーカス時に選択状態を更新（単一選択の場合のみ）
+  useEffect(() => {
+    const handleFocus = (e: FocusEvent) => {
+      const textarea = e.target as HTMLTextAreaElement;
+      const index = textareaRefs.current.findIndex(ref => ref === textarea);
+      if (index >= 0) {
+        // フォーカス時は単一選択に変更
+        onSelectedBlockIdsChange([script.blocks[index]?.id || '']);
+        setLastClickedIndex(index);
+      }
+    };
+
+    const handleBlur = () => {
+      // フォーカスが外れた時は選択状態をクリアしない
+    };
+
+    textareaRefs.current.forEach(ref => {
+      if (ref) {
+        ref.addEventListener('focus', handleFocus);
+        ref.addEventListener('blur', handleBlur);
+      }
+    });
+
+    return () => {
+      textareaRefs.current.forEach(ref => {
+        if (ref) {
+          ref.removeEventListener('focus', handleFocus);
+          ref.removeEventListener('blur', handleBlur);
+        }
+      });
+    };
+  }, [script.blocks]);
+
   // 最後に追加されたブロックに自動フォーカス
   const prevBlockCount = useRef(script.blocks.length);
   const insertIdx = useRef<number>(-1);
@@ -371,7 +469,7 @@ export default function ScriptEditor({
         console.log(`Auto focusing inserted block at index: ${insertIdx.current}`);
         setTimeout(() => {
           textareaRefs.current[insertIdx.current]?.focus();
-          setSelectedBlockId(script.blocks[insertIdx.current]?.id || null);
+          onSelectedBlockIdsChange([script.blocks[insertIdx.current]?.id || '']); // 単一選択に変更
           insertIdx.current = -1; // リセット
         }, 10);
         prevBlockCount.current = script.blocks.length;
@@ -383,7 +481,7 @@ export default function ScriptEditor({
       setTimeout(() => {
         const lastIdx = script.blocks.length - 1;
         textareaRefs.current[lastIdx]?.focus();
-        setSelectedBlockId(script.blocks[lastIdx]?.id || null);
+        onSelectedBlockIdsChange([script.blocks[lastIdx]?.id || '']); // 単一選択に変更
       }, 10); // タイミングを調整
     }
     prevBlockCount.current = script.blocks.length;
@@ -395,7 +493,9 @@ export default function ScriptEditor({
       const textarea = e.target as HTMLTextAreaElement;
       const index = textareaRefs.current.findIndex(ref => ref === textarea);
       if (index >= 0) {
-        setSelectedBlockId(script.blocks[index]?.id || null);
+        // フォーカス時は単一選択に変更
+        onSelectedBlockIdsChange([script.blocks[index]?.id || '']);
+        setLastClickedIndex(index);
       }
     };
 
@@ -427,8 +527,8 @@ export default function ScriptEditor({
         // フォーカス設定前のスクロール位置を保存
         const scrollYBeforeFocus = window.scrollY;
         
-        textareaRefs.current[manualFocusTarget.index]?.focus();
-        setSelectedBlockId(manualFocusTarget.id);
+                  textareaRefs.current[manualFocusTarget.index]?.focus();
+          onSelectedBlockIdsChange([manualFocusTarget.id]); // 単一選択に変更
         
         // フォーカス設定後にスクロール位置を復元（自動スクロールを防ぐ）
         setTimeout(() => {
@@ -488,11 +588,11 @@ export default function ScriptEditor({
   const [slideUp, setSlideUp] = useState(false);
   const [slideDown, setSlideDown] = useState(false);
   const scrollToBlock = (index: number) => {
-    if (textareaRefs.current[index]) {
-      textareaRefs.current[index]?.focus();
-      setSelectedBlockId(script.blocks[index]?.id || null);
-      ensureBlockVisible(index, 50);
-    }
+          if (textareaRefs.current[index]) {
+        textareaRefs.current[index]?.focus();
+        onSelectedBlockIdsChange([script.blocks[index]?.id || '']); // 単一選択に変更
+        ensureBlockVisible(index, 50);
+      }
   };
 
   // ブロックがウィンドウの表示領域に収まるようにスクロール位置を調整する関数
@@ -546,10 +646,10 @@ export default function ScriptEditor({
     setTimeout(() => setSlideUp(false), 300);
     scrollToY(0, 500);
     setTimeout(() => {
-      if (textareaRefs.current[0]) {
-        textareaRefs.current[0]?.focus();
-        setSelectedBlockId(script.blocks[0]?.id || null);
-      }
+              if (textareaRefs.current[0]) {
+          textareaRefs.current[0]?.focus();
+          onSelectedBlockIdsChange([script.blocks[0]?.id || '']); // 単一選択に変更
+        }
     }, 500);
   };
   const handleScrollBottom = () => {
@@ -560,7 +660,7 @@ export default function ScriptEditor({
       const lastIdx = script.blocks.length - 1;
       if (textareaRefs.current[lastIdx]) {
         textareaRefs.current[lastIdx]?.focus();
-        setSelectedBlockId(script.blocks[lastIdx]?.id || null);
+        onSelectedBlockIdsChange([script.blocks[lastIdx]?.id || '']); // 単一選択に変更
       }
     }, 500);
   };
@@ -708,10 +808,11 @@ export default function ScriptEditor({
       else if (e.ctrlKey && e.key === 'ArrowUp') {
         if (activeIdx > 0) {
           e.preventDefault();
+          const movedBlockId = script.blocks[activeIdx].id;
           onMoveBlock(activeIdx, activeIdx - 1);
-          setSelectedBlockId(script.blocks[activeIdx - 1]?.id || ''); // 追加
+          onSelectedBlockIdsChange([movedBlockId]); // 移動したブロックのIDを保持
           setTimeout(() => {
-            setManualFocusTarget({ index: activeIdx - 1, id: script.blocks[activeIdx - 1]?.id || '' });
+            setManualFocusTarget({ index: activeIdx - 1, id: movedBlockId });
             ensureBlockVisible(activeIdx - 1, 50);
           }, 10); // タイミングを調整
         }
@@ -720,10 +821,11 @@ export default function ScriptEditor({
       else if (e.ctrlKey && e.key === 'ArrowDown') {
         if (activeIdx >= 0 && activeIdx < script.blocks.length - 1) {
           e.preventDefault();
+          const movedBlockId = script.blocks[activeIdx].id;
           onMoveBlock(activeIdx, activeIdx + 1);
-          setSelectedBlockId(script.blocks[activeIdx + 1]?.id || ''); // 追加
+          onSelectedBlockIdsChange([movedBlockId]); // 移動したブロックのIDを保持
           setTimeout(() => {
-            setManualFocusTarget({ index: activeIdx + 1, id: script.blocks[activeIdx + 1]?.id || '' });
+            setManualFocusTarget({ index: activeIdx + 1, id: movedBlockId });
             ensureBlockVisible(activeIdx + 1, 50);
           }, 10); // タイミングを調整
         }
@@ -733,8 +835,13 @@ export default function ScriptEditor({
         e.preventDefault();
         handleScrollBottom();
       }
+      // Ctrl+M: CSVエクスポートダイアログを開く
+      else if (e.ctrlKey && e.key === 'm') {
+        e.preventDefault();
+        onOpenCSVExport();
+      }
       // Ctrl+Alt+, : 最上段へ
-      if (e.ctrlKey && e.altKey && e.key === ',') {
+      else if (e.ctrlKey && e.altKey && e.key === ',') {
         e.preventDefault();
         handleScrollTop();
       }
@@ -817,7 +924,8 @@ export default function ScriptEditor({
                         }
                       }}
                       textareaRef={el => textareaRefs.current[index] = el}
-                      isSelected={selectedBlockId === block.id}
+                      isSelected={selectedBlockIds.includes(block.id)}
+                      onClick={(event) => handleBlockClick(block.id, index, event)}
                     />
                     {/* ブロック間のト書き追加 */}
                     <div className="flex justify-center my-1 group">

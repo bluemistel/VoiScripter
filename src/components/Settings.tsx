@@ -209,6 +209,7 @@ export default function Settings({
                       <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Alt+B</kbd>選択ブロック削除</li>
                       <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+↑/↓</kbd> ブロック移動</li>
                       <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Alt+↑/↓</kbd> キャラクターを選択</li>
+                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+M</kbd> CSVエクスポートダイアログを開く</li>
                       <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+,</kbd> 最下段へ移動する</li>
                       <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+Alt+,</kbd> 最上段へ移動する</li>
                     </ul>

@@ -13,10 +13,11 @@ interface HeaderProps {
   onUpdateCharacter: (character: Character) => void;
   onDeleteCharacter: (id: string) => void;
   onThemeChange: (isDark: boolean) => void;
-  onExportCSV: () => void;
-  onExportSerifOnly: () => void;
+  onExportCSV: (includeTogaki?: boolean, selectedOnly?: boolean) => void;
+  onExportSerifOnly: (selectedOnly?: boolean) => void;
   onExportCharacterCSV: () => void;
-  onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only') => void;
+  onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean, selectedOnly?: boolean) => void;
+  onExportToClipboard: (serifOnly?: boolean, selectedOnly?: boolean) => void;
   onImportCSV: (file: File, options?: { mode: 'append' | 'new'; projectName?: string }) => void;
   onImportCharacterCSV: (file: File) => void;
   isDarkMode: boolean;
@@ -29,6 +30,7 @@ interface HeaderProps {
   onReorderGroups?: (newOrder: string[]) => void;
   projectName: string;
   onRenameProject: (newName: string) => void;
+  selectedBlockIds: string[];
 }
 
 // CSVインポート時の選択ダイアログ
@@ -106,6 +108,7 @@ export default function Header({
   onExportSerifOnly,
   onExportCharacterCSV,
   onExportByGroups,
+  onExportToClipboard,
   onImportCSV,
   onImportCharacterCSV,
   isDarkMode,
@@ -117,7 +120,8 @@ export default function Header({
   onReorderCharacters,
   onReorderGroups,
   projectName,
-  onRenameProject
+  onRenameProject,
+  selectedBlockIds
 }: HeaderProps) {
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
   const [isCSVExportDialogOpen, setIsCSVExportDialogOpen] = useState(false);
@@ -283,10 +287,12 @@ export default function Header({
         onClose={() => setIsCSVExportDialogOpen(false)}
         characters={characters}
         groups={groups}
+        selectedBlockIds={selectedBlockIds}
         onExportCSV={onExportCSV}
         onExportSerifOnly={onExportSerifOnly}
         onExportByGroups={onExportByGroups}
         onExportCharacterCSV={onExportCharacterCSV}
+        onExportToClipboard={onExportToClipboard}
       />
       <ImportChoiceDialog
          isOpen={isImportChoiceDialogOpen && !!pendingImportFile && !!pendingImportType}
