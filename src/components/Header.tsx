@@ -17,7 +17,7 @@ interface HeaderProps {
   onExportSerifOnly: (selectedOnly?: boolean) => void;
   onExportCharacterCSV: () => void;
   onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean, selectedOnly?: boolean) => void;
-  onExportToClipboard: (serifOnly?: boolean, selectedOnly?: boolean) => void;
+  onExportToClipboard: (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean) => void;
   onImportCSV: (file: File, options?: { mode: 'append' | 'new'; projectName?: string }) => void;
   onImportCharacterCSV: (file: File) => void;
   isDarkMode: boolean;

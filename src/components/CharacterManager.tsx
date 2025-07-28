@@ -68,7 +68,7 @@ function SortableGroup({ group, children, ...props }: any) {
     transform,
     transition,
     isDragging
-  } = useSortable({ id: group });
+  } = useSortable({ id: `${group}-${props.index || 0}` });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -425,9 +425,9 @@ export default function CharacterManager({
                 <p className="text-muted-foreground text-sm">グループがありません</p>
               ) : (
                 <DndContext sensors={groupSensors} collisionDetection={closestCenter} onDragEnd={handleGroupDragEnd}>
-                  <SortableContext items={groups} strategy={rectSortingStrategy}>
-                    {groups.map(group => (
-                      <SortableGroup key={group} group={group}>
+                  <SortableContext items={groups.map((group, index) => `${group}-${index}`)} strategy={rectSortingStrategy}>
+                    {groups.map((group, index) => (
+                      <SortableGroup key={`${group}-${index}`} group={group} index={index}>
                         <span className="text-foreground">{group}</span>
                         <button
                           onClick={() => onDeleteGroup(group)}

@@ -859,7 +859,7 @@ export default function Home() {
   };
 
   // クリップボードに出力
-  const handleExportToClipboard = async (serifOnly?: boolean, selectedOnly?: boolean) => {
+  const handleExportToClipboard = async (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean) => {
     let targetBlocks = script.blocks;
     
     // 選択ブロックのみの場合
@@ -872,16 +872,21 @@ export default function Home() {
     if (serifOnly) {
       // セリフだけ
       text = targetBlocks
-        .filter(block => block.characterId) // ト書きは除外
+        .filter(block => includeTogaki ? true : block.characterId) // ト書きを含めるかどうか
         .map(block => block.text)
         .join('\n');
     } else {
       // 話者とセリフ
       text = targetBlocks
-        .filter(block => block.characterId) // ト書きは除外
+        .filter(block => includeTogaki ? true : block.characterId) // ト書きを含めるかどうか
         .map(block => {
-          const char = characters.find(c => c.id === block.characterId);
-          return `${char ? char.name : ''}: ${block.text}`;
+          if (block.characterId) {
+            const char = characters.find(c => c.id === block.characterId);
+            return `${char ? char.name : ''}: ${block.text}`;
+          } else {
+            // ト書きの場合
+            return block.text;
+          }
         })
         .join('\n');
     }
@@ -1051,25 +1056,67 @@ export default function Home() {
       // ヘッダー行をスキップ
       const dataRows = rows.slice(1);
 
-      // 新しいキャラクターを作成
-      const newCharacters: Character[] = dataRows
-        .filter(row => row.length >= 1 && row[0].trim() !== '') // 名前が空の行をスキップ
-        .map(([name, iconUrl, group]) => {
-          const emotions = {
-            normal: { iconUrl: iconUrl || '' }
-          } as const;
+      // 重複チェックと新しいキャラクターを作成
+      const newCharacters: Character[] = [];
+      const duplicateNames: string[] = [];
+      const newGroups: string[] = [];
 
-          return {
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            name: name,
-            group: group || 'なし',
-            emotions
-          };
+      dataRows
+        .filter(row => row.length >= 1 && row[0].trim() !== '') // 名前が空の行をスキップ
+        .forEach(([name, iconUrl, group]) => {
+          const characterName = name.trim();
+          const characterGroup = group || 'なし';
+          
+          // 重複チェック（名前とグループが同じ）
+          const isDuplicate = characters.some(char => 
+            char.name === characterName && char.group === characterGroup
+          );
+          
+          if (isDuplicate) {
+            duplicateNames.push(characterName);
+          } else {
+            // 新しいグループを収集
+            if (characterGroup !== 'なし' && !groups.includes(characterGroup)) {
+              newGroups.push(characterGroup);
+            }
+            
+            const emotions = {
+              normal: { iconUrl: iconUrl || '' }
+            } as const;
+
+            newCharacters.push({
+              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+              name: characterName,
+              group: characterGroup,
+              emotions
+            });
+          }
         });
 
-      setCharacters(prev => [...prev, ...newCharacters]);
+      // 重複エラーメッセージの表示
+      if (duplicateNames.length > 0) {
+        const duplicateMessage = `以下のキャラクターは既に存在するためインポートされませんでした：\n${duplicateNames.join(', ')}`;
+        alert(duplicateMessage);
+      }
 
-      alert(`${newCharacters.length}個のキャラクターをインポートしました。`);
+      // 新しいグループを追加（重複を除去）
+      let actuallyAddedGroups: string[] = [];
+      if (newGroups.length > 0) {
+        const uniqueNewGroups = newGroups.filter((group, index) => newGroups.indexOf(group) === index);
+        setGroups(prev => {
+          const groupsToAdd = uniqueNewGroups.filter(group => !prev.includes(group));
+          actuallyAddedGroups = groupsToAdd;
+          return [...prev, ...groupsToAdd];
+        });
+      }
+
+      // 新しいキャラクターを追加
+      if (newCharacters.length > 0) {
+        setCharacters(prev => [...prev, ...newCharacters]);
+        alert(`${newCharacters.length}個のキャラクターをインポートしました。${actuallyAddedGroups.length > 0 ? `\n新しいグループ「${actuallyAddedGroups.join(', ')}」が追加されました。` : ''}`);
+      } else if (duplicateNames.length === 0) {
+        alert('インポート可能なキャラクターが見つかりませんでした。');
+      }
     } catch (error) {
       console.error('キャラクター設定のCSVインポートエラー:', error);
       alert('キャラクター設定のCSVファイルのインポートに失敗しました。');

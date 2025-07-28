@@ -232,6 +232,24 @@ export default function Settings({
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
                   <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.1.2</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• マウス操作によるテキストブロックの複数選択機能を追加。<br />Ctrl+クリック、Shift+クリックでブロックを複数選択できます</li>
+                      <li>• CSVエクスポートダイアログをタブ形式に変更（台本/キャラクター設定）キャラクター設定は別デバイスへの引き継ぎ用に使用できます</li>
+                      <li>• エクスポート機能に「選択ブロックのみエクスポート」を追加</li>
+                      <li>• エクスポート機能に「クリップボードへの出力」を追加</li>
+                      <li>• グループごとにエクスポート機能を改善（全選択/部分選択UI）</li>
+                      <li>• キャラクター設定のエクスポート/インポートにグループ設定を反映</li>
+                      <li>• キャラクター設定のインポート時に重複チェック機能を追加</li>
+                      <li>• キャラクター設定のインポート時に新しいグループの自動追加機能を追加</li>
+                      <li>• CSVインポート時に台本またはキャラクター設定のインポートかを判定するように変更</li>
+                      <li>• 無効なデータのインポート時のエラー処理を追加</li>
+                      <li>• localStorageの容量(5MB)を超過した際のエラー処理を改善</li>
+                      <li>• ショートカット(Ctrl+M)を追加。CSVエクスポートダイアログを直接開きます</li>
+                    </ul>
+                  </div>
+                  
+                  <div>
                     <h4 className="font-medium text-foreground mb-2">v0.1.1</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                       <li>• スクロール位置の補正機能を改善</li>
