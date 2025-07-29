@@ -232,6 +232,13 @@ export default function Settings({
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
                   <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.1.3</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• キャラクターアイコンの背景色をカラーピッカーで変更できる機能を追加<br />キャラクター管理画面でアイコンにホバーするとペンアイコンが表示されます</li>
+                    </ul>
+                  </div>
+                  
+                  <div>
                     <h4 className="font-medium text-foreground mb-2">v0.1.2</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                       <li>• マウス操作によるテキストブロックの複数選択機能を追加。<br />Ctrl+クリック、Shift+クリックでブロックを複数選択できます</li>

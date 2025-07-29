@@ -192,8 +192,21 @@ function SortableBlock({
                   className={`w-16 h-16 rounded-full object-cover mt-0 mr-2 transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
                 />
               ) : (
-                <div className={`w-16 h-16 rounded-full bg-muted flex items-center justify-center text-center mt-0 mr-2 overflow-hidden transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}>
-                  <span className={`text-xs font-bold text-foreground px-1 max-w-[80px] whitespace-no-wrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}>
+                <div 
+                  className={`w-16 h-16 rounded-full flex items-center justify-center text-center mt-0 mr-2 overflow-hidden transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
+                  style={{ backgroundColor: character.backgroundColor || '#e5e7eb' }}
+                >
+                  <span 
+                    className={`text-xs font-bold text-foreground px-1 max-w-[80px] whitespace-no-wrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}
+                    style={{
+                      textShadow: `
+                        -1px -1px 0 var(--color-background),  
+                         1px -1px 0 var(--color-background),
+                        -1px  1px 0 var(--color-background),
+                         1px  1px 0 var(--color-background)
+                      `
+                    }}
+                  >
                     {character.name.length > 8 ? character.name.slice(0, 8) + '…' : character.name}
                   </span>
                 </div>

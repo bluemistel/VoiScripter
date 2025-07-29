@@ -10,6 +10,7 @@ export interface Character {
       iconUrl: string;
     };
   };
+  backgroundColor?: string; // アイコン背景色
 }
 
 export interface ScriptBlock {

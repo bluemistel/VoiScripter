@@ -108,6 +108,10 @@ export default function CharacterManager({
   // 編集用
   const [editCharacter, setEditCharacter] = useState<Partial<Character> | null>(null);
 
+  // カラーピッカー用の状態
+  const [showColorPicker, setShowColorPicker] = useState<string | null>(null);
+  const [tempBackgroundColor, setTempBackgroundColor] = useState<string>('#e5e7eb');
+
   // 画像ファイル→DataURL変換
   const handleIconFileChange = (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
     const file = e.target.files?.[0];
@@ -133,6 +137,32 @@ export default function CharacterManager({
     reader.readAsDataURL(file);
   };
 
+  // カラーピッカーで背景色を変更
+  const handleBackgroundColorChange = (characterId: string, color: string) => {
+    const character = characters.find(c => c.id === characterId);
+    if (character) {
+      const updatedCharacter = {
+        ...character,
+        backgroundColor: color
+      };
+      onUpdateCharacter(updatedCharacter);
+    }
+  };
+
+  // カラーピッカーを開く
+  const openColorPicker = (characterId: string, currentColor: string = '#e5e7eb') => {
+    setShowColorPicker(characterId);
+    setTempBackgroundColor(currentColor);
+  };
+
+  // カラーピッカーを閉じる
+  const closeColorPicker = () => {
+    if (showColorPicker) {
+      handleBackgroundColorChange(showColorPicker, tempBackgroundColor);
+      setShowColorPicker(null);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newCharacter.name) {
@@ -140,7 +170,8 @@ export default function CharacterManager({
         id: Date.now().toString(),
         name: newCharacter.name,
         group: newCharacter.group || 'なし',
-        emotions: { normal: { iconUrl: newCharacter.emotions?.normal?.iconUrl || '' } }
+        emotions: { normal: { iconUrl: newCharacter.emotions?.normal?.iconUrl || '' } },
+        backgroundColor: '#e5e7eb' // デフォルトの背景色
       } as Character);
       setNewCharacter({ name: '', group: 'なし', emotions: { ...emptyEmotions } });
       setIsAdding(false);
@@ -154,7 +185,8 @@ export default function CharacterManager({
         id: editCharacter.id!,
         name: editCharacter.name,
         group: editCharacter.group || 'なし',
-        emotions: { normal: { iconUrl: editCharacter.emotions?.normal?.iconUrl || '' } }
+        emotions: { normal: { iconUrl: editCharacter.emotions?.normal?.iconUrl || '' } },
+        backgroundColor: editCharacter.backgroundColor || '#e5e7eb'
       } as Character);
       setIsEditingId(null);
       setEditCharacter(null);
@@ -275,10 +307,32 @@ export default function CharacterManager({
                             {character.emotions.normal.iconUrl ? (
                               <img src={character.emotions.normal.iconUrl} alt={character.name} className="w-14 h-14 rounded-full border object-cover" />
                             ) : (
-                              <div className="w-14 h-14 rounded-full border bg-muted flex items-center justify-center text-center overflow-hidden">
-                                <span className={`text-xs font-bold text-foreground px-1 max-w-[80px] whitespace-no-wrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}>
+                              <div 
+                                className="relative w-14 h-14 rounded-full border flex items-center justify-center text-center overflow-hidden group"
+                                style={{ backgroundColor: character.backgroundColor || '#e5e7eb' }}
+                              >
+                                <span 
+                                  className={`text-xs font-bold text-foreground px-1 max-w-[80px] whitespace-no-wrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}
+                                  style={{
+                                    textShadow: `
+                                      -1px -1px 0 var(--color-background),  
+                                       1px -1px 0 var(--color-background),
+                                      -1px  1px 0 var(--color-background),
+                                       1px  1px 0 var(--color-background)
+                                    `
+                                  }}
+                                >
                                   {character.name.length > 8 ? character.name.slice(0, 8) + '…' : character.name}
                                 </span>
+                                {/* ペンアイコン（hover時のみ表示） */}
+                                <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <button
+                                    onClick={() => openColorPicker(character.id, character.backgroundColor || '#e5e7eb')}
+                                    className="p-1 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+                                  >
+                                    <PencilIcon className="w-3 h-3 text-gray-700" />
+                                  </button>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -449,6 +503,37 @@ export default function CharacterManager({
               >
                 閉じる
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* カラーピッカーダイアログ */}
+      {showColorPicker && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-background border rounded-lg shadow-lg w-full max-w-sm mx-4 p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4">背景色を選択</h3>
+            <div className="flex flex-col items-center space-y-4">
+              <input
+                type="color"
+                value={tempBackgroundColor}
+                onChange={(e) => setTempBackgroundColor(e.target.value)}
+                className="w-32 h-32 cursor-pointer"
+              />
+              <div className="flex space-x-2">
+                <button
+                  onClick={closeColorPicker}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                >
+                  適用
+                </button>
+                <button
+                  onClick={() => setShowColorPicker(null)}
+                  className="px-4 py-2 bg-muted text-muted-foreground rounded hover:bg-muted/80"
+                >
+                  キャンセル
+                </button>
+              </div>
             </div>
           </div>
         </div>
