@@ -22,7 +22,7 @@ yarn-error.log*
 target
 dist
 logs
-public
+
 .cache
 .vscode
 .idea
