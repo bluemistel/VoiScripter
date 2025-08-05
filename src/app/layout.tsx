@@ -53,6 +53,13 @@ export default function RootLayout({
 
   return (
     <html lang="ja">
+      <head>
+        <title>VoiScripter</title>
+        <meta name="description" content="VoiScripter - 音声合成用台本作成ツール" />
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/apple-icon.png" />
+        <link rel="manifest" href="/manifest.json" />
+      </head>
       <body className="font-mplus">{children}</body>
     </html>
   )

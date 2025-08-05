@@ -537,44 +537,38 @@ export default function ScriptEditor({
   useEffect(() => {
     if (manualFocusTarget) {
       setTimeout(() => {
-        // フォーカス設定前のスクロール位置を保存
-        const scrollYBeforeFocus = window.scrollY;
-        
-                  textareaRefs.current[manualFocusTarget.index]?.focus();
+        const targetRef = textareaRefs.current[manualFocusTarget.index];
+        if (targetRef) {
+          // スクロールが必要か事前に判定
+          const rect = targetRef.getBoundingClientRect();
+          const windowHeight = window.innerHeight;
+          const headerHeight = 64;
+          const needsScroll = rect.bottom > windowHeight || rect.top < headerHeight;
+          
+          // スクロールが必要な場合のみ、スクロール位置を保存
+          const scrollYBeforeFocus = needsScroll ? window.scrollY : null;
+          
+          targetRef.focus();
           onSelectedBlockIdsChange([manualFocusTarget.id]); // 単一選択に変更
-        
-        // フォーカス設定後にスクロール位置を復元（自動スクロールを防ぐ）
-        setTimeout(() => {
-          if (window.scrollY !== scrollYBeforeFocus) {
-            window.scrollTo(0, scrollYBeforeFocus);
+          
+          if (needsScroll && scrollYBeforeFocus !== null) {
+            // スクロールが必要な場合のみ処理
+            setTimeout(() => {
+              // ブラウザの自動スクロールを防ぐ
+              if (window.scrollY !== scrollYBeforeFocus) {
+                window.scrollTo(0, scrollYBeforeFocus);
+              }
+              // 適切なスクロールを実行
+              ensureBlockVisible(manualFocusTarget.index, 20);
+            }, 5);
+          } else {
+            // スクロールが不要な場合は即座にスクロール処理を実行
+            ensureBlockVisible(manualFocusTarget.index, 5);
           }
-          // スクロールが必要な場合のみensureBlockVisibleを呼び出し
-          const targetRef = textareaRefs.current[manualFocusTarget.index];
-          if (targetRef) {
-            const rect = targetRef.getBoundingClientRect();
-            const windowHeight = window.innerHeight;
-            const headerHeight = 64;
-            
-            console.log(`Manual focus target ${manualFocusTarget.index} rect:`, rect);
-            console.log(`Window height: ${windowHeight}, Header height: ${headerHeight}`);
-            console.log(`rect.bottom: ${rect.bottom}, rect.top: ${rect.top}`);
-            console.log(`Bottom condition: ${rect.bottom > windowHeight}, Top condition: ${rect.top < headerHeight}`);
-            
-            // ブロックが画面内に完全に収まっているかを判定
-            const isBlockFullyVisible = rect.top >= headerHeight && rect.bottom <= windowHeight;
-            
-            // スクロールが必要な場合のみ処理を実行
-            if (!isBlockFullyVisible) {
-              console.log(`Scrolling needed for manual focus target ${manualFocusTarget.index}`);
-              ensureBlockVisible(manualFocusTarget.index, 50);
-            } else {
-              console.log(`No scrolling needed for manual focus target ${manualFocusTarget.index}`);
-            }
-          }
-        }, 10);
+        }
         
         setManualFocusTarget(null);
-      }, 10);
+      }, 5);
     }
   }, [manualFocusTarget]);
 
@@ -610,46 +604,29 @@ export default function ScriptEditor({
 
   // ブロックがウィンドウの表示領域に収まるようにスクロール位置を調整する関数
   const ensureBlockVisible = (index: number, delay: number = 10) => {
-    console.log(`ensureBlockVisible called for index: ${index}, delay: ${delay}`);
     setTimeout(() => {
       const targetRef = textareaRefs.current[index];
       if (targetRef) {
         const rect = targetRef.getBoundingClientRect();
         const windowHeight = window.innerHeight;
-        const currentScrollY = window.scrollY;
-        
-        // ヘッダーの高さを取得（固定ヘッダーの場合）
-        const headerHeight = 64; // ヘッダーの高さ（px）
-        
-        console.log(`Block ${index} rect:`, rect);
-        console.log(`Window height: ${windowHeight}, Current scroll Y: ${currentScrollY}`);
-        console.log(`rect.bottom: ${rect.bottom}, windowHeight: ${windowHeight}`);
-        console.log(`rect.top: ${rect.top}`);
+        const headerHeight = 64;
         
         // ブロックが画面外にある場合のみスクロール
         if (rect.bottom > windowHeight) {
-          console.log(`Scrolling down for block ${index}`);
           // 下方向にスクロールが必要な場合
           const scrollOffset = rect.bottom - windowHeight + 20; // 20pxのマージン
-          console.log(`Scroll offset: ${scrollOffset}`);
           window.scrollBy({
             top: scrollOffset,
             behavior: 'smooth'
           });
         } else if (rect.top < headerHeight) {
-          console.log(`Scrolling up for block ${index}`);
           // 上方向にスクロールが必要な場合（ヘッダーの高さを考慮）
           const scrollOffset = rect.top - headerHeight - 20; // ヘッダーの高さ + 20pxのマージン
-          console.log(`Scroll offset: ${scrollOffset}`);
           window.scrollBy({
             top: scrollOffset,
             behavior: 'smooth'
           });
-        } else {
-          console.log(`Block ${index} is already visible, no scroll needed`);
         }
-      } else {
-        console.log(`Target ref for index ${index} is null`);
       }
     }, delay);
   };
@@ -762,14 +739,35 @@ export default function ScriptEditor({
             const lineCount = before.split('\n').length;
             if (lineCount === 1) {
               e.preventDefault();
-              const scrollYBeforeFocus = window.scrollY;
-              textareaRefs.current[activeIdx - 1]?.focus();
-              setTimeout(() => {
-                if (window.scrollY !== scrollYBeforeFocus) {
-                  window.scrollTo(0, scrollYBeforeFocus);
+              const targetIndex = activeIdx - 1;
+              const targetRef = textareaRefs.current[targetIndex];
+              if (targetRef) {
+                // スクロールが必要か事前に判定
+                const rect = targetRef.getBoundingClientRect();
+                const windowHeight = window.innerHeight;
+                const headerHeight = 64;
+                const needsScroll = rect.bottom > windowHeight || rect.top < headerHeight;
+                
+                // スクロールが必要な場合のみ、スクロール位置を保存
+                const scrollYBeforeFocus = needsScroll ? window.scrollY : null;
+                
+                targetRef.focus();
+                
+                if (needsScroll && scrollYBeforeFocus !== null) {
+                  // スクロールが必要な場合のみ処理
+                  setTimeout(() => {
+                    // ブラウザの自動スクロールを防ぐ
+                    if (window.scrollY !== scrollYBeforeFocus) {
+                      window.scrollTo(0, scrollYBeforeFocus);
+                    }
+                    // 適切なスクロールを実行
+                    ensureBlockVisible(targetIndex, 20);
+                  }, 5);
+                } else {
+                  // スクロールが不要な場合は即座にスクロール処理を実行
+                  ensureBlockVisible(targetIndex, 5);
                 }
-                ensureBlockVisible(activeIdx - 1);
-              }, 10);
+              }
             }
           }
         }
@@ -787,14 +785,35 @@ export default function ScriptEditor({
             // 現在のカーソル位置が最下段か判定
             if (currentLine === totalLines) {
               e.preventDefault();
-              const scrollYBeforeFocus = window.scrollY;
-              textareaRefs.current[activeIdx + 1]?.focus();
-              setTimeout(() => {
-                if (window.scrollY !== scrollYBeforeFocus) {
-                  window.scrollTo(0, scrollYBeforeFocus);
+              const targetIndex = activeIdx + 1;
+              const targetRef = textareaRefs.current[targetIndex];
+              if (targetRef) {
+                // スクロールが必要か事前に判定
+                const rect = targetRef.getBoundingClientRect();
+                const windowHeight = window.innerHeight;
+                const headerHeight = 64;
+                const needsScroll = rect.bottom > windowHeight || rect.top < headerHeight;
+                
+                // スクロールが必要な場合のみ、スクロール位置を保存
+                const scrollYBeforeFocus = needsScroll ? window.scrollY : null;
+                
+                targetRef.focus();
+                
+                if (needsScroll && scrollYBeforeFocus !== null) {
+                  // スクロールが必要な場合のみ処理
+                  setTimeout(() => {
+                    // ブラウザの自動スクロールを防ぐ
+                    if (window.scrollY !== scrollYBeforeFocus) {
+                      window.scrollTo(0, scrollYBeforeFocus);
+                    }
+                    // 適切なスクロールを実行
+                    ensureBlockVisible(targetIndex, 20);
+                  }, 5);
+                } else {
+                  // スクロールが不要な場合は即座にスクロール処理を実行
+                  ensureBlockVisible(targetIndex, 5);
                 }
-                ensureBlockVisible(activeIdx + 1);
-              }, 10);
+              }
             }
           }
         }

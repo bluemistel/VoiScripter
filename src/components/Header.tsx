@@ -194,8 +194,8 @@ export default function Header({
   return (
     <header className="bg-background shadow-sm sticky top-0 z-50 border-b">
       <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-16">
-        <h1 className="text-2xl font-bold text-primary tracking-tight ">
-          VoiScripter.
+        <h1 className="text-2xl font-bold text-primary tracking-tight flex items-center">
+          <img src="/rogo.png" alt="VoiScripter" className="h-8 mr-2" />
           <span className="ml-4 pr-6 text-lg font-normal text-foreground align-middle group relative">
             {projectName}
             <button
