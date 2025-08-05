@@ -55,6 +55,7 @@
     "files": [
       "electron/**/*",
       "out/**/*",
+      "public/**/*",
       "node_modules/**/*",
       "!node_modules/.cache/**/*"
     ],
@@ -71,8 +72,11 @@
     },
     "win": {
       "target": "portable",
-      "icon": "public/icon_x512.png"
+      "icon": "public/icon_x512.png",
+      "sign": false,
+      "signAndEditExecutable": false
     },
+    "forceCodeSigning": false,
     "electronVersion": "28.2.0",
     "electronDownload": {
       "mirror": "https://npm.taobao.org/mirrors/electron/"

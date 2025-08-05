@@ -32,4 +32,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
 // セキュリティのため、Node.jsのAPIは直接公開しない
 contextBridge.exposeInMainWorld('nodeAPI', {
   // 必要に応じてNode.jsのAPIを安全に公開
+});
+
+// ロゴパスを取得する機能
+contextBridge.exposeInMainWorld('getLogoPath', () => {
+  const isDev = process.env.NODE_ENV === 'development';
+  if (isDev) {
+    return '/rogo.png';
+  } else {
+    // 本番環境では、app.asar内のパスを使用
+    // 相対パスで指定することで、Electronが自動的に正しいパスを解決
+    return './rogo.png';
+  }
 }); 

@@ -60,5 +60,6 @@ declare global {
       // イベントリスナーの削除
       removeAllListeners: (channel: string) => void;
     };
+    getLogoPath?: () => string;
   }
 } 

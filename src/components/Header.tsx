@@ -1,11 +1,34 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { SunIcon, MoonIcon, UsersIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, Cog6ToothIcon, PencilIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  ArrowUpTrayIcon, 
+  ArrowDownTrayIcon, 
+  UsersIcon, 
+  SunIcon, 
+  MoonIcon, 
+  Cog6ToothIcon,
+  PencilIcon,
+  Bars3Icon
+} from '@heroicons/react/24/outline';
 import CharacterManager from './CharacterManager';
 import Settings from './Settings';
 import CSVExportDialog from './CSVExportDialog';
 import { Character } from '@/types';
+
+// ロゴパスを取得するカスタムフック
+const useLogoPath = () => {
+  const [logoPath, setLogoPath] = useState('/rogo.png');
+
+  useEffect(() => {
+    // Electron環境でロゴパスを取得
+    if (typeof window !== 'undefined' && window.getLogoPath) {
+      setLogoPath(window.getLogoPath());
+    }
+  }, []);
+
+  return logoPath;
+};
 
 interface HeaderProps {
   characters: Character[];
@@ -131,6 +154,7 @@ export default function Header({
   onRenameProject,
   selectedBlockIds
 }: HeaderProps) {
+  const logoPath = useLogoPath();
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
   const [isCSVExportDialogOpen, setIsCSVExportDialogOpen] = useState(false);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
@@ -195,7 +219,7 @@ export default function Header({
     <header className="bg-background shadow-sm sticky top-0 z-50 border-b">
       <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-16">
         <h1 className="text-2xl font-bold text-primary tracking-tight flex items-center">
-          <img src="/rogo.png" alt="VoiScripter" className="h-8 mr-2" />
+          <img src={logoPath} alt="VoiScripter" className="h-8 mr-2" />
           <span className="ml-4 pr-6 text-lg font-normal text-foreground align-middle group relative">
             {projectName}
             <button
