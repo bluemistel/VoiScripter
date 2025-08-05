@@ -46,6 +46,7 @@ function createWindow() {
     height: 800,
     minWidth: 800,
     minHeight: 600,
+    title: 'VoiScripter - 音声合成用台本作成ツール',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -55,7 +56,7 @@ function createWindow() {
       webSecurity: false,
       allowRunningInsecureContent: true
     },
-    icon: path.join(__dirname, '../public/icon.png'),
+    icon: path.join(__dirname, '../public/icon_x512.png'),
     show: false,
     titleBarStyle: 'default'
   });
