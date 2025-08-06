@@ -5,15 +5,24 @@ const http = require('http');
 const isDev = process.env.NODE_ENV === 'development';
 
 let mainWindow;
+let splashWindow;
 
 // セキュリティ設定
 app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
 app.commandLine.appendSwitch('disable-web-security', 'false');
 app.commandLine.appendSwitch('allow-running-insecure-content', 'false');
 
-// セキュリティ監査を有効化
-app.commandLine.appendSwitch('enable-logging');
-app.commandLine.appendSwitch('v', '1');
+// 本番環境ではコンソールウィンドウを非表示にする
+if (!isDev) {
+  app.commandLine.appendSwitch('disable-logging');
+  app.commandLine.appendSwitch('silent');
+}
+
+// セキュリティ監査を有効化（開発環境のみ）
+if (isDev) {
+  app.commandLine.appendSwitch('enable-logging');
+  app.commandLine.appendSwitch('v', '1');
+}
 
 // 追加のセキュリティ設定
 app.commandLine.appendSwitch('disable-background-timer-throttling');
@@ -22,8 +31,10 @@ app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-features', 'TranslateUI');
 app.commandLine.appendSwitch('disable-features', 'BlinkGenPropertyTrees');
 
-// GPUハードウェアアクセラレーションを無効化してキャッシュエラーを回避
-app.disableHardwareAcceleration();
+// 本番環境でのみGPUハードウェアアクセラレーションを無効化
+if (!isDev) {
+  app.disableHardwareAcceleration();
+}
 
 // ffmpegを有効化
 app.commandLine.appendSwitch('enable-features', 'PlatformHEVCDecoderSupport');
@@ -55,6 +66,97 @@ async function findDevServerPort() {
   return 3000;
 }
 
+function createSplashWindow() {
+  // スプラッシュウィンドウを作成
+  splashWindow = new BrowserWindow({
+    width: 400,
+    height: 300,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    alwaysOnTop: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      enableRemoteModule: false,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      sandbox: false,
+      experimentalFeatures: false,
+      backgroundThrottling: false
+    },
+    icon: path.join(__dirname, '../public/favicon.ico'),
+    show: false
+  });
+
+  // スプラッシュ画面のHTML
+  const splashHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        body {
+          margin: 0;
+          padding: 20px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          overflow: hidden;
+        }
+        .logo {
+          font-size: 24px;
+          font-weight: bold;
+          margin-bottom: 20px;
+          text-align: center;
+        }
+        .loading {
+          width: 200px;
+          height: 4px;
+          background: rgba(255, 255, 255, 0.3);
+          border-radius: 2px;
+          overflow: hidden;
+          margin: 20px 0;
+        }
+        .progress {
+          height: 100%;
+          background: linear-gradient(90deg, #fff, #f0f0f0);
+          border-radius: 2px;
+          animation: loading 2s ease-in-out infinite;
+        }
+        @keyframes loading {
+          0% { width: 0%; }
+          50% { width: 70%; }
+          100% { width: 100%; }
+        }
+        .status {
+          font-size: 14px;
+          opacity: 0.8;
+          text-align: center;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="logo">VoiScripter</div>
+      <div class="loading">
+        <div class="progress"></div>
+      </div>
+      <div class="status">起動中...</div>
+    </body>
+    </html>
+  `;
+
+  splashWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(splashHTML)}`);
+  splashWindow.once('ready-to-show', () => {
+    splashWindow.show();
+  });
+}
+
 function createWindow() {
   // メインウィンドウを作成
   mainWindow = new BrowserWindow({
@@ -62,7 +164,7 @@ function createWindow() {
     height: 800,
     minWidth: 800,
     minHeight: 600,
-    title: 'VoiScripter - 音声合成用台本作成ツール',
+    title: 'VoiScripter - 音声合成ソフトの台本作成支援ツール',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -74,12 +176,14 @@ function createWindow() {
       // 追加のセキュリティ設定
       sandbox: false, // preloadスクリプトを使用するため
       experimentalFeatures: false,
+      // パフォーマンス最適化
+      backgroundThrottling: false,
       // CSPを設定
       additionalArguments: [
         '--disable-features=VizDisplayCompositor'
       ]
     },
-    icon: path.join(__dirname, '../public/icon_x512.png'),
+    icon: path.join(__dirname, '../public/favicon.ico'),
     show: false,
     titleBarStyle: 'default'
   });
@@ -89,26 +193,65 @@ function createWindow() {
     if (isDev) {
       const port = await findDevServerPort();
       const startUrl = `http://localhost:${port}`;
-      console.log(`Loading app from: ${startUrl}`);
+      if (isDev) {
+        console.log(`Loading app from: ${startUrl}`);
+      }
       mainWindow.loadURL(startUrl);
     } else {
       // 本番環境では、app.asar内のoutディレクトリを参照
+      // パッケージ化されたアプリでは、outディレクトリがapp.asar内に含まれる
       const indexPath = path.join(__dirname, '../out/index.html');
-      console.log(`Loading app from: ${indexPath}`);
+      if (isDev) {
+        console.log(`Loading app from: ${indexPath}`);
+      }
       
       // ファイルの存在確認
       if (fs.existsSync(indexPath)) {
         // セキュリティを考慮したfile://プロトコルの使用
         const fileUrl = `file://${indexPath}`;
-        console.log(`Loading file URL: ${fileUrl}`);
+        if (isDev) {
+          console.log(`Loading file URL: ${fileUrl}`);
+        }
         mainWindow.loadURL(fileUrl);
       } else {
-        console.error(`Index file not found: ${indexPath}`);
-        // フォールバック: 開発サーバーに接続（セキュリティ警告あり）
-        const port = await findDevServerPort();
-        const startUrl = `http://localhost:${port}`;
-        console.log(`Falling back to dev server: ${startUrl}`);
-        mainWindow.loadURL(startUrl);
+        // パッケージ化されたアプリでは、app.asar内のパスを試す
+        const asarIndexPath = path.join(__dirname, 'out/index.html');
+        if (isDev) {
+          console.log(`Trying asar path: ${asarIndexPath}`);
+        }
+        
+        if (fs.existsSync(asarIndexPath)) {
+          const fileUrl = `file://${asarIndexPath}`;
+          if (isDev) {
+            console.log(`Loading asar file URL: ${fileUrl}`);
+          }
+          mainWindow.loadURL(fileUrl);
+        } else {
+          // さらに別のパスを試す（パッケージ化されたアプリ用）
+          const appAsarPath = path.join(__dirname, '../out/index.html');
+          if (isDev) {
+            console.log(`Trying app asar path: ${appAsarPath}`);
+          }
+          
+          if (fs.existsSync(appAsarPath)) {
+            const fileUrl = `file://${appAsarPath}`;
+            if (isDev) {
+              console.log(`Loading app asar file URL: ${fileUrl}`);
+            }
+            mainWindow.loadURL(fileUrl);
+          } else {
+            if (isDev) {
+              console.error(`Index file not found in all locations: ${indexPath}, ${asarIndexPath}, ${appAsarPath}`);
+            }
+            // フォールバック: 開発サーバーに接続（セキュリティ警告あり）
+            const port = await findDevServerPort();
+            const startUrl = `http://localhost:${port}`;
+            if (isDev) {
+              console.log(`Falling back to dev server: ${startUrl}`);
+            }
+            mainWindow.loadURL(startUrl);
+          }
+        }
       }
     }
   };
@@ -117,7 +260,16 @@ function createWindow() {
 
   // ウィンドウが準備できたら表示
   mainWindow.once('ready-to-show', () => {
+    // スプラッシュウィンドウを閉じる
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.close();
+    }
+    
+    // ウィンドウを表示
     mainWindow.show();
+    
+    // ウィンドウをフォーカス
+    mainWindow.focus();
     
     // 開発環境ではDevToolsを開く
     if (isDev) {
@@ -155,28 +307,34 @@ function createWindow() {
     });
   });
 
-  // セキュリティ監査: 危険なAPIの使用を監視
-  mainWindow.webContents.on('did-finish-load', () => {
-    console.log('Security: Application loaded with secure settings');
-    
-    // セキュリティ監査レポート
-    console.log('Security Audit Report:');
-    console.log('- CSP: Enabled with strict directives');
-    console.log('- Web Security: Enabled');
-    console.log('- Context Isolation: Enabled');
-    console.log('- Node Integration: Disabled');
-    console.log('- Sandbox: Disabled (preload script required)');
-    console.log('- Insecure Content: Blocked');
-  });
+  // セキュリティ監査: 危険なAPIの使用を監視（開発環境のみ）
+  if (isDev) {
+    mainWindow.webContents.on('did-finish-load', () => {
+      console.log('Security: Application loaded with secure settings');
+      
+      // セキュリティ監査レポート
+      console.log('Security Audit Report:');
+      console.log('- CSP: Enabled with strict directives');
+      console.log('- Web Security: Enabled');
+      console.log('- Context Isolation: Enabled');
+      console.log('- Node Integration: Disabled');
+      console.log('- Sandbox: Disabled (preload script required)');
+      console.log('- Insecure Content: Blocked');
+    });
+  }
 
-  // セキュリティ監査: 外部リソースの読み込みを監視
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-    console.warn(`Security: Failed to load resource: ${validatedURL} (${errorDescription})`);
-  });
+  // セキュリティ監査: 外部リソースの読み込みを監視（開発環境のみ）
+  if (isDev) {
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      console.warn(`Security: Failed to load resource: ${validatedURL} (${errorDescription})`);
+    });
+  }
 
   // セキュリティ監査: 新しいウィンドウの作成を監視
   mainWindow.webContents.on('new-window', (event, navigationUrl) => {
-    console.warn(`Security: New window blocked: ${navigationUrl}`);
+    if (isDev) {
+      console.warn(`Security: New window blocked: ${navigationUrl}`);
+    }
     event.preventDefault();
     shell.openExternal(navigationUrl);
   });
@@ -187,7 +345,9 @@ function createWindow() {
     const url = new URL(navigationUrl);
     
     if (!allowedProtocols.includes(url.protocol)) {
-      console.warn(`Security: Navigation to disallowed protocol blocked: ${navigationUrl}`);
+      if (isDev) {
+        console.warn(`Security: Navigation to disallowed protocol blocked: ${navigationUrl}`);
+      }
       event.preventDefault();
     }
   });
@@ -195,6 +355,11 @@ function createWindow() {
 
 // アプリケーションが準備できた時の処理
 app.whenReady().then(() => {
+  // 本番環境ではスプラッシュウィンドウを表示
+  if (!isDev) {
+    createSplashWindow();
+  }
+  
   createWindow();
 
   // macOS用の処理
@@ -286,8 +451,14 @@ app.whenReady().then(() => {
     }
   ];
 
-  const menu = Menu.buildFromTemplate(template);
-  Menu.setApplicationMenu(menu);
+  // メニューを設定（開発環境のみ）
+  if (isDev && mainWindow && !mainWindow.isDestroyed()) {
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+  } else if (!isDev) {
+    // 本番環境ではメニューを完全に無効化
+    Menu.setApplicationMenu(null);
+  }
 });
 
 // すべてのウィンドウが閉じられた時の処理
@@ -345,7 +516,9 @@ ipcMain.handle('saveData', async (event, key, data) => {
     const filePath = path.join(saveDirectory, `${key}.json`);
     fs.writeFileSync(filePath, data, 'utf8');
   } catch (error) {
-    console.error('データ保存エラー:', error);
+    if (isDev) {
+      console.error('データ保存エラー:', error);
+    }
     throw error;
   }
 });
@@ -371,7 +544,9 @@ ipcMain.handle('loadData', async (event, key) => {
     }
     return null;
   } catch (error) {
-    console.error('データ読み込みエラー:', error);
+    if (isDev) {
+      console.error('データ読み込みエラー:', error);
+    }
     return null;
   }
 });
@@ -396,7 +571,9 @@ ipcMain.handle('listDataKeys', async () => {
       .filter(file => file.endsWith('.json'))
       .map(file => file.replace('.json', ''));
   } catch (error) {
-    console.error('データキー一覧取得エラー:', error);
+    if (isDev) {
+      console.error('データキー一覧取得エラー:', error);
+    }
     return [];
   }
 });
@@ -407,7 +584,9 @@ ipcMain.handle('saveSettings', async (event, settings) => {
     const settingsPath = path.join(app.getPath('userData'), 'settings.json');
     fs.writeFileSync(settingsPath, JSON.stringify(settings), 'utf8');
   } catch (error) {
-    console.error('設定保存エラー:', error);
+    if (isDev) {
+      console.error('設定保存エラー:', error);
+    }
     throw error;
   }
 });
@@ -421,7 +600,9 @@ ipcMain.handle('loadSettings', async () => {
     }
     return { saveDirectory: '' };
   } catch (error) {
-    console.error('設定読み込みエラー:', error);
+    if (isDev) {
+      console.error('設定読み込みエラー:', error);
+    }
     return { saveDirectory: '' };
   }
 });
@@ -444,7 +625,9 @@ ipcMain.handle('saveCSVFile', async (event, defaultName, csvContent) => {
     }
     return null;
   } catch (error) {
-    console.error('CSVファイル保存エラー:', error);
+    if (isDev) {
+      console.error('CSVファイル保存エラー:', error);
+    }
     throw error;
   }
 }); 

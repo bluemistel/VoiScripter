@@ -995,6 +995,19 @@ export default function Home() {
         }));
         alert(`${newBlocks.length}個のブロックを現在のプロジェクトにインポートしました。`);
       }
+      
+      // CSVインポート後に最後のブロックにフォーカス
+      setTimeout(() => {
+        const lastBlockIndex = newBlocks.length - 1;
+        if (lastBlockIndex >= 0) {
+          const textareaRefs = document.querySelectorAll('textarea');
+          const lastTextarea = textareaRefs[textareaRefs.length - 1] as HTMLTextAreaElement;
+          if (lastTextarea) {
+            lastTextarea.focus();
+            lastTextarea.setSelectionRange(lastTextarea.value.length, lastTextarea.value.length);
+          }
+        }
+      }, 100);
     } catch (error) {
       console.error('CSVインポートエラー:', error);
       alert('無効な台本形式です。または台本が壊れています。');
