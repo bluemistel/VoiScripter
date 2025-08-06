@@ -72,11 +72,8 @@
     },
     "win": {
       "target": "portable",
-      "icon": "public/icon_x512.png",
-      "sign": false,
-      "signAndEditExecutable": false
+      "icon": "public/icon_x512.png"
     },
-    "forceCodeSigning": false,
     "electronVersion": "28.2.0",
     "electronDownload": {
       "mirror": "https://npm.taobao.org/mirrors/electron/"
