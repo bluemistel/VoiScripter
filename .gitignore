@@ -22,6 +22,7 @@ yarn-error.log*
 target
 dist
 logs
+out
 
 .cache
 .vscode
@@ -49,4 +50,4 @@ yarn-error.log*
 .env.production.local
 
 # workspace
-VoiScripter.code-workspace
+*.code-workspace
