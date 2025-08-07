@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveData: (key, data) => ipcRenderer.invoke('saveData', key, data),
   loadData: (key) => ipcRenderer.invoke('loadData', key),
   listDataKeys: () => ipcRenderer.invoke('listDataKeys'),
+  deleteData: (key) => ipcRenderer.invoke('deleteData', key),
+  moveDataBetweenDirectories: (fromDirectory, toDirectory) => ipcRenderer.invoke('moveDataBetweenDirectories', fromDirectory, toDirectory),
   
   // CSVファイル保存
   saveCSVFile: (defaultName, csvContent) => ipcRenderer.invoke('saveCSVFile', defaultName, csvContent),
@@ -24,6 +26,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onOpenProject: (callback) => ipcRenderer.on('open-project', callback),
   onSaveProject: (callback) => ipcRenderer.on('save-project', callback),
   onShowAbout: (callback) => ipcRenderer.on('show-about', callback),
+  
+  // ウィンドウフォーカスイベント
+  onWindowFocused: (callback) => ipcRenderer.on('window-focused', callback),
+  onWindowBlurred: (callback) => ipcRenderer.on('window-blurred', callback),
   
   // イベントリスナーの削除
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)

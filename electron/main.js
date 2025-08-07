@@ -164,28 +164,21 @@ function createWindow() {
     height: 800,
     minWidth: 800,
     minHeight: 600,
-    title: 'VoiScripter - 音声合成ソフトの台本作成支援ツール',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
-      preload: path.join(__dirname, 'preload.js'),
-      // セキュリティを強化した設定
       webSecurity: true,
       allowRunningInsecureContent: false,
-      // 追加のセキュリティ設定
-      sandbox: false, // preloadスクリプトを使用するため
+      sandbox: false,
       experimentalFeatures: false,
-      // パフォーマンス最適化
       backgroundThrottling: false,
-      // CSPを設定
-      additionalArguments: [
-        '--disable-features=VizDisplayCompositor'
-      ]
+      preload: path.join(__dirname, 'preload.js')
     },
-    icon: path.join(__dirname, '../public/favicon.ico'),
+    icon: path.join(__dirname, '../public/icon.png'),
     show: false,
-    titleBarStyle: 'default'
+    titleBarStyle: 'default',
+    autoHideMenuBar: true
   });
 
   // 開発環境ではローカルサーバー、本番環境ではビルドされたファイルを読み込み
@@ -275,6 +268,18 @@ function createWindow() {
     if (isDev) {
       mainWindow.webContents.openDevTools();
     }
+  });
+
+  // ウィンドウがアクティブになった時の処理
+  mainWindow.on('focus', () => {
+    // ウィンドウがフォーカスされた時にレンダラープロセスに通知
+    mainWindow.webContents.send('window-focused');
+  });
+
+  // ウィンドウが非アクティブになった時の処理
+  mainWindow.on('blur', () => {
+    // ウィンドウがフォーカスを失った時にレンダラープロセスに通知
+    mainWindow.webContents.send('window-blurred');
   });
 
   // ウィンドウが閉じられた時の処理
@@ -578,6 +583,41 @@ ipcMain.handle('listDataKeys', async () => {
   }
 });
 
+// ファイル削除
+ipcMain.handle('deleteData', async (event, key) => {
+  try {
+    // 保存先ディレクトリを取得（設定から）
+    const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+    let saveDirectory = '';
+    
+    if (fs.existsSync(settingsPath)) {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      saveDirectory = settings.saveDirectory || '';
+    }
+    
+    if (!saveDirectory) {
+      throw new Error('保存先ディレクトリが設定されていません');
+    }
+    
+    const filePath = path.join(saveDirectory, `${key}.json`);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      if (isDev) {
+        console.log(`ファイル削除成功: ${filePath}`);
+      }
+    } else {
+      if (isDev) {
+        console.log(`ファイルが存在しません: ${filePath}`);
+      }
+    }
+  } catch (error) {
+    if (isDev) {
+      console.error('ファイル削除エラー:', error);
+    }
+    throw error;
+  }
+});
+
 // 設定保存
 ipcMain.handle('saveSettings', async (event, settings) => {
   try {
@@ -627,6 +667,69 @@ ipcMain.handle('saveCSVFile', async (event, defaultName, csvContent) => {
   } catch (error) {
     if (isDev) {
       console.error('CSVファイル保存エラー:', error);
+    }
+    throw error;
+  }
+}); 
+
+// ディレクトリ間データ移動
+ipcMain.handle('moveDataBetweenDirectories', async (event, fromDirectory, toDirectory) => {
+  try {
+    if (isDev) {
+      console.log(`ディレクトリ間データ移動: ${fromDirectory} → ${toDirectory}`);
+    }
+    
+    const movedData = {};
+    
+    // 前のディレクトリからデータを読み込み
+    if (fs.existsSync(fromDirectory)) {
+      const files = fs.readdirSync(fromDirectory);
+      const jsonFiles = files.filter(file => file.endsWith('.json'));
+      
+      if (isDev) {
+        console.log(`前のディレクトリのファイル数: ${jsonFiles.length}`);
+        console.log('移動対象ファイル:', jsonFiles);
+      }
+      
+      for (const file of jsonFiles) {
+        const key = file.replace('.json', '');
+        const filePath = path.join(fromDirectory, file);
+        const data = fs.readFileSync(filePath, 'utf8');
+        movedData[key] = data;
+        if (isDev) {
+          console.log(`データ読み込み成功: ${key} (${data.length} bytes)`);
+        }
+      }
+    } else {
+      if (isDev) {
+        console.log(`前のディレクトリが存在しません: ${fromDirectory}`);
+      }
+    }
+    
+    // 新しいディレクトリにデータを保存
+    if (!fs.existsSync(toDirectory)) {
+      fs.mkdirSync(toDirectory, { recursive: true });
+      if (isDev) {
+        console.log(`新しいディレクトリを作成: ${toDirectory}`);
+      }
+    }
+    
+    for (const [key, data] of Object.entries(movedData)) {
+      const filePath = path.join(toDirectory, `${key}.json`);
+      fs.writeFileSync(filePath, data, 'utf8');
+      if (isDev) {
+        console.log(`データ移動成功: ${key} → ${filePath}`);
+      }
+    }
+    
+    if (isDev) {
+      console.log(`移動完了: ${Object.keys(movedData).length}個のファイル`);
+    }
+    
+    return { success: true, movedCount: Object.keys(movedData).length };
+  } catch (error) {
+    if (isDev) {
+      console.error('ディレクトリ間データ移動エラー:', error);
     }
     throw error;
   }

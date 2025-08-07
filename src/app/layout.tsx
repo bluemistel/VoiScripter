@@ -32,12 +32,43 @@ export default function RootLayout({
         // ここでアバウトダイアログを表示
       });
 
+      // ウィンドウフォーカスイベントの処理
+      window.electronAPI.onWindowFocused(() => {
+        // ウィンドウがフォーカスされた時にアクティブなtextareaにフォーカスを復元
+        const activeElement = document.activeElement;
+        if (activeElement && activeElement.tagName === 'TEXTAREA') {
+          setTimeout(() => {
+            (activeElement as HTMLTextAreaElement).focus();
+            // さらに確実にするため、もう一度フォーカス
+            setTimeout(() => {
+              (activeElement as HTMLTextAreaElement).focus();
+            }, 50);
+          }, 10);
+        }
+        
+        // フォーカス可能な要素をすべて復元
+        setTimeout(() => {
+          const textareas = document.querySelectorAll('textarea');
+          textareas.forEach(textarea => {
+            if (textarea === document.activeElement) {
+              (textarea as HTMLTextAreaElement).focus();
+            }
+          });
+        }, 100);
+      });
+
+      window.electronAPI.onWindowBlurred(() => {
+        // ウィンドウがフォーカスを失った時の処理（必要に応じて）
+      });
+
       // クリーンアップ
       return () => {
         window.electronAPI?.removeAllListeners('new-project');
         window.electronAPI?.removeAllListeners('open-project');
         window.electronAPI?.removeAllListeners('save-project');
         window.electronAPI?.removeAllListeners('show-about');
+        window.electronAPI?.removeAllListeners('window-focused');
+        window.electronAPI?.removeAllListeners('window-blurred');
       };
     }
   }, []);

@@ -450,6 +450,16 @@ export default function ScriptEditor({
       if (ref) {
         ref.addEventListener('focus', handleFocus);
         ref.addEventListener('blur', handleBlur);
+        
+        // Electron版での追加処理
+        if (typeof window !== 'undefined' && window.electronAPI) {
+          ref.addEventListener('click', () => {
+            // クリック時にフォーカスを確実にする
+            setTimeout(() => {
+              ref.focus();
+            }, 10);
+          });
+        }
       }
     });
 
@@ -458,6 +468,11 @@ export default function ScriptEditor({
         if (ref) {
           ref.removeEventListener('focus', handleFocus);
           ref.removeEventListener('blur', handleBlur);
+          
+          // Electron版での追加処理
+          if (typeof window !== 'undefined' && window.electronAPI) {
+            ref.removeEventListener('click', () => {});
+          }
         }
       });
     };
@@ -912,7 +927,10 @@ export default function ScriptEditor({
         {script.blocks.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
             <p className="text-lg mb-4">1.左上の新規作成から新しいプロジェクトを作成してください。</p>
-            <p className="text-lg mb-4">2.キャラクターのアイコンからキャラクターを追加し、下のボタンからブロックを追加します。</p>
+            <p className="text-lg mb-4">2.キャラクターのアイコンからキャラクターを追加します。</p>
+            <p className="text-lg mb-4">3.「+ブロックを追加」からテキストブロックを追加し、キャラクターを選択するとセリフを入力できます。</p>
+            <p className="text-lg mb-4">4.右上のエクスポートから台本をCSV形式で出力できます。グループ設定ごとにCSVファイルを分割出力することができます。</p>
+            <p className="text-lg mb-4">5.ショートカットやより詳しい操作方法は設定＞ヘルプをご覧ください。</p>
           </div>
         ) : (
           <div className="bg-card rounded-lg shadow p-4 relative h-full flex flex-col justify-between">

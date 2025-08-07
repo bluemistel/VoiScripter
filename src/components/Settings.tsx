@@ -60,8 +60,8 @@ export default function Settings({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-background border rounded-lg shadow-lg w-full max-w-3xl mx-4 h-[750px] overflow-hidden">
-        <div className="flex justify-between items-center p-4 border-b">
+      <div className="bg-background border rounded-lg shadow-lg w-full max-w-3xl mx-4 h-[750px] overflow-hidden flex flex-col">
+        <div className="flex justify-between items-center p-4 border-b flex-shrink-0">
           <h2 className="text-lg font-semibold text-foreground">設定</h2>
           <button
             onClick={onClose}
@@ -71,9 +71,9 @@ export default function Settings({
           </button>
         </div>
         
-        <div className="flex">
+        <div className="flex flex-1 overflow-hidden">
           {/* サイドバー */}
-          <div className="w-48 border-r bg-muted/30 h-[750px]">
+          <div className="w-48 border-r bg-muted/30 flex-shrink-0">
             <button
               onClick={() => setActiveTab('settings')}
               className={`w-full p-3 text-left flex items-center space-x-2 transition-colors ${
@@ -188,12 +188,14 @@ export default function Settings({
                   <div>
                     <h4 className="font-medium text-foreground mb-2">基本的な使い方</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• 左上の新規作成から新しいプロジェクトを作成してください。</li>
                       <li>• 右上のキャラクターのアイコンから話者を追加してください。</li>
-                      <li>• Alt+↑ ↓、またはキャラクターを変更してセリフを入力してください。</li>
-                      <li>• Ctrl+Enter、または「＋ブロックを追加」ボタンでセリフを追加できます。</li>
+                      <li>• 「+ブロックを追加」からテキストブロックを追加してください。</li>
+                      <li>• テキストブロックのリストからキャラクターを変更するとセリフが入力できます。「ト書きを入力」ではメモを書けます。</li>
                       <li>• Ctrl+↑ ↓、またはドラッグ&ドロップでブロックの順序を変更できます。</li>
-                      <li>• 右上のエクスポートからCSVのテキストファイルとして出力できます。</li>
-                      <li>• エクスポートしたファイルは、VoiScripterでも読み込むことができます。</li>
+                      <li>• 右上のエクスポートからCSVのテキストファイルとして出力できます。グループ設定ごとにCSVファイルを分割出力することができます。</li>
+                      <li>• セリフの入力エリア外をCtrl+クリック、またはShift+クリックすると複数ブロックを選択し、選択したブロックのみをエクスポートできます。</li>
+                      <li>• エクスポートしたファイルは、VoiScripterでも読み込むことができ、対応合成音声ソフトにインポートすることができます。</li>
                       <li>• 作業状態は随時保存されており、閉じても前回の状態から再開できます。</li>
                     </ul>
                   </div>
@@ -231,6 +233,16 @@ export default function Settings({
               <div className="flex flex-col max-h-[60vh] overflow-y-auto pr-2">
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.1.4</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• デスクトップアプリ化に伴い各種機能を実装</li>
+                      <li>• デスクトップアプリ化に伴いダイアログ系のUIを変更、右上の通知システムを実装</li>
+                      <li>• キャラクター設定のエクスポートに背景色を追加、インポート時にも背景色の変更内容が反映されるように改修</li>
+                      <li>• アプリケーションのアイコン、タイトルを作成</li>
+                    </ul>
+                  </div>
+                  
                   <div>
                     <h4 className="font-medium text-foreground mb-2">v0.1.3</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">

@@ -40,6 +40,8 @@ declare global {
       saveData: (key: string, data: string) => Promise<void>;
       loadData: (key: string) => Promise<string | null>;
       listDataKeys: () => Promise<string[]>;
+      deleteData: (key: string) => Promise<void>;
+      moveDataBetweenDirectories: (fromDirectory: string, toDirectory: string) => Promise<{ success: boolean; movedCount: number }>;
       
       // CSVファイル保存
       saveCSVFile: (defaultName: string, csvContent: string) => Promise<string | null>;
@@ -56,6 +58,10 @@ declare global {
       onOpenProject: (callback: () => void) => void;
       onSaveProject: (callback: () => void) => void;
       onShowAbout: (callback: () => void) => void;
+      
+      // ウィンドウフォーカスイベント
+      onWindowFocused: (callback: () => void) => void;
+      onWindowBlurred: (callback: () => void) => void;
       
       // イベントリスナーの削除
       removeAllListeners: (channel: string) => void;
