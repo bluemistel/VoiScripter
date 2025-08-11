@@ -547,25 +547,7 @@ export default function Home() {
     saveData(`voiscripter_${name}`, JSON.stringify(newProjectData));
     saveData('voiscripter_lastProject', name);
     
-    // 古いプロジェクトのデータを削除（default以外の場合）
-    if (oldProjectId !== 'default') {
-      if (saveDirectory === '') {
-        localStorage.removeItem(`voiscripter_${oldProjectId}`);
-        localStorage.removeItem(`voiscripter_${oldProjectId}_undo`);
-        localStorage.removeItem(`voiscripter_${oldProjectId}_redo`);
-      } else if (window.electronAPI) {
-        // Electron版では非同期で削除
-        window.electronAPI.deleteData(`voiscripter_${oldProjectId}`);
-        window.electronAPI.deleteData(`voiscripter_${oldProjectId}_undo`);
-        window.electronAPI.deleteData(`voiscripter_${oldProjectId}_redo`);
-      }
-      console.log(`古いプロジェクト「${oldProjectId}」のデータを削除しました`);
-    }
-    
-    // プロジェクトリストから古いプロジェクトを削除（default以外の場合）
-    if (oldProjectId !== 'default') {
-      setProjectList(prev => prev.filter(p => p !== oldProjectId));
-    }
+
     
     // 新しいプロジェクトの内容を設定
     setScript(newProjectData);
