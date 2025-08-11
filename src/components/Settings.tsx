@@ -182,7 +182,7 @@ export default function Settings({
             )}
             
             {activeTab === 'help' && (
-              <div className="flex flex-col max-h-[60vh] overflow-y-auto pr-2">
+              <div className="flex flex-col max-h-[60vh] pr-2">
                 <h4 className="font-medium text-foreground mb-2">VoiScripter ヘルプ</h4>
                 <div className="space-y-4">
                   <div>
@@ -230,9 +230,18 @@ export default function Settings({
             )}
 
             {activeTab === 'changelog' && (
-              <div className="flex flex-col max-h-[60vh] overflow-y-auto pr-2">
+              <div className="flex flex-col max-h-[60vh] pr-2">
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
+
+                <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.1.5</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• プロジェクト作成時に直前のプロジェクトが削除される不具合を修正</li>
+                      <li>• 設定ダイアログにシークバーが二重に出ていた不具合を修正</li>
+                    </ul>
+                  </div>
+
                   <div>
                     <h4 className="font-medium text-foreground mb-2">v0.1.4</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
