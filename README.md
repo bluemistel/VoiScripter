@@ -20,6 +20,7 @@ https://drive.google.com/file/d/1jRYg0_YZVeFqn2T6lnez2g8-wY0SCFbd/view?usp=drive
 - グループ設定での分割CSVエクスポート/インポート
 - ダークモード対応
 - デスクトップアプリケーション対応
+- プロジェクト内サブプロジェクトの管理機能
 
 ## 技術スタック
 - Next.js 14
