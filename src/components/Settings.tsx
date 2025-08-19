@@ -235,13 +235,21 @@ export default function Settings({
                 <div className="space-y-6">
 
                 <div>
-                    <h4 className="font-medium text-foreground mb-2">v0.1.5</h4>
+                    <h4 className="font-medium text-foreground mb-2">v0.1.6</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                       <li>• プロジェクト内サブプロジェクト作成機能(シーン機能)を追加し、タブ形式でシーンを管理できるように</li>
                       <li>• エクスポートメニューに「特定のシーンのみCSVを出力」する機能を追加</li>
                       <li>• CSVのインポート時に選択シーンに追加するように変更</li>
                       <li>• プロジェクト全体をJSONでエクスポート/インポートする機能を追加</li>
                       <li>• エクスポートメニューの各種UIを調整</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.1.5</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• 新規プロジェクトを作成して次のデータを開くと、前のデータが消える場合がある不具合を修正</li>
+                      <li>• 軽微な不具合を修正</li>
                     </ul>
                   </div>
 
