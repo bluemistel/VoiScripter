@@ -17,6 +17,7 @@ interface CSVExportDialogProps {
   scenes: Scene[];
   selectedSceneId: string | null;
   onExportSceneCSV: (sceneIds: string[], exportType: 'full' | 'serif-only', includeTogaki: boolean, selectedOnly: boolean) => void;
+  onExportProjectJson: () => void;
 }
 
 export default function CSVExportDialog({
@@ -32,9 +33,10 @@ export default function CSVExportDialog({
   onExportToClipboard,
   scenes,
   selectedSceneId,
-  onExportSceneCSV
+  onExportSceneCSV,
+  onExportProjectJson
 }: CSVExportDialogProps) {
-  type ExportType = 'full' | 'serif-only' | 'character-setting';
+  type ExportType = 'full' | 'serif-only' | 'character-setting' | 'project';
   const [exportType, setExportType] = useState<ExportType>('full');
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [useGroupExport, setUseGroupExport] = useState(false);
@@ -102,7 +104,7 @@ export default function CSVExportDialog({
   // タブ切り替え時にエクスポートタイプをリセット
   useEffect(() => {
     if (activeTab === 'project') {
-      setExportType('character-setting');
+      setExportType('project');
     } else if (activeTab === 'character') {
       setExportType('character-setting');
     } else {
@@ -422,7 +424,7 @@ export default function CSVExportDialog({
           </>
         )}
 
-{/* キャラクター設定タブの内容 */}
+{/* プロジェクト設定タブの内容 */}
         {activeTab === 'project' && (
           <div className="mb-4">
             <span className="text-foreground mb-2 font-semibold">プロジェクト</span>
@@ -431,13 +433,14 @@ export default function CSVExportDialog({
                 <input
                   type="radio"
                   name="exportType"
-                  value="character-setting"
-                  checked={exportType === 'character-setting'}
-                  onChange={(e) => setExportType(e.target.value as ExportType)}
+                  value="project"
+                  checked={exportType === 'project'}
+                  onChange={() => setExportType('project')}
                   className="text-primary"
                 />
-                <span className="text-foreground">プロジェクトをエクスポート</span>
+                <span className="text-foreground">プロジェクト全体をJSONでエクスポート</span>
               </label>
+              <span className="block text-sm text-muted-foreground">現在選択中のプロジェクト全体をJSONファイルとしてエクスポートします。インポートで復元できます。</span>
             </div>
           </div>
         )}
@@ -472,13 +475,16 @@ export default function CSVExportDialog({
                 useSceneExport,
                 sceneCheckboxes,
                 selectedGroups,
-                exportToClipboard
+                exportToClipboard,
+                activeTab
               });
               if (exportType === 'character-setting') {
                 onExportCharacterCSV();
                 handleClose();
+              } else if (exportType === 'project') {
+                onExportProjectJson();
+                handleClose();
               } else if (useGroupExport && selectedGroups.length > 0) {
-                // グループごとにエクスポートが最優先
                 handleExport(exportType as 'full' | 'serif-only', includeTogaki);
               } else if (useSceneExport && sceneCheckboxes.length > 0 && !exportToClipboard) {
                 onExportSceneCSV(sceneCheckboxes, exportType as 'full' | 'serif-only', includeTogaki, exportSelectedOnly);

@@ -1391,13 +1391,12 @@ export default function Home() {
       const text = await file.text();
       const data = JSON.parse(text);
       // バリデーション: Project型の最低限の構造チェック
-      if (!data || typeof data !== 'object' || !Array.isArray(data.scenes) || !data.name) {
+      if (!data || typeof data !== 'object' || !Array.isArray(data.scenes) || !data.name || !data.id) {
         showNotification('無効な形式のためインポートできませんでした。', 'error');
         return;
       }
-      // インポートダイアログで新規プロジェクト名を入力させる場合はここで対応
       setProject({
-        id: Date.now().toString(),
+        id: data.id,
         name: data.name,
         scenes: data.scenes
       });
@@ -1568,6 +1567,19 @@ export default function Home() {
     }
   }, [deleteConfirmation]);
 
+  // プロジェクトのJSONエクスポート
+  const handleExportProjectJson = () => {
+    const json = JSON.stringify(project, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${project.name || 'project'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showNotification('プロジェクトをエクスポートしました', 'success');
+  };
+
   return (
     <div id="root">
       <div className="min-h-auto bg-background text-foreground transition-colors duration-300">
@@ -1614,6 +1626,7 @@ export default function Home() {
           onExportCharacterCSV={handleExportCharacterCSV}
           onExportByGroups={handleExportByGroups}
           onExportToClipboard={handleExportToClipboard}
+          onExportProjectJson={handleExportProjectJson}
           onImportCSV={handleImportCSV}
           onImportCharacterCSV={handleImportCharacterCSV}
           onImportJson={handleImportJson}
@@ -1796,6 +1809,7 @@ export default function Home() {
               }
             });
           }}
+          onExportProjectJson={handleExportProjectJson}
         />
       </div>
       <ProjectDialog

@@ -42,6 +42,7 @@ interface HeaderProps {
   onExportCharacterCSV: () => void;
   onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean, selectedOnly?: boolean) => void;
   onExportToClipboard: (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean) => void;
+  onExportProjectJson: () => void;
   onImportCSV: (file: File, options?: { mode: 'append' | 'new'; projectName?: string }) => void;
   onImportCharacterCSV: (file: File) => void;
   onImportJson: (file: File) => void;
@@ -150,8 +151,10 @@ export default function Header(props: HeaderProps) {
     onExportCharacterCSV,
     onExportByGroups,
     onExportToClipboard,
+    onExportProjectJson,
     onImportCSV,
     onImportCharacterCSV,
+    onImportJson,
     isDarkMode,
     saveDirectory,
     onSaveDirectoryChange,
@@ -169,7 +172,6 @@ export default function Header(props: HeaderProps) {
     onRenameScene,
     onDeleteScene,
     onSelectScene,
-    onImportJson,
     onExportSceneCSV
   } = props;
   const logoPath = useLogoPath();
@@ -582,6 +584,7 @@ export default function Header(props: HeaderProps) {
         scenes={scenes}
         selectedSceneId={selectedSceneId}
         onExportSceneCSV={onExportSceneCSV}
+        onExportProjectJson={onExportProjectJson}
       />
       <ImportChoiceDialog
          isOpen={isImportChoiceDialogOpen && !!pendingImportFile && !!pendingImportType}
