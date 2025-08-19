@@ -1401,6 +1401,8 @@ export default function Home() {
         scenes: data.scenes
       });
       setSelectedSceneId(data.scenes[0]?.id || null);
+      setProjectId(data.id); // インポート直後にプロジェクトIDを切り替え
+      refreshProjectList(); // プロジェクトリストも即時更新
       showNotification('プロジェクトをインポートしました', 'success');
     } catch (e) {
       showNotification('無効な形式のためインポートできませんでした。', 'error');
