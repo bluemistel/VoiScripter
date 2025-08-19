@@ -10,8 +10,8 @@
   --color-popover-foreground: oklch(0.78 0.18 186);
   --color-primary: oklch(0.78 0.18 186);
   --color-primary-foreground: oklch(100% 0% 220);
-  --color-secondary: oklch(0.92 0.00 0);
-  --color-secondary-foreground:  oklch(0.3211 0 0);;
+  --color-secondary: oklch(0.7295 0.136 223.42);
+  --color-secondary-foreground:  oklch(100% 0% 220);
   --color-muted:  oklch(95% 0% 220);
   --color-muted-foreground: oklch(0.3211 0 0);
   --color-accent: oklch(95% 0% 220);
@@ -54,8 +54,8 @@
     --color-popover-foreground: rgb(212, 212, 212);
     --color-primary: rgb(29, 178, 134);
     --color-primary-foreground: rgb(160, 245, 219);
-    --color-secondary: oklch(0.78 0.00 0);
-    --color-secondary-foreground:  oklch(34% 17% 216);
+    --color-secondary: oklch(0.6801 0.1343 229.77);
+    --color-secondary-foreground:  rgb(212, 212, 212);
     --color-muted: rgb(68, 68, 68);
     --color-muted-foreground: rgb(212, 212, 212);
     --color-accent: rgb(68, 68, 68);
@@ -69,4 +69,7 @@
     --radius: 0.5rem;
   }
 }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 

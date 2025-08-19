@@ -5,15 +5,33 @@ import Header from '@/components/Header';
 import ScriptEditor from '@/components/ScriptEditor';
 import Settings from '@/components/Settings';
 import ProjectDialog from '@/components/ProjectDialog';
-import { Script, Character, ScriptBlock, Emotion } from '@/types';
+import CSVExportDialog from '@/components/CSVExportDialog'; // CSVExportDialogを追加
+import { Script, Character, ScriptBlock, Emotion, Project, Scene } from '@/types';
 
 export default function Home() {
-  // グローバルキャラクター管理
+  // useState宣言を最初にまとめる
   const [characters, setCharacters] = useState<Character[]>([]);
-  // グループ管理
   const [groups, setGroups] = useState<string[]>([]);
-  // プロジェクトID管理
   const [projectId, setProjectId] = useState<string>('default');
+  const [project, setProject] = useState<Project>({ id: 'default', name: '新しいプロジェクト', scenes: [] });
+  const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
+  const [script, setScript] = useState<Omit<Script, 'characters'>>({ id: '1', title: '新しい台本', blocks: [] });
+  const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
+  const [saveDirectory, setSaveDirectory] = useState<string>('');
+  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ projectId: string; confirmed: boolean | null } | null>(null);
+  // Undo/Redoスタックの型を定義
+  type ProjectHistory = { project: Project; selectedSceneId: string | null };
+  const [undoStack, setUndoStack] = useState<ProjectHistory[]>([{ project: { id: 'default', name: '新しいプロジェクト', scenes: [] }, selectedSceneId: null }]);
+  const [redoStack, setRedoStack] = useState<ProjectHistory[]>([]);
+
+  // showNotification関数をここに
+  const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const last = localStorage.getItem('voiscripter_lastProject');
@@ -21,82 +39,98 @@ export default function Home() {
     }
   }, []);
   const [projectList, setProjectList] = useState<string[]>([]);
-  const [undoStack, setUndoStack] = useState<Omit<Script, 'characters'>[]>([]);
-  const [redoStack, setRedoStack] = useState<Omit<Script, 'characters'>[]>([]);
-  const [script, setScript] = useState<Omit<Script, 'characters'>>({
-    id: '1',
-    title: '新しい台本',
-    blocks: []
-  });
-  const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
-  // データ保存先設定
-  const [saveDirectory, setSaveDirectory] = useState<string>('');
-  // プロジェクトダイアログ
-  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
-  
-  // 通知システム
-  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-  
-  // 削除確認用の状態
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{ projectId: string; confirmed: boolean | null } | null>(null);
-  
-  // 通知表示関数
-  const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3000);
-  };
 
-  // 削除確認の処理
+  // Undo/Redoスタックの保存
   useEffect(() => {
-    if (deleteConfirmation && deleteConfirmation.confirmed !== null) {
-      const handleDelete = async () => {
-        if (deleteConfirmation.confirmed) {
-          // 削除実行
-          const projectToDelete = deleteConfirmation.projectId;
-          setDeleteConfirmation(null);
-          
-          try {
-            // プロジェクトデータを削除
-            if (saveDirectory === '') {
-              localStorage.removeItem(`voiscripter_${projectToDelete}`);
-              localStorage.removeItem(`voiscripter_${projectToDelete}_undo`);
-              localStorage.removeItem(`voiscripter_${projectToDelete}_redo`);
-            } else if (window.electronAPI) {
-              await window.electronAPI.deleteData(`voiscripter_${projectToDelete}`);
-              await window.electronAPI.deleteData(`voiscripter_${projectToDelete}_undo`);
-              await window.electronAPI.deleteData(`voiscripter_${projectToDelete}_redo`);
-            }
+    if (!project.id) return;
+    saveData(`voiscripter_project_${project.id}_undo`, JSON.stringify(undoStack));
+  }, [undoStack, project.id, saveDirectory]);
+  useEffect(() => {
+    if (!project.id) return;
+    saveData(`voiscripter_project_${project.id}_redo`, JSON.stringify(redoStack));
+  }, [redoStack, project.id, saveDirectory]);
 
-            // プロジェクトリストから削除
-            setProjectList(prev => prev.filter(p => p !== projectToDelete));
+  // Undo/Redoスタックの復元（プロジェクト切替時）
+  useEffect(() => {
+    const loadUndoRedo = async () => {
+      const undoJson = await loadData(`voiscripter_project_${projectId}_undo`);
+      const redoJson = await loadData(`voiscripter_project_${projectId}_redo`);
+      if (undoJson) {
+        try {
+          const parsed = JSON.parse(undoJson);
+          if (Array.isArray(parsed)) setUndoStack(parsed);
+        } catch {}
+      } else {
+        setUndoStack([]);
+      }
+      if (redoJson) {
+        try {
+          const parsed = JSON.parse(redoJson);
+          if (Array.isArray(parsed)) setRedoStack(parsed);
+        } catch {}
+      } else {
+        setRedoStack([]);
+      }
+    };
+    loadUndoRedo();
+  }, [projectId, saveDirectory]);
 
-            // 削除されたプロジェクトが現在のプロジェクトの場合、defaultに切り替え
-            if (projectId === projectToDelete) {
-              setProjectId('default');
-              setScript({
-                id: '1',
-                title: '新しい台本',
-                blocks: []
-              });
-              setUndoStack([]);
-              setRedoStack([]);
-            }
+  // Undo/Redo操作中かどうかのフラグ
+  const isUndoRedoOperation = useRef(false);
 
-            showNotification(`プロジェクト「${projectToDelete}」を削除しました`, 'success');
-          } catch (error) {
-            console.error('プロジェクト削除エラー:', error);
-            showNotification('プロジェクトの削除に失敗しました', 'error');
-          }
-        } else {
-          // キャンセル
-          setDeleteConfirmation(null);
-          showNotification('削除をキャンセルしました', 'info');
-        }
-      };
-
-      handleDelete();
+  // Undo/Redoスタックに積む（project変更時）
+  useEffect(() => {
+    if (isUndoRedoOperation.current) {
+      isUndoRedoOperation.current = false;
+      return;
     }
-  }, [deleteConfirmation, projectId, saveDirectory]);
+    setUndoStack(prev => {
+      const newStack = [...prev, { project, selectedSceneId }];
+      saveData(`voiscripter_project_${project.id}_undo`, JSON.stringify(newStack));
+      return newStack.length > 50 ? newStack.slice(newStack.length - 50) : newStack;
+    });
+    setRedoStack([]);
+    saveData(`voiscripter_project_${project.id}_redo`, JSON.stringify([]));
+  }, [project, selectedSceneId]);
+
+  // Undo/Redoキーハンドラ
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (undoStack.length > 1) {
+          isUndoRedoOperation.current = true;
+          const newRedo = [{ project, selectedSceneId }, ...redoStack];
+          setRedoStack(newRedo);
+          saveData(`voiscripter_project_${project.id}_redo`, JSON.stringify(newRedo));
+          const prev = undoStack[undoStack.length - 2];
+          setUndoStack(u => {
+            const newUndo = u.slice(0, -1);
+            saveData(`voiscripter_project_${project.id}_undo`, JSON.stringify(newUndo));
+            return newUndo;
+          });
+          setProject(prev.project);
+          setSelectedSceneId(prev.selectedSceneId);
+        }
+      } else if (e.ctrlKey && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        if (redoStack.length > 0) {
+          isUndoRedoOperation.current = true;
+          const next = redoStack[0];
+          const newUndo = [...undoStack, next];
+          setUndoStack(newUndo);
+          saveData(`voiscripter_project_${project.id}_undo`, JSON.stringify(newUndo));
+          const newRedo = redoStack.slice(1);
+          setRedoStack(newRedo);
+          saveData(`voiscripter_project_${project.id}_redo`, JSON.stringify(newRedo));
+          setProject(next.project);
+          setSelectedSceneId(next.selectedSceneId);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undoStack, redoStack, project, selectedSceneId]);
 
   // データ保存関数
   const saveData = (key: string, data: string) => {
@@ -243,15 +277,22 @@ export default function Home() {
       
       // projectList
       if (saveDirectory === '') {
-        const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory' && k !== 'voiscripter_groups');
-        const projectKeys = keys.map(k => k.replace('voiscripter_', ''));
+        const keys = Object.keys(localStorage)
+          .filter(k => k.startsWith('voiscripter_project_') &&
+            !k.endsWith('_lastScene') &&
+            !k.endsWith('_undo') &&
+            !k.endsWith('_redo'));
+        const projectKeys = keys.map(k => k.replace('voiscripter_project_', ''));
         setProjectList(projectKeys);
         console.log('localStorageからプロジェクトリスト読み込み:', projectKeys);
       } else if (window.electronAPI) {
         try {
           const keys = await window.electronAPI.listDataKeys() || [];
-          const projectKeys = keys.filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory' && k !== 'voiscripter_groups');
-          const projectNames = projectKeys.map(k => k.replace('voiscripter_', ''));
+          const projectKeys = keys.filter(k => k.startsWith('voiscripter_project_') &&
+            !k.endsWith('_lastScene') &&
+            !k.endsWith('_undo') &&
+            !k.endsWith('_redo'));
+          const projectNames = projectKeys.map(k => k.replace('voiscripter_project_', ''));
           setProjectList(projectNames);
           console.log('ファイルからプロジェクトリスト読み込み:', projectNames);
         } catch (error) {
@@ -363,199 +404,125 @@ export default function Home() {
     }
   }, [groups, saveDirectory]);
 
+  // プロジェクト保存・復元
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    // プロジェクト保存
+    const saveProject = () => {
+      const key = `voiscripter_project_${project.id}`;
+      saveData(key, JSON.stringify(project));
+      // 最後に開いていたシーンIDも保存
+      if (selectedSceneId) {
+        saveData(`voiscripter_project_${project.id}_lastScene`, selectedSceneId);
+      }
+    };
+    saveProject();
+  }, [project, selectedSceneId, saveDirectory]);
+
   // プロジェクト切替時の復元
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    saveData('voiscripter_lastProject', projectId);
-    
-    const loadProjectData = async () => {
-      const saved = await loadData(`voiscripter_${projectId}`);
-      setScript(saved ? JSON.parse(saved) : {
-        id: '1', title: '新しい台本', blocks: []
-      });
-      
-      const u = await loadData(`voiscripter_${projectId}_undo`);
-      setUndoStack(u ? JSON.parse(u) : []);
-      
-      const r = await loadData(`voiscripter_${projectId}_redo`);
-      setRedoStack(r ? JSON.parse(r) : []);
-      
-      // プロジェクトリストの更新
-      if (saveDirectory === '') {
-        const keys = Object.keys(localStorage).filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory' && k !== 'voiscripter_groups');
-        const projectKeys = keys.map(k => k.replace('voiscripter_', ''));
-        setProjectList(projectKeys);
-        console.log('プロジェクト切替時localStorageからプロジェクトリスト読み込み:', projectKeys);
-      } else if (window.electronAPI) {
+    const loadProject = async () => {
+      const key = `voiscripter_project_${projectId}`;
+      const saved = await loadData(key);
+      if (saved) {
         try {
-          const keys = await window.electronAPI.listDataKeys() || [];
-          const projectKeys = keys.filter(k => k.startsWith('voiscripter_') && !k.endsWith('_undo') && !k.endsWith('_redo') && k !== 'voiscripter_characters' && k !== 'voiscripter_lastProject' && k !== 'voiscripter_saveDirectory' && k !== 'voiscripter_groups');
-          const projectNames = projectKeys.map(k => k.replace('voiscripter_', ''));
-          setProjectList(projectNames);
-          console.log('プロジェクト切替時ファイルからプロジェクトリスト読み込み:', projectNames);
-        } catch (error) {
-          console.error('プロジェクトリスト取得エラー:', error);
-          setProjectList([]);
-        }
-      }
-
-      // キャラクター設定の復元（プロジェクト切替時も読み込み）
-      const savedChars = await loadData('voiscripter_characters');
-      if (savedChars) {
-        try {
-          const parsedChars = JSON.parse(savedChars);
-          // 既存のキャラクターにグループプロパティを追加
-          const charsWithGroups = parsedChars.map((char: any) => ({
-            ...char,
-            group: char.group || 'なし',
-            backgroundColor: char.backgroundColor || '#e5e7eb'
-          }));
-          setCharacters(charsWithGroups);
-          console.log('プロジェクト切替時キャラクター設定読み込み成功:', charsWithGroups.length, '個');
-        } catch (error) {
-          console.error('プロジェクト切替時キャラクター設定読み込みエラー:', error);
-          setCharacters([]);
+          const parsed = JSON.parse(saved);
+          if (parsed && Array.isArray(parsed.scenes)) {
+            setProject(parsed);
+            // シーンID復元
+            const lastSceneId = await loadData(`voiscripter_project_${parsed.id}_lastScene`);
+            if (lastSceneId && parsed.scenes.some((s: any) => s.id === lastSceneId)) {
+              setSelectedSceneId(lastSceneId);
+            } else if (parsed.scenes.length > 0) {
+              setSelectedSceneId(parsed.scenes[0].id);
+            } else {
+              setSelectedSceneId(null);
+            }
+          }
+        } catch (e) {
+          console.error('プロジェクトデータのパースエラー', e);
+          setProject({ id: projectId, name: projectId, scenes: [] });
+          setSelectedSceneId(null);
         }
       } else {
-        console.log('プロジェクト切替時キャラクター設定が見つかりません');
-        setCharacters([]);
+        // 新規プロジェクトが空の場合は初期シーンを作成
+        const newSceneId = Date.now().toString();
+        const newScene = {
+          id: newSceneId,
+          name: projectId,
+          scripts: [{ id: Date.now().toString(), title: projectId, blocks: [], characters: [] }]
+        };
+        setProject({ id: projectId, name: projectId, scenes: [newScene] });
+        setSelectedSceneId(newSceneId);
       }
-
-      // グループデータの復元
-      isFirstGroups.current = true; // プロジェクト切り替え時は必ずリセット
-      const savedGroups = await loadData('voiscripter_groups');
-      if (savedGroups !== null && savedGroups !== undefined) {
-        try {
-          const parsedGroups = JSON.parse(savedGroups);
-          if (Array.isArray(parsedGroups)) {
-            setGroups(parsedGroups);
-            isFirstGroups.current = false;
-            return;
-          } else {
-            setGroups([]);
-            isFirstGroups.current = false;
-            return;
-          }
-        } catch (error) {
-          setGroups([]);
-          isFirstGroups.current = false;
-          return;
-        }
-      }
-      setGroups([]);
-      isFirstGroups.current = false;
     };
-    
-    loadProjectData();
+    loadProject();
   }, [projectId, saveDirectory]);
 
-  // script変更時に保存＆Undoスタック
-  const isFirstRender = useRef(true);
-  const isUndoRedoOperation = useRef(false);
-  
+  // プロジェクト削除時のscenes/selectedSceneIdリセット
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
+    if (projectList.length === 0) {
+      setProject({ id: 'default', name: '新しいプロジェクト', scenes: [] });
+      setSelectedSceneId(null);
     }
-    if (typeof window === 'undefined') return;
-    
-    // Undo/Redo操作中はUndoスタックに追加しない
-    if (isUndoRedoOperation.current) {
-      isUndoRedoOperation.current = false;
-      saveData(`voiscripter_${projectId}`, JSON.stringify(script));
-      return;
-    }
-    
-    setUndoStack(prev => {
-      let newStack = [...prev, script];
-      if (newStack.length > 50) newStack = newStack.slice(newStack.length - 50);
-      saveData(`voiscripter_${projectId}_undo`, JSON.stringify(newStack));
-      return newStack;
-    });
-    setRedoStack([]);
-    // redoスタックをクリア
-    if (saveDirectory === '') {
-      localStorage.removeItem(`voiscripter_${projectId}_redo`);
-    } else if (window.electronAPI) {
-      window.electronAPI?.saveData(`voiscripter_${projectId}_redo`, '');
-    }
-    saveData(`voiscripter_${projectId}`, JSON.stringify(script));
-  }, [script, projectId, saveDirectory]);
-
-  // Undo/Redoキーハンドラ
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        if (undoStack.length > 0) {
-          isUndoRedoOperation.current = true;
-          setRedoStack(r => {
-            const newRedo = [script, ...r];
-            if (typeof window !== 'undefined') saveData(`voiscripter_${projectId}_redo`, JSON.stringify(newRedo));
-            return newRedo;
-          });
-          const prev = undoStack[undoStack.length - 1];
-          setUndoStack(u => {
-            const newUndo = u.slice(0, -1);
-            if (typeof window !== 'undefined') saveData(`voiscripter_${projectId}_undo`, JSON.stringify(newUndo));
-            return newUndo;
-          });
-          setScript(prev);
-        }
-      } else if (e.ctrlKey && e.key.toLowerCase() === 'y') {
-        e.preventDefault();
-        if (redoStack.length > 0) {
-          isUndoRedoOperation.current = true;
-          const next = redoStack[0];
-          setUndoStack(u => {
-            const newUndo = [...u, script];
-            if (typeof window !== 'undefined') saveData(`voiscripter_${projectId}_undo`, JSON.stringify(newUndo));
-            return newUndo;
-          });
-          setRedoStack(r => {
-            const newRedo = r.slice(1);
-            if (typeof window !== 'undefined') saveData(`voiscripter_${projectId}_redo`, JSON.stringify(newRedo));
-            return newRedo;
-          });
-          setScript(next);
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undoStack, redoStack, script, projectId, saveDirectory]);
+  }, [projectList]);
 
   // プロジェクト新規作成
   const handleNewProject = () => {
     setIsProjectDialogOpen(true);
   };
 
-  const handleCreateProject = (name: string) => {
-    const oldProjectId = projectId;
-    setProjectId(name);
-    setProjectList(prev => prev.includes(name) ? prev : [...prev, name]);
-    
-    // 新しいプロジェクトのデータを保存
-    const newProjectData = {
-      id: '1',
-      title: name,
-      blocks: oldProjectId === 'default' ? script.blocks : []
-    };
-    
-    // 新しいプロジェクトを保存
-    saveData(`voiscripter_${name}`, JSON.stringify(newProjectData));
-    saveData('voiscripter_lastProject', name);
-    
+  // プロジェクトリスト再取得関数
+  const refreshProjectList = async () => {
+    if (saveDirectory === '') {
+      const keys = Object.keys(localStorage)
+        .filter(k => k.startsWith('voiscripter_project_') &&
+          !k.endsWith('_lastScene') &&
+          !k.endsWith('_undo') &&
+          !k.endsWith('_redo'));
+      const projectKeys = keys.map(k => k.replace('voiscripter_project_', ''));
+      setProjectList(projectKeys);
+    } else if (window.electronAPI) {
+      try {
+        const keys = await window.electronAPI.listDataKeys() || [];
+        const projectKeys = keys.filter(k => k.startsWith('voiscripter_project_') &&
+          !k.endsWith('_lastScene') &&
+          !k.endsWith('_undo') &&
+          !k.endsWith('_redo'));
+        const projectNames = projectKeys.map(k => k.replace('voiscripter_project_', ''));
+        setProjectList(projectNames);
+      } catch (error) {
+        setProjectList([]);
+      }
+    }
+  };
 
-    
-    // 新しいプロジェクトの内容を設定
-    setScript(newProjectData);
+  // プロジェクト新規作成時にリスト更新
+  const handleCreateProject = (name: string) => {
+    const newSceneId = Date.now().toString();
+    const newScene = {
+      id: newSceneId,
+      name: name,
+      scripts: [{ id: Date.now().toString(), title: name, blocks: [], characters: [] }]
+    };
+    setProject({
+      id: name,
+      name: name,
+      scenes: [newScene]
+    });
+    setSelectedSceneId(newSceneId);
+    setProjectId(name);
     setUndoStack([]);
     setRedoStack([]);
-    
     showNotification(`プロジェクト「${name}」を作成しました`, 'success');
+    setTimeout(refreshProjectList, 200);
   };
+
+  // プロジェクト削除時にリスト更新
+  useEffect(() => {
+    refreshProjectList();
+  }, [projectId, saveDirectory]);
 
   // プロジェクト削除
   const handleDeleteProject = () => {
@@ -976,85 +943,88 @@ export default function Home() {
   };
 
   // グループ別エクスポート
-  const handleExportByGroups = async (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean, selectedOnly?: boolean) => {
-    for (const group of selectedGroups) {
-      // グループに属するキャラクターのIDを取得
-      const groupCharacterIds = characters
-        .filter(char => char.group === group)
-        .map(char => char.id);
-
-      // グループに属するキャラクターのブロックのみをフィルタリング
-      let groupBlocks = script.blocks.filter(block => 
-        (block.characterId && groupCharacterIds.includes(block.characterId))
-      );
-      // ト書きも含める場合
-      if (includeTogaki) {
-        groupBlocks = [
-          ...groupBlocks,
-          ...script.blocks.filter(block => !block.characterId)
-        ];
-      }
-
-      // 選択ブロックのみの場合
-      if (selectedOnly && selectedBlockIds.length > 0) {
-        groupBlocks = groupBlocks.filter(block => selectedBlockIds.includes(block.id));
-      }
-
-      if (groupBlocks.length === 0) {
-        console.log(`グループ「${group}」にはセリフがありません`);
-        continue;
-      }
-
-      let rows: string[][];
-      let filename: string;
-
-      if (exportType === 'full') {
-        // 話者,セリフ形式
-        rows = groupBlocks.map(block => {
-          if (!block.characterId) {
-            return ['ト書き', block.text.replace(/\n/g, '\\n')];
-          }
-          const char = characters.find(c => c.id === block.characterId);
-          return [char ? char.name : '', block.text.replace(/\n/g, '\\n')];
-        });
-        filename = `${script.title || 'script'}_${group}.csv`;
-      } else {
-        // セリフだけ
-        rows = groupBlocks.map(block => [block.text.replace(/\n/g, '\\n')]);
-        filename = `${script.title || 'serif'}_${group}.csv`;
-      }
-
-      // CSVエンコード関数
-      const encodeCSV = (rows: string[][]) => {
-        return rows.map(row => 
-          row.map(cell => {
-            // セルにカンマ、改行、ダブルクォートが含まれる場合はダブルクォートで囲む
-            if (cell.includes(',') || cell.includes('\n') || cell.includes('"')) {
-              return `"${cell.replace(/"/g, '""')}"`;
-            }
-            return cell;
-          }).join(',')
-        ).join('\r\n');
-      };
-
-      const csv = encodeCSV(rows);
-      
-      if (window.electronAPI) {
-        try {
-          await window.electronAPI.saveCSVFile(filename, csv);
-        } catch (error) {
-          console.error(`CSV保存エラー (${group}):`, error);
-          alert(`グループ「${group}」のCSVファイルの保存に失敗しました。`);
+  const handleExportByGroups = async (
+    selectedGroups: string[],
+    exportType: 'full' | 'serif-only',
+    includeTogaki?: boolean,
+    selectedOnly?: boolean,
+    sceneIds?: string[]
+  ) => {
+    // デバッグ用出力
+    console.log('handleExportByGroups sceneIds:', sceneIds);
+    let targetScenes;
+    if (Array.isArray(sceneIds) && sceneIds.length > 0) {
+      targetScenes = project.scenes.filter(s => sceneIds.includes(s.id));
+    } else {
+      targetScenes = project.scenes;
+    }
+    console.log('targetScenes:', targetScenes.map(s => s.name));
+    for (const scene of targetScenes) {
+      const script = scene.scripts[0];
+      console.log('selectedGroups in handleExportByGroups', selectedGroups);
+      for (const group of selectedGroups) {
+        // グループに属するキャラクターのIDを取得
+        const groupCharacterIds = characters
+          .filter(char => char.group === group)
+          .map(char => char.id);
+        // グループに属するキャラクターのブロックのみをフィルタリング
+        let groupBlocks = script.blocks.filter(block =>
+          (block.characterId && groupCharacterIds.includes(block.characterId))
+        );
+        // ト書きも含める場合
+        if (includeTogaki) {
+          groupBlocks = [
+            ...groupBlocks,
+            ...script.blocks.filter(block => !block.characterId)
+          ];
         }
-      } else {
-        // ブラウザ環境では従来の方法
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
+        // 選択ブロックのみの場合
+        if (selectedOnly && selectedBlockIds.length > 0) {
+          groupBlocks = groupBlocks.filter(block => selectedBlockIds.includes(block.id));
+        }
+        if (groupBlocks.length === 0) {
+          console.log(`シーン「${scene.name}」グループ「${group}」にはセリフがありません`);
+          continue;
+        }
+        let rows: string[][];
+        let filename: string;
+        if (exportType === 'full') {
+          rows = groupBlocks.map(block => {
+            if (!block.characterId) {
+              return ['ト書き', block.text.replace(/\n/g, '\\n')];
+            }
+            const char = characters.find(c => c.id === block.characterId);
+            return [char ? char.name : '', block.text.replace(/\n/g, '\\n')];
+          });
+        } else {
+          rows = groupBlocks.map(block => [block.text.replace(/\n/g, '\\n')]);
+        }
+        filename = `${project.name || 'project'}_${scene.name}_${group}.csv`;
+        // CSVエンコード関数
+        const encodeCSV = (rows: string[][]) =>
+          rows.map(row =>
+            row.map(cell =>
+              cell.includes(',') || cell.includes('\n') || cell.includes('"')
+                ? `"${cell.replace(/"/g, '""')}"`
+                : cell
+            ).join(',')
+          ).join('\r\n');
+        const csv = encodeCSV(rows);
+        if (window.electronAPI) {
+          try {
+            await window.electronAPI.saveCSVFile(filename, csv);
+          } catch (error) {
+            alert(`グループ「${group}」のCSVファイルの保存に失敗しました。`);
+          }
+        } else {
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
       }
     }
   };
@@ -1095,26 +1065,20 @@ export default function Home() {
   };
 
   // クリップボードに出力
-  const handleExportToClipboard = async (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean) => {
-    let targetBlocks = script.blocks;
-    
-    // 選択ブロックのみの場合
-    if (selectedOnly && selectedBlockIds.length > 0) {
-      targetBlocks = script.blocks.filter(block => selectedBlockIds.includes(block.id));
-    }
-    
+  const handleExportToClipboard = async (serifOnly?: boolean, _selectedOnly?: boolean, includeTogaki?: boolean) => {
+    // プロジェクト全体の全シーン・全ブロックを対象
+    const allBlocks = project.scenes.flatMap(scene => scene.scripts[0]?.blocks || []);
     let text: string;
-    
     if (serifOnly) {
       // セリフだけ
-      text = targetBlocks
-        .filter(block => includeTogaki ? true : block.characterId) // ト書きを含めるかどうか
+      text = allBlocks
+        .filter(block => includeTogaki ? true : block.characterId)
         .map(block => block.text)
         .join('\n');
     } else {
       // 話者とセリフ
-      text = targetBlocks
-        .filter(block => includeTogaki ? true : block.characterId) // ト書きを含めるかどうか
+      text = allBlocks
+        .filter(block => includeTogaki ? true : block.characterId)
         .map(block => {
           if (block.characterId) {
             const char = characters.find(c => c.id === block.characterId);
@@ -1126,12 +1090,10 @@ export default function Home() {
         })
         .join('\n');
     }
-    
     try {
       await navigator.clipboard.writeText(text);
       alert('クリップボードにコピーしました。');
     } catch (error) {
-      console.error('クリップボード出力エラー:', error);
       alert('クリップボードへの出力に失敗しました。');
     }
   };
@@ -1215,21 +1177,57 @@ export default function Home() {
           }
         });
 
-      if (options?.mode === 'new' && options.projectName) {
-        // 新規プロジェクトデータを先に保存
-        saveData(`voiscripter_${options.projectName}`, JSON.stringify({ id: '1', title: options.projectName, blocks: newBlocks }));
-        if (typeof options.projectName === 'string') {
-          setProjectList(prev => prev.includes(options.projectName!) ? prev : [...prev, options.projectName!]);
-        }
+      if (options?.mode === 'new') {
+        if (!options.projectName) return;
+        // 新しいプロジェクト構造を作成
+        const newSceneId = Date.now().toString();
+        const newScriptId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+        const newProject = {
+          id: options.projectName,
+          name: options.projectName,
+          scenes: [
+            {
+              id: newSceneId,
+              name: options.projectName,
+              scripts: [
+                {
+                  id: newScriptId,
+                  title: options.projectName,
+                  blocks: newBlocks,
+                  characters: []
+                }
+              ]
+            }
+          ]
+        };
+        saveData(`voiscripter_project_${options.projectName}`, JSON.stringify(newProject));
+        setProjectList((prev: string[]) => {
+          const name = options.projectName as string;
+          return prev.includes(name) ? prev : [...prev, name];
+        });
+        setProject(newProject);
         setProjectId(options.projectName);
+        setSelectedSceneId(newSceneId);
         showNotification(`${newBlocks.length}個のブロックを新規プロジェクト「${options.projectName}」にインポートしました。`, 'success');
       } else {
-        // 追加
-        setScript(prev => ({
+        // 選択中シーンのscripts[0].blocksに追加
+        setProject(prev => ({
           ...prev,
-          blocks: [...prev.blocks, ...newBlocks]
+          scenes: prev.scenes.map(scene =>
+            scene.id === selectedSceneId
+              ? {
+                  ...scene,
+                  scripts: scene.scripts.length > 0
+                    ? [{
+                        ...scene.scripts[0],
+                        blocks: [...scene.scripts[0].blocks, ...newBlocks]
+                      }]
+                    : [{ id: Date.now().toString(), title: scene.name, blocks: newBlocks, characters: [] }]
+                }
+              : scene
+          )
         }));
-        showNotification(`${newBlocks.length}個のブロックを現在のプロジェクトにインポートしました。`, 'success');
+        showNotification(`${newBlocks.length}個のブロックを現在のシーンにインポートしました。`, 'success');
       }
       
       // CSVインポート後に最後のブロックにフォーカス
@@ -1387,6 +1385,202 @@ export default function Home() {
     }
   };
 
+  // JSONインポート（プロジェクト/シーン）
+  const handleImportJson = async (file: File) => {
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      // バリデーション: Project型の最低限の構造チェック
+      if (!data || typeof data !== 'object' || !Array.isArray(data.scenes) || !data.name || !data.id) {
+        showNotification('無効な形式のためインポートできませんでした。', 'error');
+        return;
+      }
+      setProject({
+        id: data.id,
+        name: data.name,
+        scenes: data.scenes
+      });
+      setSelectedSceneId(data.scenes[0]?.id || null);
+      setProjectId(data.id); // インポート直後にプロジェクトIDを切り替え
+      refreshProjectList(); // プロジェクトリストも即時更新
+      showNotification('プロジェクトをインポートしました', 'success');
+    } catch (e) {
+      showNotification('無効な形式のためインポートできませんでした。', 'error');
+    }
+  };
+
+  // シーン操作関数
+  const handleAddScene = (name: string) => {
+    if (!name.trim()) return;
+    if (project.scenes.length >= 30) return;
+    if (project.scenes.some(s => s.name === name.trim())) return;
+    const newSceneId = Date.now().toString();
+    const newScene = {
+      id: newSceneId,
+      name: name.trim(),
+      scripts: [{ id: Date.now().toString(), title: name.trim(), blocks: [], characters: [] }]
+    };
+    setProject(prev => ({ ...prev, scenes: [...prev.scenes, newScene] }));
+    setSelectedSceneId(newSceneId);
+  };
+  const handleRenameScene = (sceneId: string, newName: string) => {
+    if (!newName.trim()) return;
+    if (project.scenes.some(s => s.name === newName.trim() && s.id !== sceneId)) return;
+    setProject(prev => ({
+      ...prev,
+      scenes: prev.scenes.map(s => s.id === sceneId ? { ...s, name: newName.trim() } : s)
+    }));
+  };
+  const handleDeleteScene = (sceneId: string) => {
+    setProject(prev => ({
+      ...prev,
+      scenes: prev.scenes.filter(s => s.id !== sceneId)
+    }));
+    // 削除後は先頭のシーンを選択
+    setTimeout(() => {
+      setSelectedSceneId(p => {
+        const remain = project.scenes.filter(s => s.id !== sceneId);
+        return remain.length > 0 ? remain[0].id : null;
+      });
+    }, 0);
+  };
+  const handleSelectScene = (sceneId: string) => {
+    setSelectedSceneId(sceneId);
+  };
+
+  // 選択中シーンの取得
+  const selectedScene = project.scenes.find(s => s.id === selectedSceneId) || null;
+  // 選択中シーンのスクリプト（現状は1シーン1スクリプト想定）
+  const currentScript = selectedScene?.scripts[0] || { id: '', title: '', blocks: [], characters: [] };
+
+  // ScriptEditorの編集内容をproject.scenesに反映
+  const handleUpdateScript = (updates: Partial<Script>) => {
+    if (!selectedSceneId) return;
+    setProject(prev => ({
+      ...prev,
+      scenes: prev.scenes.map(scene =>
+        scene.id === selectedSceneId
+          ? { ...scene, scripts: scene.scripts.length > 0 ? [{ ...scene.scripts[0], ...updates }] : [{ ...updates, id: Date.now().toString(), title: scene.name, blocks: [], characters: [] }] }
+          : scene
+      )
+    }));
+  };
+
+  // シーン単位でCSVエクスポート（複数シーン対応）
+  const handleExportSceneCSV = async (
+    sceneIds: string[],
+    exportType: 'full' | 'serif-only',
+    includeTogaki: boolean,
+    selectedOnly: boolean
+  ) => {
+    sceneIds.forEach(async (sceneId) => {
+      const scene = project.scenes.find(s => s.id === sceneId);
+      if (!scene || scene.scripts.length === 0) {
+        showNotification('シーンが見つかりません', 'error');
+        return;
+      }
+      const script = scene.scripts[0];
+      let targetBlocks = script.blocks;
+      if (selectedOnly && selectedBlockIds.length > 0) {
+        targetBlocks = script.blocks.filter(block => selectedBlockIds.includes(block.id));
+      }
+      if (!targetBlocks || targetBlocks.length === 0) {
+        showNotification('エクスポート対象のブロックがありません', 'info');
+        return;
+      }
+      let rows: string[][] = [];
+      if (exportType === 'full') {
+        rows = targetBlocks
+          .filter(block => includeTogaki ? true : block.characterId)
+          .map(block => {
+            if (!block.characterId) {
+              return ['ト書き', block.text.replace(/\n/g, '\\n')];
+            }
+            const char = characters.find(c => c.id === block.characterId);
+            return [char ? char.name : '', block.text.replace(/\n/g, '\\n')];
+          });
+      } else if (exportType === 'serif-only') {
+        rows = targetBlocks
+          .filter(block => block.characterId)
+          .map(block => [block.text.replace(/\n/g, '\\n')]);
+      }
+      if (!rows || rows.length === 0) {
+        showNotification('エクスポート対象のデータがありません', 'info');
+        return;
+      }
+      // CSVエンコード
+      const encodeCSV = (rows: string[][]) =>
+        rows.map(row =>
+          row.map(cell =>
+            cell.includes(',') || cell.includes('\n') || cell.includes('"')
+              ? `"${cell.replace(/"/g, '""')}"`
+              : cell
+          ).join(',')
+        ).join('\r\n');
+      const csv = encodeCSV(rows);
+      const filename = `${project.name || 'project'}_${scene.name}_${exportType}.csv`;
+      if (window.electronAPI) {
+        try {
+          await window.electronAPI.saveCSVFile(filename, csv);
+          showNotification('CSVファイルを保存しました', 'success');
+        } catch (error) {
+          showNotification('CSVファイルの保存に失敗しました', 'error');
+        }
+      } else {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        showNotification('CSVファイルをダウンロードしました', 'success');
+      }
+    });
+  };
+
+  // プロジェクト削除ダイアログの確定・キャンセル処理
+  useEffect(() => {
+    if (!deleteConfirmation) return;
+    if (deleteConfirmation.confirmed === true) {
+      // プロジェクト削除処理
+      if (deleteConfirmation.projectId === 'default') {
+        showNotification('デフォルトプロジェクトは削除できません', 'error');
+        setDeleteConfirmation(null);
+        return;
+      }
+      // localStorageまたはファイルから削除
+      if (saveDirectory === '') {
+        localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}`);
+        localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}_lastScene`);
+        localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}_undo`);
+        localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}_redo`);
+      } else if (window.electronAPI) {
+        window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}`);
+        window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}_lastScene`);
+        window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}_undo`);
+        window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}_redo`);
+      }
+      showNotification(`プロジェクト「${deleteConfirmation.projectId}」を削除しました`, 'success');
+      setProjectId('default');
+      setDeleteConfirmation(null);
+    } else if (deleteConfirmation.confirmed === false) {
+      setDeleteConfirmation(null);
+    }
+  }, [deleteConfirmation]);
+
+  // プロジェクトのJSONエクスポート
+  const handleExportProjectJson = () => {
+    const json = JSON.stringify(project, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${project.name || 'project'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showNotification('プロジェクトをエクスポートしました', 'success');
+  };
 
   return (
     <div id="root">
@@ -1434,8 +1628,10 @@ export default function Home() {
           onExportCharacterCSV={handleExportCharacterCSV}
           onExportByGroups={handleExportByGroups}
           onExportToClipboard={handleExportToClipboard}
+          onExportProjectJson={handleExportProjectJson}
           onImportCSV={handleImportCSV}
           onImportCharacterCSV={handleImportCharacterCSV}
+          onImportJson={handleImportJson}
           isDarkMode={isDarkMode}
           saveDirectory={saveDirectory}
           onSaveDirectoryChange={handleSaveDirectoryChange}
@@ -1444,61 +1640,179 @@ export default function Home() {
           onDeleteGroup={handleDeleteGroup}
           onReorderCharacters={setCharacters}
           onReorderGroups={setGroups}
-          projectName={script.title}
+          projectName={project.name}
           selectedBlockIds={selectedBlockIds}
           onRenameProject={(newName) => {
-            if (!newName.trim() || newName === script.title) return;
-            
-            const oldProjectName = script.title;
-            
-            // プロジェクトリスト更新
-            setProjectList(prev => prev.map(p => p === oldProjectName ? newName : p));
-            // プロジェクトID更新
+            if (!newName.trim() || newName === project.name) return;
+            const oldProjectId = project.id;
+            // 1シーン目・1スクリプト目がプロジェクト名と同じ場合は同時に変更
+            setProject(prev => {
+              const updatedScenes = prev.scenes.map((scene, idx) => {
+                if (idx === 0 && scene.name === prev.name) {
+                  return {
+                    ...scene,
+                    name: newName,
+                    scripts: scene.scripts.map((script, sidx) =>
+                      sidx === 0 && script.title === prev.name ? { ...script, title: newName } : script
+                    )
+                  };
+                }
+                return scene;
+              });
+              return {
+                ...prev,
+                id: newName,
+                name: newName,
+                scenes: updatedScenes
+              };
+            });
+            setProjectList(prev => prev.map(p => p === oldProjectId ? newName : p));
             setProjectId(newName);
-            // スクリプトタイトル更新
-            setScript(prev => ({ ...prev, title: newName }));
-            // 新しいプロジェクトデータを保存
-            saveData(`voiscripter_${newName}`, JSON.stringify({ ...script, title: newName }));
+            saveData(`voiscripter_project_${newName}`, JSON.stringify({ ...project, id: newName, name: newName, scenes: project.scenes.map((scene, idx) => idx === 0 && scene.name === project.name ? { ...scene, name: newName, scripts: scene.scripts.map((script, sidx) => sidx === 0 && script.title === project.name ? { ...script, title: newName } : script) } : scene) }));
             saveData('voiscripter_lastProject', newName);
-            
-            // 古いプロジェクトのデータを完全に削除
+            // 古いプロジェクトデータ削除
             if (saveDirectory === '') {
-              localStorage.removeItem(`voiscripter_${oldProjectName}`);
-              localStorage.removeItem(`voiscripter_${oldProjectName}_undo`);
-              localStorage.removeItem(`voiscripter_${oldProjectName}_redo`);
+              localStorage.removeItem(`voiscripter_project_${oldProjectId}`);
+              localStorage.removeItem(`voiscripter_project_${oldProjectId}_lastScene`);
             } else if (window.electronAPI) {
-              // Electron版では実際にファイルを削除
-              window.electronAPI.deleteData(`voiscripter_${oldProjectName}`);
-              window.electronAPI.deleteData(`voiscripter_${oldProjectName}_undo`);
-              window.electronAPI.deleteData(`voiscripter_${oldProjectName}_redo`);
+              window.electronAPI.deleteData(`voiscripter_project_${oldProjectId}`);
+              window.electronAPI.deleteData(`voiscripter_project_${oldProjectId}_lastScene`);
             }
-            
-            console.log(`プロジェクト名変更: 「${oldProjectName}」→「${newName}」`);
             showNotification(`プロジェクト名を「${newName}」に変更しました`, 'success');
           }}
+          scenes={project.scenes}
+          selectedSceneId={selectedSceneId}
+          onAddScene={handleAddScene}
+          onRenameScene={handleRenameScene}
+          onDeleteScene={handleDeleteScene}
+          onSelectScene={handleSelectScene}
+          onExportSceneCSV={handleExportSceneCSV}
         />
         <main className="p-4">
           <div className="max-w-6xl mx-auto">
-            <ScriptEditor
-              script={{ ...script, characters }}
-              onUpdateBlock={handleUpdateBlock}
-              onAddBlock={handleAddBlock}
-              onDeleteBlock={handleDeleteBlock}
-              onInsertBlock={handleInsertBlock}
-              onMoveBlock={handleMoveBlock}
-              selectedBlockIds={selectedBlockIds}
-              onSelectedBlockIdsChange={setSelectedBlockIds}
-              onOpenCSVExport={() => {
-                // CSVエクスポートダイアログを開く処理
-                // HeaderコンポーネントのCSVエクスポートボタンをクリックする
-                const csvExportButton = document.querySelector('[title="CSVエクスポート"]') as HTMLButtonElement;
-                if (csvExportButton) {
-                  csvExportButton.click();
-                }
-              }}
-            />
+            {selectedScene ? (
+              <ScriptEditor
+                script={{ ...currentScript, characters }}
+                onUpdateBlock={(blockId, updates) => {
+                  const blocks = currentScript.blocks.map(b => b.id === blockId ? { ...b, ...updates, id: b.id ?? Date.now().toString(), characterId: typeof updates.characterId === 'string' ? updates.characterId : b.characterId || '', emotion: typeof updates.emotion === 'string' ? updates.emotion : b.emotion || 'normal' } : b);
+                  handleUpdateScript({ blocks });
+                }}
+                onAddBlock={() => {
+                  const newBlock = { id: Date.now().toString(), characterId: characters[0]?.id ?? '', emotion: 'normal' as const, text: '' };
+                  handleUpdateScript({ blocks: [...currentScript.blocks, newBlock] });
+                }}
+                onDeleteBlock={blockId => {
+                  handleUpdateScript({ blocks: currentScript.blocks.filter(b => b.id !== blockId) });
+                }}
+                onInsertBlock={(block, index) => {
+                  const blocks = [...currentScript.blocks];
+                  blocks.splice(index, 0, { ...block, id: block.id ?? Date.now().toString(), characterId: block.characterId ?? '', emotion: block.emotion ?? 'normal' });
+                  handleUpdateScript({ blocks });
+                }}
+                onMoveBlock={(from, to) => {
+                  const blocks = [...currentScript.blocks];
+                  const [moved] = blocks.splice(from, 1);
+                  blocks.splice(to, 0, moved);
+                  handleUpdateScript({ blocks });
+                }}
+                selectedBlockIds={selectedBlockIds}
+                onSelectedBlockIdsChange={setSelectedBlockIds}
+                onOpenCSVExport={() => {
+                  // CSVエクスポートダイアログを開く処理
+                  const csvExportButton = document.querySelector('[title="CSVエクスポート"]') as HTMLButtonElement;
+                  if (csvExportButton) csvExportButton.click();
+                }}
+              />
+            ) : (
+              <div className="text-center text-muted-foreground py-12">シーンがない古いプロジェクトが読み込まれています。<br />+ボタンから新しいシーンを作成してください。<br />または、新規作成から新しいプロジェクトを作成してください。</div>
+            )}
           </div>
         </main>
+        <CSVExportDialog
+          isOpen={false}
+          onClose={() => {}}
+          characters={characters}
+          groups={groups}
+          selectedBlockIds={selectedBlockIds}
+          onExportCSV={(includeTogaki, selectedOnly) => {
+            // 全シーンのセリフを結合して出力
+            const allBlocks = project.scenes.flatMap(scene => scene.scripts[0]?.blocks || []);
+            if (allBlocks.length === 0) return;
+            const rows = allBlocks
+              .filter(block => includeTogaki ? true : block.characterId)
+              .map(block => {
+                if (!block.characterId) {
+                  return ['ト書き', block.text.replace(/\n/g, '\n')];
+                }
+                const char = characters.find(c => c.id === block.characterId);
+                return [char ? char.name : '', block.text.replace(/\n/g, '\n')];
+              });
+            const encodeCSV = (rows: string[][]) => rows.map(row => row.map(cell => cell.includes(',') || cell.includes('\n') || cell.includes('"') ? `"${cell.replace(/"/g, '""')}"` : cell).join(',')).join('\r\n');
+            const csv = encodeCSV(rows);
+            const defaultName = `${project.name || 'project'}.csv`;
+            if (window.electronAPI) {
+              window.electronAPI.saveCSVFile(defaultName, csv);
+            } else {
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = defaultName;
+              a.click();
+              URL.revokeObjectURL(url);
+            }
+          }}
+          onExportSerifOnly={() => {}}
+          onExportByGroups={() => {}}
+          onExportCharacterCSV={() => {}}
+          onExportToClipboard={() => {}}
+          scenes={project.scenes}
+          selectedSceneId={selectedSceneId}
+          onExportSceneCSV={(sceneIds, exportType, includeTogaki, selectedOnly) => {
+            // 特定シーンごとに分割出力
+            sceneIds.forEach(sceneId => {
+              const scene = project.scenes.find(s => s.id === sceneId);
+              if (!scene || scene.scripts.length === 0) return;
+              const script = scene.scripts[0];
+              let targetBlocks = script.blocks;
+              if (selectedOnly && selectedBlockIds.length > 0) {
+                targetBlocks = script.blocks.filter(block => selectedBlockIds.includes(block.id));
+              }
+              let rows;
+              if (exportType === 'full') {
+                rows = targetBlocks
+                  .filter(block => includeTogaki ? true : block.characterId)
+                  .map(block => {
+                    if (!block.characterId) {
+                      return ['ト書き', block.text.replace(/\n/g, '\n')];
+                    }
+                    const char = characters.find(c => c.id === block.characterId);
+                    return [char ? char.name : '', block.text.replace(/\n/g, '\n')];
+                  });
+              } else {
+                rows = targetBlocks
+                  .filter(block => block.characterId)
+                  .map(block => [block.text.replace(/\n/g, '\n')]);
+              }
+              if (!rows || rows.length === 0) return;
+              const encodeCSV = (rows: string[][]) => rows.map(row => row.map(cell => cell.includes(',') || cell.includes('\n') || cell.includes('"') ? `"${cell.replace(/"/g, '""')}"` : cell).join(',')).join('\r\n');
+              const csv = encodeCSV(rows);
+              const filename = `${project.name || 'project'}_${scene.name}.csv`;
+              if (window.electronAPI) {
+                window.electronAPI.saveCSVFile(filename, csv);
+              } else {
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+              }
+            });
+          }}
+          onExportProjectJson={handleExportProjectJson}
+        />
       </div>
       <ProjectDialog
         isOpen={isProjectDialogOpen}

@@ -997,14 +997,14 @@ export default function ScriptEditor({
       <div className="fixed right-6 z-40 flex flex-row items-end space-x-2 bottom-6">
         <button
           onClick={handleScrollTop}
-          className={`px-3 py-2 bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full shadow-lg text-lg transition-transform duration-600 ${slideUp ? '-translate-y-2' : ''}`}
+          className={`px-3 py-2 bg-muted hover:bg-muted/90 text-muted-foreground rounded-full shadow-lg text-lg transition-transform duration-600 ${slideUp ? '-translate-y-2' : ''}`}
           title="Ctrl+Alt+↑: 最上段へ"
         >
           <ArrowUpIcon className="w-6 h-6" />
         </button>
         <button
           onClick={handleScrollBottom}
-          className={`px-3 py-2 bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full shadow-lg text-lg transition-transform duration-600 ${slideDown ? 'translate-y-2' : ''}`}
+          className={`px-3 py-2 bg-muted hover:bg-muted/90 text-muted-foreground rounded-full shadow-lg text-lg transition-transform duration-600 ${slideDown ? 'translate-y-2' : ''}`}
           title="Ctrl+,: 最下段へ"
         >
           <ArrowDownIcon className="w-6 h-6" />

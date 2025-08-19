@@ -27,6 +27,22 @@ export interface Script {
   characters: Character[];
 }
 
+// シーン（サブプロジェクト）
+export interface Scene {
+  id: string;
+  name: string;
+  scripts: Script[];
+  // 必要に応じて他のシーン固有情報を追加
+}
+
+// プロジェクト型
+export interface Project {
+  id: string;
+  name: string;
+  scenes: Scene[];
+  // プロジェクト全体の設定やメタ情報を追加可能
+}
+
 // Electron API型定義
 declare global {
   interface Window {
