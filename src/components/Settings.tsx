@@ -239,6 +239,7 @@ export default function Settings({
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                       <li>• プロジェクト内サブプロジェクト作成機能(シーン機能)を追加し、タブ形式でシーンを管理できるように</li>
                       <li>• エクスポートメニューに「特定のシーンのみCSVを出力」する機能を追加</li>
+                      <li>• CSVのインポート時に選択シーンに追加するように変更</li>
                       <li>• エクスポートメニューの各種UIを調整</li>
                     </ul>
                   </div>

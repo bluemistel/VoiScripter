@@ -86,7 +86,7 @@ function ImportChoiceDialog({ isOpen, onClose, onImportToCurrent, onImportToNew 
           </button>
         </div>
         <div className="space-y-4">
-          <button onClick={() => { setNewProjectName(''); onImportToCurrent(); }} className="w-full px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold">現在のプロジェクトに追加</button>
+          <button onClick={() => { setNewProjectName(''); onImportToCurrent(); }} className="w-full px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold">現在のプロジェクトのシーンに追加</button>
           <div>
             <div className="mb-2 text-foreground">新しいプロジェクトを作成してインポート</div>
             <input type="text" value={newProjectName} onChange={e => setNewProjectName(e.target.value)} placeholder="プロジェクト名" className="w-full p-2 border rounded mb-2" />

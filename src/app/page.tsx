@@ -1177,21 +1177,57 @@ export default function Home() {
           }
         });
 
-      if (options?.mode === 'new' && options.projectName) {
-        // 新規プロジェクトデータを先に保存
-        saveData(`voiscripter_${options.projectName}`, JSON.stringify({ id: '1', title: options.projectName, blocks: newBlocks }));
-        if (typeof options.projectName === 'string') {
-          setProjectList(prev => prev.includes(options.projectName!) ? prev : [...prev, options.projectName!]);
-        }
+      if (options?.mode === 'new') {
+        if (!options.projectName) return;
+        // 新しいプロジェクト構造を作成
+        const newSceneId = Date.now().toString();
+        const newScriptId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+        const newProject = {
+          id: options.projectName,
+          name: options.projectName,
+          scenes: [
+            {
+              id: newSceneId,
+              name: options.projectName,
+              scripts: [
+                {
+                  id: newScriptId,
+                  title: options.projectName,
+                  blocks: newBlocks,
+                  characters: []
+                }
+              ]
+            }
+          ]
+        };
+        saveData(`voiscripter_project_${options.projectName}`, JSON.stringify(newProject));
+        setProjectList((prev: string[]) => {
+          const name = options.projectName as string;
+          return prev.includes(name) ? prev : [...prev, name];
+        });
+        setProject(newProject);
         setProjectId(options.projectName);
+        setSelectedSceneId(newSceneId);
         showNotification(`${newBlocks.length}個のブロックを新規プロジェクト「${options.projectName}」にインポートしました。`, 'success');
       } else {
-        // 追加
-        setScript(prev => ({
+        // 選択中シーンのscripts[0].blocksに追加
+        setProject(prev => ({
           ...prev,
-          blocks: [...prev.blocks, ...newBlocks]
+          scenes: prev.scenes.map(scene =>
+            scene.id === selectedSceneId
+              ? {
+                  ...scene,
+                  scripts: scene.scripts.length > 0
+                    ? [{
+                        ...scene.scripts[0],
+                        blocks: [...scene.scripts[0].blocks, ...newBlocks]
+                      }]
+                    : [{ id: Date.now().toString(), title: scene.name, blocks: newBlocks, characters: [] }]
+                }
+              : scene
+          )
         }));
-        showNotification(`${newBlocks.length}個のブロックを現在のプロジェクトにインポートしました。`, 'success');
+        showNotification(`${newBlocks.length}個のブロックを現在のシーンにインポートしました。`, 'success');
       }
       
       // CSVインポート後に最後のブロックにフォーカス
@@ -1501,6 +1537,36 @@ export default function Home() {
       }
     });
   };
+
+  // プロジェクト削除ダイアログの確定・キャンセル処理
+  useEffect(() => {
+    if (!deleteConfirmation) return;
+    if (deleteConfirmation.confirmed === true) {
+      // プロジェクト削除処理
+      if (deleteConfirmation.projectId === 'default') {
+        showNotification('デフォルトプロジェクトは削除できません', 'error');
+        setDeleteConfirmation(null);
+        return;
+      }
+      // localStorageまたはファイルから削除
+      if (saveDirectory === '') {
+        localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}`);
+        localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}_lastScene`);
+        localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}_undo`);
+        localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}_redo`);
+      } else if (window.electronAPI) {
+        window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}`);
+        window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}_lastScene`);
+        window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}_undo`);
+        window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}_redo`);
+      }
+      showNotification(`プロジェクト「${deleteConfirmation.projectId}」を削除しました`, 'success');
+      setProjectId('default');
+      setDeleteConfirmation(null);
+    } else if (deleteConfirmation.confirmed === false) {
+      setDeleteConfirmation(null);
+    }
+  }, [deleteConfirmation]);
 
   return (
     <div id="root">
