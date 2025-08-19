@@ -425,15 +425,15 @@ export default function CharacterManager({
           <div className="flex space-x-2">
             <button
               onClick={() => setIsGroupSettingsOpen(true)}
-              className="flex-1 flex items-center justify-center space-x-2 p-2 border rounded hover:bg-accent text-foreground"
-              style={{ flex: '0 0 33.333%', backgroundColor: 'var(--color-secondary)', color: 'var(--color-secondary-foreground)' }}
+              className="flex-1 flex items-center justify-center space-x-2 p-2 border rounded hover:bg-muted/80 text-foreground"
+              style={{ flex: '0 0 33.333%', backgroundColor: 'var(--color-muted)', color: 'var(--color-muted-foreground)' }}
             >
               <Cog6ToothIcon className="w-4 h-4" />
               <span>グループ設定</span>
             </button>
             <button
               onClick={() => setIsAdding(true)}
-              className="flex-1 flex items-center justify-center space-x-2 p-2 border rounded hover:bg-accent text-foreground"
+              className="flex-1 flex items-center justify-center space-x-2 p-2 border rounded hover:bg-primary/80 text-foreground"
               style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-primary-foreground)' }}
             >
               <PlusIcon className="w-5 h-5" />

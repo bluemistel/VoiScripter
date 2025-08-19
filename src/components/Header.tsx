@@ -9,12 +9,13 @@ import {
   MoonIcon, 
   Cog6ToothIcon,
   PencilIcon,
-  Bars3Icon
+  Bars3Icon,
+  PlusIcon
 } from '@heroicons/react/24/outline';
 import CharacterManager from './CharacterManager';
 import Settings from './Settings';
 import CSVExportDialog from './CSVExportDialog';
-import { Character } from '@/types';
+import { Character, Project, Scene } from '@/types';
 
 // ロゴパスを取得するカスタムフック
 const useLogoPath = () => {
@@ -43,6 +44,7 @@ interface HeaderProps {
   onExportToClipboard: (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean) => void;
   onImportCSV: (file: File, options?: { mode: 'append' | 'new'; projectName?: string }) => void;
   onImportCharacterCSV: (file: File) => void;
+  onImportJson: (file: File) => void;
   isDarkMode: boolean;
   saveDirectory: string;
   onSaveDirectoryChange: (directory: string) => void;
@@ -54,6 +56,13 @@ interface HeaderProps {
   projectName: string;
   onRenameProject: (newName: string) => void;
   selectedBlockIds: string[];
+  scenes: Scene[];
+  selectedSceneId: string | null;
+  onAddScene: (name: string) => void;
+  onRenameScene: (sceneId: string, newName: string) => void;
+  onDeleteScene: (sceneId: string) => void;
+  onSelectScene: (sceneId: string) => void;
+  onExportSceneCSV: (sceneIds: string[], exportType: 'full' | 'serif-only', includeTogaki: boolean, selectedOnly: boolean) => void;
 }
 
 // CSVインポート時の選択ダイアログ
@@ -129,31 +138,40 @@ function ProjectRenameDialog({ isOpen, onClose, currentName, onRename }: { isOpe
   );
 }
 
-export default function Header({
-  characters,
-  onAddCharacter,
-  onUpdateCharacter,
-  onDeleteCharacter,
-  onThemeChange,
-  onExportCSV,
-  onExportSerifOnly,
-  onExportCharacterCSV,
-  onExportByGroups,
-  onExportToClipboard,
-  onImportCSV,
-  onImportCharacterCSV,
-  isDarkMode,
-  saveDirectory,
-  onSaveDirectoryChange,
-  groups,
-  onAddGroup,
-  onDeleteGroup,
-  onReorderCharacters,
-  onReorderGroups,
-  projectName,
-  onRenameProject,
-  selectedBlockIds
-}: HeaderProps) {
+export default function Header(props: HeaderProps) {
+  const {
+    characters,
+    onAddCharacter,
+    onUpdateCharacter,
+    onDeleteCharacter,
+    onThemeChange,
+    onExportCSV,
+    onExportSerifOnly,
+    onExportCharacterCSV,
+    onExportByGroups,
+    onExportToClipboard,
+    onImportCSV,
+    onImportCharacterCSV,
+    isDarkMode,
+    saveDirectory,
+    onSaveDirectoryChange,
+    groups,
+    onAddGroup,
+    onDeleteGroup,
+    onReorderCharacters,
+    onReorderGroups,
+    projectName,
+    onRenameProject,
+    selectedBlockIds,
+    scenes,
+    selectedSceneId,
+    onAddScene,
+    onRenameScene,
+    onDeleteScene,
+    onSelectScene,
+    onImportJson,
+    onExportSceneCSV
+  } = props;
   const logoPath = useLogoPath();
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
   const [isCSVExportDialogOpen, setIsCSVExportDialogOpen] = useState(false);
@@ -215,6 +233,150 @@ export default function Header({
     event.target.value = '';
   };
 
+  // シーン管理用state（仮実装）
+  // const [scenes, setScenes] = useState<Scene[]>([]); // 削除
+  // const [isAddSceneDialogOpen, setIsAddSceneDialogOpen] = useState(false); // 削除
+  // const [newSceneName, setNewSceneName] = useState(''); // 削除
+  // const [sceneError, setSceneError] = useState(''); // 削除
+
+  // シーン名変更用state
+  const [isRenameSceneDialogOpen, setIsRenameSceneDialogOpen] = useState(false);
+  const [renameTargetSceneId, setRenameTargetSceneId] = useState<string | null>(null);
+  const [renameSceneName, setRenameSceneName] = useState('');
+  const [renameSceneError, setRenameSceneError] = useState('');
+
+  // シーン削除用state
+  const [isDeleteSceneDialogOpen, setIsDeleteSceneDialogOpen] = useState(false);
+  const [deleteTargetSceneId, setDeleteTargetSceneId] = useState<string | null>(null);
+  const [deleteTargetSceneName, setDeleteTargetSceneName] = useState('');
+
+  // シーン追加ハンドラ
+  // const handleAddScene = () => { // 削除
+  //   if (!newSceneName.trim()) { // 削除
+  //     setSceneError('シーン名を入力してください'); // 削除
+  //     return; // 削除
+  //   } // 削除
+  //   if (scenes.length >= 30) { // 削除
+  //     setSceneError('シーンは最大30個までです'); // 削除
+  //     return; // 削除
+  //   } // 削除
+  //   if (scenes.some(s => s.name === newSceneName.trim())) { // 削除
+  //     setSceneError('同名のシーンが既に存在します'); // 削除
+  //     return; // 削除
+  //   } // 削除
+  //   setScenes([...scenes, { id: Date.now().toString(), name: newSceneName.trim(), scripts: [] }]); // 削除
+  //   setNewSceneName(''); // 削除
+  //   setSceneError(''); // 削除
+  //   setIsAddSceneDialogOpen(false); // 削除
+  // }; // 削除
+
+  // シーン名変更ダイアログを開く
+  const openRenameSceneDialog = (sceneId: string, currentName: string) => {
+    setRenameTargetSceneId(sceneId);
+    setRenameSceneName(currentName);
+    setRenameSceneError('');
+    setIsRenameSceneDialogOpen(true);
+  };
+  // シーン名変更処理
+  const handleRenameSceneLocal = () => {
+    if (!renameSceneName.trim()) {
+      setRenameSceneError('シーン名を入力してください');
+      return;
+    }
+    if (scenes.some(s => s.name === renameSceneName.trim() && s.id !== renameTargetSceneId)) {
+      setRenameSceneError('同名のシーンが既に存在します');
+      return;
+    }
+    if (renameTargetSceneId) {
+      onRenameScene(renameTargetSceneId, renameSceneName.trim());
+    }
+    setIsRenameSceneDialogOpen(false);
+    setRenameTargetSceneId(null);
+    setRenameSceneName('');
+    setRenameSceneError('');
+  };
+
+  // シーン削除ダイアログを開く
+  const openDeleteSceneDialog = (sceneId: string, sceneName: string) => {
+    setDeleteTargetSceneId(sceneId);
+    setDeleteTargetSceneName(sceneName);
+    setIsDeleteSceneDialogOpen(true);
+  };
+  // シーン削除処理
+  const handleDeleteSceneLocal = () => {
+    if (deleteTargetSceneId) {
+      onDeleteScene(deleteTargetSceneId);
+    }
+    setIsDeleteSceneDialogOpen(false);
+    setDeleteTargetSceneId(null);
+    setDeleteTargetSceneName('');
+  };
+
+  // シーンタブの横スクロール用ref
+  const sceneTabContainerRef = useRef<HTMLDivElement>(null);
+
+  // マウスホイールで横スクロール
+  useEffect(() => {
+    const container = sceneTabContainerRef.current;
+    if (!container) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+        container.scrollLeft += e.deltaY;
+      }
+    };
+    container.addEventListener('wheel', onWheel, { passive: false });
+    return () => container.removeEventListener('wheel', onWheel);
+  }, [scenes.length]);
+
+  // 表示できる最大タブ数を計算（最大12個）
+  const [maxVisibleTabs, setMaxVisibleTabs] = useState(12);
+  useEffect(() => {
+    const updateMaxTabs = () => {
+      // 1タブ約120px+余白で計算
+      const width = window.innerWidth;
+      const tabWidth = 120;
+      const margin = 60; // 余白
+      const maxTabs = Math.max(1, Math.min(12, Math.floor((width - margin) / tabWidth)));
+      setMaxVisibleTabs(maxTabs);
+    };
+    updateMaxTabs();
+    window.addEventListener('resize', updateMaxTabs);
+    return () => window.removeEventListener('resize', updateMaxTabs);
+  }, []);
+
+  // jsonインポート用ハンドラ
+  const handleJsonImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      onImportJson(file);
+    }
+    event.target.value = '';
+  };
+
+  // シーン追加ダイアログ用state
+  const [isAddSceneDialogOpen, setIsAddSceneDialogOpen] = useState(false);
+  const [newSceneName, setNewSceneName] = useState('');
+  const [sceneError, setSceneError] = useState('');
+  const handleAddSceneLocal = () => {
+    if (!newSceneName.trim()) {
+      setSceneError('シーン名を入力してください');
+      return;
+    }
+    if (scenes.length >= 30) {
+      setSceneError('シーンは最大30個までです');
+      return;
+    }
+    if (scenes.some(s => s.name === newSceneName.trim())) {
+      setSceneError('同名のシーンが既に存在します');
+      return;
+    }
+    onAddScene(newSceneName.trim());
+    setNewSceneName('');
+    setSceneError('');
+    setIsAddSceneDialogOpen(false);
+  };
+
   return (
     <header className="bg-background shadow-sm sticky top-0 z-50 border-b">
       <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-16">
@@ -267,6 +429,15 @@ export default function Header({
                     onChange={(e) => handleFileImport(e, 'character')}
                   />
                 </label>
+                <label className="block w-full text-left px-4 py-2 hover:bg-accent text-foreground cursor-pointer">
+                  プロジェクトのインポート（json）
+                  <input
+                    type="file"
+                    accept=".json"
+                    className="hidden"
+                    onChange={handleJsonImport}
+                  />
+                </label>
               </div>
             )}
           </div>
@@ -297,6 +468,69 @@ export default function Header({
           </button>
         </div>
       </div>
+      {/* headerとmainの間にシーンタブ＋追加ボタン */}
+      <div className="flex items-center space-x-2 px-4 py-2 border-b bg-background">
+        {scenes.length > 1 && (
+          <div
+            ref={sceneTabContainerRef}
+            className="flex overflow-x-auto no-scrollbar max-w-full"
+            style={{ maxWidth: `calc(${maxVisibleTabs} * 120px)` }}
+          >
+            {scenes.map((scene, idx) => (
+              <div
+                key={scene.id}
+                className={`relative px-4 py-1 rounded text-foreground text-sm font-medium mr-1 whitespace-nowrap flex-shrink-0 cursor-pointer group ${selectedSceneId === scene.id ? 'bg-secondary text-secondary-foreground' : 'bg-muted hover:bg-accent'}`}
+                style={{ minWidth: 100, maxWidth: 120 }}
+                onClick={() => onSelectScene(scene.id)}
+                onDoubleClick={() => openRenameSceneDialog(scene.id, scene.name)}
+              >
+                <span className="overflow-hidden text-ellipsis whitespace-nowrap block max-w-[80px]" title={scene.name}>
+                  {scene.name}
+                </span>
+                {/* ×ボタン（ホバー時のみ表示） */}
+                <button
+                  onClick={e => { e.stopPropagation(); openDeleteSceneDialog(scene.id, scene.name); }}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-destructive/20 text-destructive hidden group-hover:inline-block"
+                  title="シーンを削除"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* シーン追加ボタン */}
+        {scenes.length < 30 && (
+          <button
+            onClick={() => setIsAddSceneDialogOpen(true)}
+            className="p-1 rounded-full bg-primary text-primary-foreground hover:bg-primary/80 transition flex-shrink-0"
+            title="シーンを追加"
+          >
+            <PlusIcon className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+      {/* シーン追加ダイアログ */}
+      {isAddSceneDialogOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4">シーンを追加</h3>
+            <input
+              type="text"
+              value={newSceneName}
+              onChange={e => { setNewSceneName(e.target.value); setSceneError(''); }}
+              className="w-full p-2 border rounded mb-2"
+              placeholder="シーン名"
+              autoFocus
+            />
+            {sceneError && <p className="text-sm text-destructive mb-2">{sceneError}</p>}
+            <div className="flex justify-end space-x-2">
+              <button onClick={() => { setIsAddSceneDialogOpen(false); setSceneError(''); setNewSceneName(''); }} className="px-4 py-2 text-muted-foreground hover:bg-accent rounded">キャンセル</button>
+              <button onClick={handleAddSceneLocal} className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold">OK</button>
+            </div>
+          </div>
+        </div>
+      )}
       {isCharacterModalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300">
           <div className="bg-card border rounded-lg p-6 w-full max-w-3xl mx-4 shadow-xl transition-opacity duration-300">
@@ -345,6 +579,9 @@ export default function Header({
         onExportByGroups={onExportByGroups}
         onExportCharacterCSV={onExportCharacterCSV}
         onExportToClipboard={onExportToClipboard}
+        scenes={scenes}
+        selectedSceneId={selectedSceneId}
+        onExportSceneCSV={onExportSceneCSV}
       />
       <ImportChoiceDialog
          isOpen={isImportChoiceDialogOpen && !!pendingImportFile && !!pendingImportType}
@@ -380,6 +617,40 @@ export default function Header({
         currentName={projectName}
         onRename={onRenameProject}
       />
+      {/* シーン名変更ダイアログ */}
+      {isRenameSceneDialogOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4">シーン名の変更</h3>
+            <input
+              type="text"
+              value={renameSceneName}
+              onChange={e => { setRenameSceneName(e.target.value); setRenameSceneError(''); }}
+              className="w-full p-2 border rounded mb-2"
+              placeholder="新しいシーン名"
+              autoFocus
+            />
+            {renameSceneError && <p className="text-sm text-destructive mb-2">{renameSceneError}</p>}
+            <div className="flex justify-end space-x-2">
+              <button onClick={() => { setIsRenameSceneDialogOpen(false); setRenameSceneError(''); }} className="px-4 py-2 text-muted-foreground hover:bg-accent rounded">キャンセル</button>
+              <button onClick={handleRenameSceneLocal} className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold">変更</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* シーン削除ダイアログ */}
+      {isDeleteSceneDialogOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4">シーンの削除</h3>
+            <p className="mb-4 text-foreground">「{deleteTargetSceneName}」を削除しますか？<br/>この操作は元に戻せません。</p>
+            <div className="flex justify-end space-x-2">
+              <button onClick={() => setIsDeleteSceneDialogOpen(false)} className="px-4 py-2 text-muted-foreground hover:bg-accent rounded">キャンセル</button>
+              <button onClick={handleDeleteSceneLocal} className="px-4 py-2 bg-destructive text-destructive-foreground rounded hover:bg-destructive/80 font-semibold">削除</button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

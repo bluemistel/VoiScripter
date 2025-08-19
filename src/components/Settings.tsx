@@ -237,8 +237,9 @@ export default function Settings({
                 <div>
                     <h4 className="font-medium text-foreground mb-2">v0.1.5</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
-                      <li>• プロジェクト作成時に直前のプロジェクトが削除される不具合を修正</li>
-                      <li>• 設定ダイアログにシークバーが二重に出ていた不具合を修正</li>
+                      <li>• プロジェクト内サブプロジェクト作成機能(シーン機能)を追加し、タブ形式でシーンを管理できるように</li>
+                      <li>• エクスポートメニューに「特定のシーンのみCSVを出力」する機能を追加</li>
+                      <li>• エクスポートメニューの各種UIを調整</li>
                     </ul>
                   </div>
 
