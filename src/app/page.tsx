@@ -1395,12 +1395,55 @@ export default function Home() {
         showNotification('無効な形式のためインポートできませんでした。', 'error');
         return;
       }
+      // インポートデータのキャラクターID→名前マップを作成（シーン→スクリプト→characters配列を探索）
+      const importIdToName: Record<string, string> = {};
+      // プロジェクト直下のcharacters（古い形式）
+      if (Array.isArray(data.characters)) {
+        data.characters.forEach((c: any) => { importIdToName[c.id] = c.name; });
+      }
+      // 各シーン・スクリプトのcharacters
+      data.scenes.forEach((scene: any) => {
+        scene.scripts?.forEach((script: any) => {
+          if (Array.isArray(script.characters)) {
+            script.characters.forEach((c: any) => { importIdToName[c.id] = c.name; });
+          }
+        });
+      });
+      // 現在のキャラクター名→IDマップ
+      const nameToId: Record<string, string> = {};
+      characters.forEach(c => { nameToId[c.name] = c.id; });
+      // 各シーン・スクリプト・ブロックのcharacterIdを変換
+      const mappedScenes = data.scenes.map((scene: any) => ({
+        ...scene,
+        scripts: scene.scripts.map((script: any) => ({
+          ...script,
+          blocks: script.blocks.map((block: any) => {
+            let newCharId = '';
+            // 1. インポートデータのID→名前→現在のID
+            if (block.characterId && importIdToName[block.characterId] && nameToId[importIdToName[block.characterId]]) {
+              newCharId = nameToId[importIdToName[block.characterId]];
+            }
+            // 2. 旧データがcharacterNameを持っている場合
+            if (!newCharId && block.characterName && nameToId[block.characterName]) {
+              newCharId = nameToId[block.characterName];
+            }
+            // 3. 旧データのcharacterIdが実はnameの場合
+            if (!newCharId && block.characterId && nameToId[block.characterId]) {
+              newCharId = nameToId[block.characterId];
+            }
+            return {
+              ...block,
+              characterId: newCharId || '',
+            };
+          })
+        }))
+      }));
       setProject({
         id: data.id,
         name: data.name,
-        scenes: data.scenes
+        scenes: mappedScenes
       });
-      setSelectedSceneId(data.scenes[0]?.id || null);
+      setSelectedSceneId(mappedScenes[0]?.id || null);
       setProjectId(data.id); // インポート直後にプロジェクトIDを切り替え
       refreshProjectList(); // プロジェクトリストも即時更新
       showNotification('プロジェクトをインポートしました', 'success');
