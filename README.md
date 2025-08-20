@@ -9,8 +9,8 @@ Webアプリケーションとしても、デスクトップアプリケーシ�
 Web版
 https://voiscripter.vercel.app/ にアクセス
 
-デスクトップ版(現在はGoogleドライブから)<br>
-https://drive.google.com/file/d/1jRYg0_YZVeFqn2T6lnez2g8-wY0SCFbd/view?usp=drive_link
+デスクトップ版(Booth)<br>
+https://bluemist.booth.pm/items/7272767
 
 ## 主な機能
 - キャラクター管理機能（追加、編集、削除）
@@ -19,8 +19,8 @@ https://drive.google.com/file/d/1jRYg0_YZVeFqn2T6lnez2g8-wY0SCFbd/view?usp=drive
 - ドラッグ操作によるブロック並び替え
 - グループ設定での分割CSVエクスポート/インポート
 - ダークモード対応
-- デスクトップアプリケーション対応
-- プロジェクト内サブプロジェクトの管理機能
+- デスクトップアプリケーション対応 (Ver.0.14.0)
+- プロジェクト内サブプロジェクトの管理機能 (Ver.0.16.0)
 
 ## 技術スタック
 - Next.js 14

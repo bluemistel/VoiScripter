@@ -133,9 +133,9 @@ export default function CSVExportDialog({
 
   const handleExport = (exportType: 'full' | 'serif-only', includeTogaki: boolean) => {
     if (exportToClipboard) {
-      console.log('handleExport: exportToClipboard', { exportType, includeTogaki });
+      console.log('handleExport: exportToClipboard', { exportType, includeTogaki, exportSelectedOnly });
       // プロジェクト全体のテキストをコピー
-      onExportToClipboard(exportType === 'serif-only', false, includeTogaki);
+      onExportToClipboard(exportType === 'serif-only', exportSelectedOnly, includeTogaki);
     } else if (useGroupExport && selectedGroups.length > 0) {
       // 特定のシーンのみCSVを出力が有効な場合はsceneCheckboxesを渡す
       console.log('handleExport: onExportByGroups', { selectedGroups, exportType, includeTogaki, exportSelectedOnly, sceneIds: useSceneExport ? sceneCheckboxes : undefined });
