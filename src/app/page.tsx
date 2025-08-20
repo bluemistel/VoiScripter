@@ -842,11 +842,13 @@ export default function Home() {
 
   // CSVエクスポート（話者,セリフ）
   const handleExportCSV = async (includeTogaki?: boolean, selectedOnly?: boolean) => {
-    let targetBlocks = script.blocks;
+    // 現在選択中のシーンのスクリプトを使用
+    const currentScript = selectedScene?.scripts[0] || { id: '', title: '', blocks: [], characters: [] };
+    let targetBlocks = currentScript.blocks;
     
     // 選択ブロックのみの場合
     if (selectedOnly && selectedBlockIds.length > 0) {
-      targetBlocks = script.blocks.filter(block => selectedBlockIds.includes(block.id));
+      targetBlocks = currentScript.blocks.filter(block => selectedBlockIds.includes(block.id));
     }
     
     const rows = targetBlocks
@@ -873,7 +875,7 @@ export default function Home() {
     };
 
     const csv = encodeCSV(rows);
-    const defaultName = `${script.title || 'script'}.csv`;
+    const defaultName = `${project.name || 'project'}_${currentScript.title || 'script'}.csv`;
     
     if (window.electronAPI) {
       try {
@@ -896,11 +898,13 @@ export default function Home() {
 
   // セリフだけエクスポート
   const handleExportSerifOnly = async (selectedOnly?: boolean) => {
-    let targetBlocks = script.blocks;
+    // 現在選択中のシーンのスクリプトを使用
+    const currentScript = selectedScene?.scripts[0] || { id: '', title: '', blocks: [], characters: [] };
+    let targetBlocks = currentScript.blocks;
     
     // 選択ブロックのみの場合
     if (selectedOnly && selectedBlockIds.length > 0) {
-      targetBlocks = script.blocks.filter(block => selectedBlockIds.includes(block.id));
+      targetBlocks = currentScript.blocks.filter(block => selectedBlockIds.includes(block.id));
     }
     
     const rows = targetBlocks
@@ -921,7 +925,7 @@ export default function Home() {
     };
 
     const csv = encodeCSV(rows);
-    const defaultName = `${script.title || 'serif'}.csv`;
+    const defaultName = `${project.name || 'project'}_${currentScript.title || 'serif'}.csv`;
     
     if (window.electronAPI) {
       try {
@@ -1065,9 +1069,15 @@ export default function Home() {
   };
 
   // クリップボードに出力
-  const handleExportToClipboard = async (serifOnly?: boolean, _selectedOnly?: boolean, includeTogaki?: boolean) => {
+  const handleExportToClipboard = async (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean) => {
     // プロジェクト全体の全シーン・全ブロックを対象
-    const allBlocks = project.scenes.flatMap(scene => scene.scripts[0]?.blocks || []);
+    let allBlocks = project.scenes.flatMap(scene => scene.scripts[0]?.blocks || []);
+    
+    // 選択ブロックのみの場合
+    if (selectedOnly && selectedBlockIds.length > 0) {
+      allBlocks = allBlocks.filter(block => selectedBlockIds.includes(block.id));
+    }
+    
     let text: string;
     if (serifOnly) {
       // セリフだけ
@@ -1092,9 +1102,9 @@ export default function Home() {
     }
     try {
       await navigator.clipboard.writeText(text);
-      alert('クリップボードにコピーしました。');
+      showNotification('クリップボードにコピーしました。', 'success');
     } catch (error) {
-      alert('クリップボードへの出力に失敗しました。');
+      showNotification('クリップボードへの出力に失敗しました。', 'error');
     }
   };
 
