@@ -212,6 +212,7 @@ export default function Home() {
       };
       
       console.log('データ読み込み開始 - 保存先:', savedDirectory);
+      console.log('loadDataWithDirectory関数が使用する保存先:', savedDirectory);
       
       // characters
       const savedChars = await loadDataWithDirectory('voiscripter_characters');
@@ -292,7 +293,9 @@ export default function Home() {
       setProjectId(validProjectId);
       
       // projectList（saveDirectory設定後に実行）
+      console.log('プロジェクトリスト読み込み開始 - 保存先:', savedDirectory);
       if (savedDirectory === '') {
+        // localStorageから読み込み
         const keys = Object.keys(localStorage)
           .filter(k => k.startsWith('voiscripter_project_') &&
             !k.endsWith('_lastScene') &&
@@ -302,8 +305,10 @@ export default function Home() {
         setProjectList(projectKeys);
         console.log('localStorageからプロジェクトリスト読み込み:', projectKeys);
       } else if (window.electronAPI) {
+        // ファイルから読み込み
         try {
           const keys = await window.electronAPI.listDataKeys() || [];
+          console.log('ファイルから取得したキー一覧:', keys);
           const projectKeys = keys.filter(k => k.startsWith('voiscripter_project_') &&
             !k.endsWith('_lastScene') &&
             !k.endsWith('_undo') &&
@@ -440,21 +445,6 @@ export default function Home() {
         console.log('localStorage変更後、シーン選択を保存');
       }
       
-      // プロジェクトリストをlocalStorageから再読み込み
-      setTimeout(() => {
-        try {
-          const keys = Object.keys(localStorage)
-            .filter(k => k.startsWith('voiscripter_project_') &&
-              !k.endsWith('_lastScene') &&
-              !k.endsWith('_undo') &&
-              !k.endsWith('_redo'));
-          const projectKeys = keys.map(k => k.replace('voiscripter_project_', ''));
-          setProjectList(projectKeys);
-          console.log('localStorage変更後、プロジェクトリスト再読み込み:', projectKeys);
-        } catch (error) {
-          console.error('プロジェクトリスト再読み込みエラー:', error);
-        }
-      }, 500);
     }
   }, [saveDirectory, characters, groups, project, selectedSceneId]);
 
@@ -1984,9 +1974,13 @@ export default function Home() {
             if (saveDirectory === '') {
               localStorage.removeItem(`voiscripter_project_${oldProjectId}`);
               localStorage.removeItem(`voiscripter_project_${oldProjectId}_lastScene`);
+              localStorage.removeItem(`voiscripter_project_${oldProjectId}_undo`);
+              localStorage.removeItem(`voiscripter_project_${oldProjectId}_redo`);
             } else if (window.electronAPI) {
               window.electronAPI.deleteData(`voiscripter_project_${oldProjectId}`);
               window.electronAPI.deleteData(`voiscripter_project_${oldProjectId}_lastScene`);
+              window.electronAPI.deleteData(`voiscripter_project_${oldProjectId}_undo`);
+              window.electronAPI.deleteData(`voiscripter_project_${oldProjectId}_redo`);
             }
             showNotification(`プロジェクト名を「${newName}」に変更しました`, 'success');
           }}
