@@ -234,7 +234,17 @@ export default function Settings({
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
 
-                <div>
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.1.7</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                    <li>• v0.1.6の機能をデスクトップアプリ版でも利用できるように改修</li>
+                    <li>• プロジェクトのJSONエクスポート・インポート機能を改修しキャラクター設定のエクスポートと併用して別環境でも引き継げるように</li>
+                    <li>• キャラクター設定のCSVエクスポートで別環境でも同じ設定を引き継げるように改修</li>
+                    <li>• ライセンス情報にデスクトップアプリ版のダウンロード先を追加</li>
+                    </ul>
+                  </div>
+
+                  <div>
                     <h4 className="font-medium text-foreground mb-2">v0.1.6</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                       <li>• プロジェクト内サブプロジェクト作成機能(シーン機能)を追加し、タブ形式でシーンを管理できるように</li>
@@ -323,13 +333,19 @@ export default function Settings({
                     <div className="mb-2">
                       <span className="font-bold text-foreground">VoiScripter</span>
                     </div>
-                    <div className="ml-2">
-                        <span>本アプリの不具合により何らかの損害が発生した場合でも、作者は一切の責任を負いません。自己責任でのご使用をお願いいたします。
-                        </span>
+                    <div className="mb-2 ml-2">
+                      <span className="text-foreground">デスクトップアプリ版(最新版もここから確認してください):</span>
+                      <div className="ml-2">
+                        <a href="https://bluemist.booth.pm/items/7272767" target="_blank" title="デスクトップアプリ版のダウンロード(booth)" className="text-blue-500 hover:underline">https://bluemist.booth.pm/items/7272767</a>
                       </div>
-                    <h4 className="font-medium text-foreground mb-2">使用技術</h4>
+                    </div>
+                    <div className="ml-2 mb-2">
+                      <span>本アプリの不具合により何らかの損害が発生した場合でも、作者は一切の責任を負いません。自己責任でのご使用をお願いいたします。
+                      </span>
+                    </div>
                     <div className="mb-2">
-                      <ul className="list-disc ml-6">
+                      <span className="font-semibold text-foreground">使用技術</span>
+                      <ul className="text-sm text-muted-foreground ml-6 list-disc space-y-1">
                         <li>Next.js (MIT)</li>
                         <li>React (MIT)</li>
                         <li>TypeScript (Apache-2.0)</li>

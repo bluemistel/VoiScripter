@@ -15,7 +15,6 @@ export default function Home() {
   const [projectId, setProjectId] = useState<string>('default');
   const [project, setProject] = useState<Project>({ id: 'default', name: '新しいプロジェクト', scenes: [] });
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
-  const [script, setScript] = useState<Omit<Script, 'characters'>>({ id: '1', title: '新しい台本', blocks: [] });
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [saveDirectory, setSaveDirectory] = useState<string>('');
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
@@ -195,8 +194,20 @@ export default function Home() {
         setSaveDirectory(savedDirectory);
       }
       
+      // データ読み込み関数（現在のsaveDirectory値を使用）
+      const loadDataWithDirectory = async (key: string): Promise<string | null> => {
+        if (savedDirectory === '') {
+          // localStorageから読み込み
+          return localStorage.getItem(key);
+        } else if (window.electronAPI) {
+          // ファイルから読み込み
+          return await window.electronAPI?.loadData(key) || null;
+        }
+        return null;
+      };
+      
       // characters
-      const savedChars = await loadData('voiscripter_characters');
+      const savedChars = await loadDataWithDirectory('voiscripter_characters');
       if (savedChars) {
         try {
           const parsedChars = JSON.parse(savedChars);
@@ -218,7 +229,7 @@ export default function Home() {
       }
       
       // groups
-      const savedGroups = await loadData('voiscripter_groups');
+      const savedGroups = await loadDataWithDirectory('voiscripter_groups');
       if (savedGroups !== null && savedGroups !== undefined) {
         try {
           const parsedGroups = JSON.parse(savedGroups);
@@ -226,27 +237,25 @@ export default function Home() {
             setGroups(parsedGroups); // 空配列でも必ずセット
             isFirstGroups.current = false;
             console.log('グループ設定読み込み成功:', parsedGroups.length, '個');
-            return;
           } else {
             console.warn('Invalid groups data format:', parsedGroups);
             setGroups([]);
             isFirstGroups.current = false;
-            return;
           }
         } catch (error) {
           console.error('Groups parse error:', error);
           setGroups([]);
           isFirstGroups.current = false;
-          return;
         }
       } else {
         console.log('グループ設定が見つかりません');
         setGroups([]);
         isFirstGroups.current = false;
       }
+      
       // グループデータが一度も保存されていない場合のみ、キャラクターからグループを抽出
       // （この分岐は初回のみ実行される）
-      const savedCharsForGroups = await loadData('voiscripter_characters');
+      const savedCharsForGroups = await loadDataWithDirectory('voiscripter_characters');
       if (savedCharsForGroups) {
         try {
           const parsedChars = JSON.parse(savedCharsForGroups);
@@ -267,7 +276,7 @@ export default function Home() {
       }
       
       // projectId
-      const lastProject = await loadData('voiscripter_lastProject');
+      const lastProject = await loadDataWithDirectory('voiscripter_lastProject');
       // lastProjectが有効なプロジェクト名かチェック
       let validProjectId = 'default';
       if (lastProject && lastProject !== 'lastProject' && lastProject.trim() !== '') {
@@ -275,8 +284,8 @@ export default function Home() {
       }
       setProjectId(validProjectId);
       
-      // projectList
-      if (saveDirectory === '') {
+      // projectList（saveDirectory設定後に実行）
+      if (savedDirectory === '') {
         const keys = Object.keys(localStorage)
           .filter(k => k.startsWith('voiscripter_project_') &&
             !k.endsWith('_lastScene') &&
@@ -301,46 +310,29 @@ export default function Home() {
         }
       }
       
-      // script
-      const savedScript = await loadData(`voiscripter_${validProjectId}`);
-      if (savedScript) {
-        try {
-          const parsedScript = JSON.parse(savedScript);
-          // 基本的な構造チェック
-          if (parsedScript && typeof parsedScript === 'object' && Array.isArray(parsedScript.blocks)) {
-            setScript(parsedScript);
-          } else {
-            throw new Error('Invalid script structure');
-          }
-        } catch (error) {
-          console.error('Script parse error:', error);
-          alert('無効な台本形式です。または台本が壊れています。');
-          // 無効なデータを削除してから空のプロジェクトを設定
-          try {
-            if (saveDirectory === '') {
-              localStorage.removeItem(`voiscripter_${validProjectId}`);
-              localStorage.removeItem(`voiscripter_${validProjectId}_undo`);
-              localStorage.removeItem(`voiscripter_${validProjectId}_redo`);
-            }
-          } catch (cleanupError) {
-            console.error('Cleanup error:', cleanupError);
-          }
-          setScript({
-            id: '1', title: '新しい台本', blocks: []
-          });
+      // デフォルトプロジェクトの初期化（存在しない場合）
+      const defaultProjectExists = await loadDataWithDirectory('voiscripter_project_default');
+      if (!defaultProjectExists) {
+        const defaultProject = {
+          id: 'default',
+          name: '新しいプロジェクト',
+          scenes: [{
+            id: Date.now().toString(),
+            name: '新しいシーン',
+            scripts: [{ id: Date.now().toString(), title: '新しいシーン', blocks: [], characters: [] }]
+          }]
+        };
+        // 現在のsaveDirectoryに保存
+        if (savedDirectory === '') {
+          localStorage.setItem('voiscripter_project_default', JSON.stringify(defaultProject));
+        } else if (window.electronAPI) {
+          await window.electronAPI.saveData('voiscripter_project_default', JSON.stringify(defaultProject));
         }
-      } else {
-        // デフォルトプロジェクトが存在しない場合は初期化
-        if (validProjectId === 'default' && window.electronAPI) {
-          await window.electronAPI?.initializeDefaultProject();
-        }
-        setScript({
-          id: '1', title: '新しい台本', blocks: []
-        });
+        console.log('デフォルトプロジェクトを初期化しました');
       }
       
       // undo/redo
-      const u = await loadData(`voiscripter_${validProjectId}_undo`);
+      const u = await loadDataWithDirectory(`voiscripter_${validProjectId}_undo`);
       if (u) {
         try {
           const parsedUndo = JSON.parse(u);
@@ -356,7 +348,7 @@ export default function Home() {
         }
       }
       
-      const r = await loadData(`voiscripter_${validProjectId}_redo`);
+      const r = await loadDataWithDirectory(`voiscripter_${validProjectId}_redo`);
       if (r) {
         try {
           const parsedRedo = JSON.parse(r);
@@ -403,6 +395,57 @@ export default function Home() {
       console.log('グループ設定を保存:', groups.length, '個');
     }
   }, [groups, saveDirectory]);
+
+  // saveDirectory変更時のキャラクター・グループ設定の再保存
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    if (saveDirectory !== '') {
+      // ファイル保存先に変更された場合、既存のキャラクター・グループ設定を保存
+      if (characters.length > 0) {
+        saveData('voiscripter_characters', JSON.stringify(characters));
+        console.log('saveDirectory変更後、キャラクター設定を保存:', characters.length, '個');
+      }
+      if (groups.length > 0) {
+        saveData('voiscripter_groups', JSON.stringify(groups));
+        console.log('saveDirectory変更後、グループ設定を保存:', groups.length, '個');
+      }
+    } else {
+      // localStorageに変更された場合、現在のデータをlocalStorageに保存
+      if (characters.length > 0) {
+        localStorage.setItem('voiscripter_characters', JSON.stringify(characters));
+        console.log('localStorage変更後、キャラクター設定を保存:', characters.length, '個');
+      }
+      if (groups.length > 0) {
+        localStorage.setItem('voiscripter_groups', JSON.stringify(groups));
+        console.log('localStorage変更後、グループ設定を保存:', groups.length, '個');
+      }
+      if (project.id && project.scenes.length > 0) {
+        localStorage.setItem(`voiscripter_project_${project.id}`, JSON.stringify(project));
+        console.log('localStorage変更後、プロジェクトを保存');
+      }
+      if (selectedSceneId) {
+        localStorage.setItem(`voiscripter_project_${project.id}_lastScene`, selectedSceneId);
+        console.log('localStorage変更後、シーン選択を保存');
+      }
+      
+      // プロジェクトリストをlocalStorageから再読み込み
+      setTimeout(() => {
+        try {
+          const keys = Object.keys(localStorage)
+            .filter(k => k.startsWith('voiscripter_project_') &&
+              !k.endsWith('_lastScene') &&
+              !k.endsWith('_undo') &&
+              !k.endsWith('_redo'));
+          const projectKeys = keys.map(k => k.replace('voiscripter_project_', ''));
+          setProjectList(projectKeys);
+          console.log('localStorage変更後、プロジェクトリスト再読み込み:', projectKeys);
+        } catch (error) {
+          console.error('プロジェクトリスト再読み込みエラー:', error);
+        }
+      }, 500);
+    }
+  }, [saveDirectory, characters, groups, project, selectedSceneId]);
 
   // プロジェクト保存・復元
   useEffect(() => {
@@ -453,8 +496,30 @@ export default function Home() {
           name: projectId,
           scripts: [{ id: Date.now().toString(), title: projectId, blocks: [], characters: [] }]
         };
-        setProject({ id: projectId, name: projectId, scenes: [newScene] });
+        const newProject = { id: projectId, name: projectId, scenes: [newScene] };
+        setProject(newProject);
         setSelectedSceneId(newSceneId);
+        
+        // 新規プロジェクトを保存
+        saveData(`voiscripter_project_${projectId}`, JSON.stringify(newProject));
+      }
+      
+      // デフォルトプロジェクトの確認と初期化
+      if (projectId === 'default') {
+        const defaultProjectData = await loadData(`voiscripter_project_default`);
+        if (!defaultProjectData) {
+          const defaultProject = {
+            id: 'default',
+            name: '新しいプロジェクト',
+            scenes: [{
+              id: Date.now().toString(),
+              name: '新しいシーン',
+              scripts: [{ id: Date.now().toString(), title: '新しいシーン', blocks: [], characters: [] }]
+            }]
+          };
+          saveData('voiscripter_project_default', JSON.stringify(defaultProject));
+          console.log('デフォルトプロジェクトを初期化しました');
+        }
       }
     };
     loadProject();
@@ -463,10 +528,22 @@ export default function Home() {
   // プロジェクト削除時のscenes/selectedSceneIdリセット
   useEffect(() => {
     if (projectList.length === 0) {
-      setProject({ id: 'default', name: '新しいプロジェクト', scenes: [] });
-      setSelectedSceneId(null);
+      const defaultProject = {
+        id: 'default',
+        name: '新しいプロジェクト',
+        scenes: [{
+          id: Date.now().toString(),
+          name: '新しいシーン',
+          scripts: [{ id: Date.now().toString(), title: '新しいシーン', blocks: [], characters: [] }]
+        }]
+      };
+      setProject(defaultProject);
+      setSelectedSceneId(defaultProject.scenes[0].id);
+      
+      // デフォルトプロジェクトを保存
+      saveData('voiscripter_project_default', JSON.stringify(defaultProject));
     }
-  }, [projectList]);
+  }, [projectList, saveDirectory]);
 
   // プロジェクト新規作成
   const handleNewProject = () => {
@@ -646,6 +723,40 @@ export default function Home() {
             }
           }
           
+          // 現在のメモリ上のデータもlocalStorageに保存
+          if (characters.length > 0) {
+            localStorage.setItem('voiscripter_characters', JSON.stringify(characters));
+            console.log('現在のキャラクター設定をlocalStorageに保存');
+          }
+          if (groups.length > 0) {
+            localStorage.setItem('voiscripter_groups', JSON.stringify(groups));
+            console.log('現在のグループ設定をlocalStorageに保存');
+          }
+          if (project.id && project.scenes.length > 0) {
+            localStorage.setItem(`voiscripter_project_${project.id}`, JSON.stringify(project));
+            console.log('現在のプロジェクトをlocalStorageに保存');
+          }
+          if (selectedSceneId) {
+            localStorage.setItem(`voiscripter_project_${project.id}_lastScene`, selectedSceneId);
+            console.log('現在のシーン選択をlocalStorageに保存');
+          }
+          
+          // プロジェクトリストを再読み込み
+          setTimeout(async () => {
+            try {
+              const keys = Object.keys(localStorage)
+                .filter(k => k.startsWith('voiscripter_project_') &&
+                  !k.endsWith('_lastScene') &&
+                  !k.endsWith('_undo') &&
+                  !k.endsWith('_redo'));
+              const projectKeys = keys.map(k => k.replace('voiscripter_project_', ''));
+              setProjectList(projectKeys);
+              console.log('localStorageからプロジェクトリスト再読み込み:', projectKeys);
+            } catch (error) {
+              console.error('プロジェクトリスト再読み込みエラー:', error);
+            }
+          }, 500);
+          
           showNotification('データの移動が完了しました', 'success');
         } catch (error) {
           console.error('データ移動エラー:', error);
@@ -681,20 +792,20 @@ export default function Home() {
                   // データ移動後はdefaultプロジェクトに切り替え
                   console.log('データ移動後、defaultプロジェクトに切り替え');
                   setProjectId('default');
-                  setScript({
-                    id: '1',
-                    title: '新しい台本',
-                    blocks: []
+                  setProject({
+                    id: 'default',
+                    name: '新しいプロジェクト',
+                    scenes: []
                   });
                   setUndoStack([]);
                   setRedoStack([]);
                   
                   // defaultプロジェクトのデータを空にする
                   try {
-                    await window.electronAPI.saveData('voiscripter_default', JSON.stringify({
-                      id: '1',
-                      title: '新しい台本',
-                      blocks: []
+                    await window.electronAPI.saveData('voiscripter_project_default', JSON.stringify({
+                      id: 'default',
+                      name: '新しいプロジェクト',
+                      scenes: []
                     }));
                     console.log('defaultプロジェクトを空にしました');
                   } catch (error) {
@@ -760,11 +871,23 @@ export default function Home() {
   // キャラクター削除
   const handleDeleteCharacter = (id: string) => {
     setCharacters(prev => prev.filter(c => c.id !== id));
-    // blocks内のcharacterIdも空にする
-    setScript(prev => ({
-      ...prev,
-      blocks: prev.blocks.map(b => b.characterId === id ? { ...b, characterId: '' } : b)
-    }));
+    // blocks内のcharacterIdも空にする（現在のプロジェクトの選択中シーン）
+    if (selectedSceneId) {
+      setProject(prev => ({
+        ...prev,
+        scenes: prev.scenes.map(scene =>
+          scene.id === selectedSceneId
+            ? {
+                ...scene,
+                scripts: scene.scripts.map(script => ({
+                  ...script,
+                  blocks: script.blocks.map(b => b.characterId === id ? { ...b, characterId: '' } : b)
+                }))
+              }
+            : scene
+        )
+      }));
+    }
   };
 
   // グループ追加
@@ -783,16 +906,32 @@ export default function Home() {
 
   // ブロック編集
   const handleUpdateBlock = (blockId: string, updates: Partial<ScriptBlock>) => {
-    setScript(prev => ({
+    if (!selectedSceneId) return;
+    setProject(prev => ({
       ...prev,
-      blocks: prev.blocks.map(block =>
-        block.id === blockId ? { ...block, ...updates } : block
+      scenes: prev.scenes.map(scene =>
+        scene.id === selectedSceneId
+          ? {
+              ...scene,
+              scripts: scene.scripts.map(script => ({
+                ...script,
+                blocks: script.blocks.map(block =>
+                  block.id === blockId ? { ...block, ...updates } : block
+                )
+              }))
+            }
+          : scene
       )
     }));
   };
+  
   // ブロック追加
   const handleAddBlock = () => {
-    const lastSerif = [...script.blocks].reverse().find(b => b.characterId);
+    if (!selectedSceneId) return;
+    const currentScript = project.scenes.find(s => s.id === selectedSceneId)?.scripts[0];
+    if (!currentScript) return;
+    
+    const lastSerif = [...currentScript.blocks].reverse().find(b => b.characterId);
     const charId = lastSerif?.characterId || characters[0]?.id || '';
     const emotion = lastSerif?.emotion || 'normal';
     const newBlock: ScriptBlock = {
@@ -801,43 +940,81 @@ export default function Home() {
       emotion,
       text: ''
     };
-    // 追加時はundoStackに積まれるのはuseEffectの1回だけになるようにする
-    setScript(prev => {
-      if (prev.blocks.length > 0 && prev.blocks[prev.blocks.length - 1].id === newBlock.id) {
-        return prev; // すでに追加済みなら何もしない
-      }
-      return {
-        ...prev,
-        blocks: [...prev.blocks, newBlock]
-      };
-    });
+    
+    setProject(prev => ({
+      ...prev,
+      scenes: prev.scenes.map(scene =>
+        scene.id === selectedSceneId
+          ? {
+              ...scene,
+              scripts: scene.scripts.map(script => ({
+                ...script,
+                blocks: [...script.blocks, newBlock]
+              }))
+            }
+          : scene
+      )
+    }));
   };
 
   // ブロック削除
   const handleDeleteBlock = (blockId: string) => {
-    setScript(prev => ({
+    if (!selectedSceneId) return;
+    setProject(prev => ({
       ...prev,
-      blocks: prev.blocks.filter(block => block.id !== blockId)
+      scenes: prev.scenes.map(scene =>
+        scene.id === selectedSceneId
+          ? {
+              ...scene,
+              scripts: scene.scripts.map(script => ({
+                ...script,
+                blocks: script.blocks.filter(block => block.id !== blockId)
+              }))
+            }
+          : scene
+      )
     }));
   };
 
   // ブロック挿入（ト書き用）
   const handleInsertBlock = (block: ScriptBlock, index: number) => {
-    setScript(prev => {
-      const newBlocks = [...prev.blocks];
-      newBlocks.splice(index, 0, block);
-      return { ...prev, blocks: newBlocks };
-    });
+    if (!selectedSceneId) return;
+    setProject(prev => ({
+      ...prev,
+      scenes: prev.scenes.map(scene =>
+        scene.id === selectedSceneId
+          ? {
+              ...scene,
+              scripts: scene.scripts.map(script => {
+                const newBlocks = [...script.blocks];
+                newBlocks.splice(index, 0, block);
+                return { ...script, blocks: newBlocks };
+              })
+            }
+          : scene
+      )
+    }));
   };
 
   // ブロック移動
   const handleMoveBlock = (fromIndex: number, toIndex: number) => {
-    setScript(prev => {
-      const newBlocks = [...prev.blocks];
-      const [movedBlock] = newBlocks.splice(fromIndex, 1);
-      newBlocks.splice(toIndex, 0, movedBlock);
-      return { ...prev, blocks: newBlocks };
-    });
+    if (!selectedSceneId) return;
+    setProject(prev => ({
+      ...prev,
+      scenes: prev.scenes.map(scene =>
+        scene.id === selectedSceneId
+          ? {
+              ...scene,
+              scripts: scene.scripts.map(script => {
+                const newBlocks = [...script.blocks];
+                const [movedBlock] = newBlocks.splice(fromIndex, 1);
+                newBlocks.splice(toIndex, 0, movedBlock);
+                return { ...script, blocks: newBlocks };
+              })
+            }
+          : scene
+      )
+    }));
   };
 
   // CSVエクスポート（話者,セリフ）
@@ -1036,8 +1213,9 @@ export default function Home() {
   // キャラクター設定のCSVエクスポート
   const handleExportCharacterCSV = () => {
     const rows = [
-      ['名前', 'アイコン', 'グループ', '背景色'],
+      ['ID', '名前', 'アイコン', 'グループ', '背景色'],
       ...characters.map(char => [
+        char.id,
         char.name,
         char.emotions.normal.iconUrl,
         char.group,
@@ -1150,9 +1328,9 @@ export default function Home() {
 
       const rows = parseCSV(text);
 
-      // 1行目が「話者」「セリフ」などのヘッダーでなければ全行インポート
+      // 1行目が「ID」「名前」「アイコン」「グループ」などのヘッダーでなければ全行インポート
       let dataRows = rows;
-      if (rows.length > 0 && (rows[0][0].includes('話者') || rows[0][0].toLowerCase().includes('speaker'))) {
+      if (rows.length > 0 && (rows[0][0].includes('ID') || rows[0][1]?.includes('名前') || rows[0][0].toLowerCase().includes('id'))) {
         dataRows = rows.slice(1);
       }
       const newBlocks: ScriptBlock[] = dataRows
@@ -1221,23 +1399,56 @@ export default function Home() {
         showNotification(`${newBlocks.length}個のブロックを新規プロジェクト「${options.projectName}」にインポートしました。`, 'success');
       } else {
         // 選択中シーンのscripts[0].blocksに追加
-        setProject(prev => ({
-          ...prev,
-          scenes: prev.scenes.map(scene =>
-            scene.id === selectedSceneId
-              ? {
-                  ...scene,
-                  scripts: scene.scripts.length > 0
-                    ? [{
-                        ...scene.scripts[0],
-                        blocks: [...scene.scripts[0].blocks, ...newBlocks]
-                      }]
-                    : [{ id: Date.now().toString(), title: scene.name, blocks: newBlocks, characters: [] }]
-                }
-              : scene
-          )
-        }));
-        showNotification(`${newBlocks.length}個のブロックを現在のシーンにインポートしました。`, 'success');
+        if (!selectedSceneId) {
+          // 選択中シーンが存在しない場合は、デフォルトシーンを作成
+          const newSceneId = Date.now().toString();
+          const newScene = {
+            id: newSceneId,
+            name: '新しいシーン',
+            scripts: [{ id: Date.now().toString(), title: '新しいシーン', blocks: newBlocks, characters: [] }]
+          };
+          
+          // 現在のプロジェクトにシーンを追加
+          setProject(prev => {
+            const updatedProject = {
+              ...prev,
+              scenes: [...prev.scenes, newScene]
+            };
+            
+            // プロジェクトを保存
+            saveData(`voiscripter_project_${prev.id}`, JSON.stringify(updatedProject));
+            return updatedProject;
+          });
+          
+          setSelectedSceneId(newSceneId);
+          showNotification(`${newBlocks.length}個のブロックを新規シーンにインポートしました。`, 'success');
+        } else {
+          // 選択中シーンに追加
+          setProject(prev => {
+            const updatedProject = {
+              ...prev,
+              scenes: prev.scenes.map(scene =>
+                scene.id === selectedSceneId
+                  ? {
+                      ...scene,
+                      scripts: scene.scripts.length > 0
+                        ? [{
+                            ...scene.scripts[0],
+                            blocks: [...scene.scripts[0].blocks, ...newBlocks]
+                          }]
+                        : [{ id: Date.now().toString(), title: scene.name, blocks: newBlocks, characters: [] }]
+                    }
+                  : scene
+              )
+            };
+            
+            // プロジェクトを保存
+            saveData(`voiscripter_project_${prev.id}`, JSON.stringify(updatedProject));
+            return updatedProject;
+          });
+          
+          showNotification(`${newBlocks.length}個のブロックを現在のシーンにインポートしました。`, 'success');
+        }
       }
       
       // CSVインポート後に最後のブロックにフォーカス
@@ -1270,16 +1481,7 @@ export default function Home() {
     } catch (error) {
       console.error('CSVインポートエラー:', error);
       showNotification('無効な台本形式です。または台本が壊れています。', 'error');
-      // 空のプロジェクトを読み込む
-      try {
-        setScript({
-          id: '1',
-          title: '新しい台本',
-          blocks: []
-        });
-      } catch (setError) {
-        console.error('Failed to set empty script:', setError);
-      }
+      // エラー時は何もしない（既存のプロジェクトを維持）
     }
   };
 
@@ -1327,49 +1529,63 @@ export default function Home() {
 
       // 1行目が「名前」「アイコン」「グループ」などのヘッダーでなければ全行インポート
       let dataRows = rows;
-      if (rows.length > 0 && (rows[0][0].includes('名前') || rows[0][0].toLowerCase().includes('name'))) {
+      if (rows.length > 0 && (rows[0][0].includes('ID') || rows[0][0].toLowerCase().includes('id'))) {
         dataRows = rows.slice(1);
       }
 
       const newCharacters: Character[] = [];
       const newGroups: string[] = [];
-      const duplicateNames: string[] = [];
 
       dataRows.forEach((row, index) => {
-        if (row.length >= 3) {
-          const characterName = row[0]?.trim() || '';
-          const iconUrl = row[1]?.trim() || '';
-          const characterGroup = row[2]?.trim() || 'なし';
-          const backgroundColor = row[3]?.trim() || '#e5e7eb'; // 背景色を追加
+        if (row.length >= 4) { // ID, 名前, アイコン, グループ, 背景色（オプション）
+          const characterId = row[0]?.trim() || '';
+          const characterName = row[1]?.trim() || '';
+          const iconUrl = row[2]?.trim() || '';
+          const characterGroup = row[3]?.trim() || 'なし';
+          const backgroundColor = row[4]?.trim() || '#e5e7eb'; // 背景色を追加
 
-          if (characterName && !characters.find(c => c.name === characterName)) {
-            // 新しいグループを追加
-            if (characterGroup && characterGroup !== 'なし' && !groups.includes(characterGroup)) {
-              newGroups.push(characterGroup);
+          if (characterName) {
+            const existingCharacter = characters.find(c => c.name === characterName);
+            
+            if (existingCharacter) {
+              // 既存のキャラクターが存在する場合
+              if (existingCharacter.group !== characterGroup || existingCharacter.emotions.normal.iconUrl !== iconUrl || existingCharacter.backgroundColor !== backgroundColor || existingCharacter.id !== characterId) {
+                // 設定が異なる場合は更新
+                setCharacters(prev => prev.map(char => 
+                  char.name === characterName 
+                    ? { 
+                        ...char, 
+                        id: characterId,
+                        group: characterGroup, 
+                        emotions: { ...char.emotions, normal: { iconUrl } },
+                        backgroundColor 
+                      }
+                    : char
+                ));
+                console.log(`「${characterName}」の設定を更新しました（characterId: ${existingCharacter.id}）`);
+              }
+            } else {
+              // 新しいキャラクターを追加
+              // 新しいグループを追加
+              if (characterGroup && characterGroup !== 'なし' && !groups.includes(characterGroup)) {
+                newGroups.push(characterGroup);
+              }
+
+              const emotions = {
+                normal: { iconUrl }
+              };
+
+              newCharacters.push({
+                id: characterId || Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                name: characterName,
+                group: characterGroup,
+                emotions,
+                backgroundColor // 背景色を追加
+              });
             }
-
-            const emotions = {
-              normal: { iconUrl }
-            };
-
-            newCharacters.push({
-              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-              name: characterName,
-              group: characterGroup,
-              emotions,
-              backgroundColor // 背景色を追加
-            });
-          } else if (characterName) {
-            duplicateNames.push(characterName);
           }
         }
       });
-
-      // 重複エラーメッセージの表示
-      if (duplicateNames.length > 0) {
-        const duplicateMessage = `以下のキャラクターは既に存在するためインポートされませんでした：\n${duplicateNames.join(', ')}`;
-        showNotification(duplicateMessage, 'error');
-      }
 
       // 新しいグループを追加（重複を除去）
       let actuallyAddedGroups: string[] = [];
@@ -1378,16 +1594,24 @@ export default function Home() {
         setGroups(prev => {
           const groupsToAdd = uniqueNewGroups.filter(group => !prev.includes(group));
           actuallyAddedGroups = groupsToAdd;
-          return [...prev, ...groupsToAdd];
+          const newGroups = [...prev, ...groupsToAdd];
+          // グループ設定を永続化
+          saveData('voiscripter_groups', JSON.stringify(newGroups));
+          return newGroups;
         });
       }
 
       // 新しいキャラクターを追加
       if (newCharacters.length > 0) {
-        setCharacters(prev => [...prev, ...newCharacters]);
+        setCharacters(prev => {
+          const newCharactersList = [...prev, ...newCharacters];
+          // キャラクター設定を永続化
+          saveData('voiscripter_characters', JSON.stringify(newCharactersList));
+          return newCharactersList;
+        });
         showNotification(`${newCharacters.length}個のキャラクターをインポートしました。${actuallyAddedGroups.length > 0 ? `\n新しいグループ「${actuallyAddedGroups.join(', ')}」が追加されました。` : ''}`, 'success');
-      } else if (duplicateNames.length === 0) {
-        showNotification('インポート可能なキャラクターが見つかりませんでした。', 'info');
+      } else {
+        showNotification('キャラクター設定のインポートが完了しました。', 'success');
       }
     } catch (error) {
       console.error('キャラクター設定のCSVインポートエラー:', error);
@@ -1405,23 +1629,6 @@ export default function Home() {
         showNotification('無効な形式のためインポートできませんでした。', 'error');
         return;
       }
-      // インポートデータのキャラクターID→名前マップを作成（シーン→スクリプト→characters配列を探索）
-      const importIdToName: Record<string, string> = {};
-      // プロジェクト直下のcharacters（古い形式）
-      if (Array.isArray(data.characters)) {
-        data.characters.forEach((c: any) => { importIdToName[c.id] = c.name; });
-      }
-      // 各シーン・スクリプトのcharacters
-      data.scenes.forEach((scene: any) => {
-        scene.scripts?.forEach((script: any) => {
-          if (Array.isArray(script.characters)) {
-            script.characters.forEach((c: any) => { importIdToName[c.id] = c.name; });
-          }
-        });
-      });
-      // 現在のキャラクター名→IDマップ
-      const nameToId: Record<string, string> = {};
-      characters.forEach(c => { nameToId[c.name] = c.id; });
       // 各シーン・スクリプト・ブロックのcharacterIdを変換
       const mappedScenes = data.scenes.map((scene: any) => ({
         ...scene,
@@ -1429,21 +1636,38 @@ export default function Home() {
           ...script,
           blocks: script.blocks.map((block: any) => {
             let newCharId = '';
-            // 1. インポートデータのID→名前→現在のID
-            if (block.characterId && importIdToName[block.characterId] && nameToId[importIdToName[block.characterId]]) {
-              newCharId = nameToId[importIdToName[block.characterId]];
+            
+            // デバッグログ
+            console.log('Block processing:', {
+              blockId: block.id,
+              originalCharacterId: block.characterId,
+              currentCharacters: characters.map(c => ({ id: c.id, name: c.name }))
+            });
+            
+            // シンプルな判定: block.characterIdがcharacters内のIDに存在するかチェック
+            if (block.characterId && characters.some(c => c.id === block.characterId)) {
+              newCharId = block.characterId;
+              console.log('Character ID found:', {
+                blockCharacterId: block.characterId,
+                newCharId: newCharId
+              });
+            } else {
+              // characterIdが存在しない、またはcharacters内に見つからない場合は空文字（ト書き）
+              newCharId = '';
+              console.log('Character ID not found, treating as stage direction:', {
+                blockCharacterId: block.characterId
+              });
             }
-            // 2. 旧データがcharacterNameを持っている場合
-            if (!newCharId && block.characterName && nameToId[block.characterName]) {
-              newCharId = nameToId[block.characterName];
-            }
-            // 3. 旧データのcharacterIdが実はnameの場合
-            if (!newCharId && block.characterId && nameToId[block.characterId]) {
-              newCharId = nameToId[block.characterId];
-            }
+            
+            console.log('Final result:', {
+              blockId: block.id,
+              originalCharacterId: block.characterId,
+              newCharId: newCharId
+            });
+            
             return {
               ...block,
-              characterId: newCharId || '',
+              characterId: newCharId,
             };
           })
         }))
