@@ -1213,8 +1213,9 @@ export default function Home() {
   // キャラクター設定のCSVエクスポート
   const handleExportCharacterCSV = () => {
     const rows = [
-      ['名前', 'アイコン', 'グループ', '背景色'],
+      ['ID', '名前', 'アイコン', 'グループ', '背景色'],
       ...characters.map(char => [
+        char.id,
         char.name,
         char.emotions.normal.iconUrl,
         char.group,
@@ -1327,9 +1328,9 @@ export default function Home() {
 
       const rows = parseCSV(text);
 
-      // 1行目が「話者」「セリフ」などのヘッダーでなければ全行インポート
+      // 1行目が「ID」「名前」「アイコン」「グループ」などのヘッダーでなければ全行インポート
       let dataRows = rows;
-      if (rows.length > 0 && (rows[0][0].includes('話者') || rows[0][0].toLowerCase().includes('speaker'))) {
+      if (rows.length > 0 && (rows[0][0].includes('ID') || rows[0][1]?.includes('名前') || rows[0][0].toLowerCase().includes('id'))) {
         dataRows = rows.slice(1);
       }
       const newBlocks: ScriptBlock[] = dataRows
@@ -1528,49 +1529,63 @@ export default function Home() {
 
       // 1行目が「名前」「アイコン」「グループ」などのヘッダーでなければ全行インポート
       let dataRows = rows;
-      if (rows.length > 0 && (rows[0][0].includes('名前') || rows[0][0].toLowerCase().includes('name'))) {
+      if (rows.length > 0 && (rows[0][0].includes('ID') || rows[0][0].toLowerCase().includes('id'))) {
         dataRows = rows.slice(1);
       }
 
       const newCharacters: Character[] = [];
       const newGroups: string[] = [];
-      const duplicateNames: string[] = [];
 
       dataRows.forEach((row, index) => {
-        if (row.length >= 3) {
-          const characterName = row[0]?.trim() || '';
-          const iconUrl = row[1]?.trim() || '';
-          const characterGroup = row[2]?.trim() || 'なし';
-          const backgroundColor = row[3]?.trim() || '#e5e7eb'; // 背景色を追加
+        if (row.length >= 4) { // ID, 名前, アイコン, グループ, 背景色（オプション）
+          const characterId = row[0]?.trim() || '';
+          const characterName = row[1]?.trim() || '';
+          const iconUrl = row[2]?.trim() || '';
+          const characterGroup = row[3]?.trim() || 'なし';
+          const backgroundColor = row[4]?.trim() || '#e5e7eb'; // 背景色を追加
 
-          if (characterName && !characters.find(c => c.name === characterName)) {
-            // 新しいグループを追加
-            if (characterGroup && characterGroup !== 'なし' && !groups.includes(characterGroup)) {
-              newGroups.push(characterGroup);
+          if (characterName) {
+            const existingCharacter = characters.find(c => c.name === characterName);
+            
+            if (existingCharacter) {
+              // 既存のキャラクターが存在する場合
+              if (existingCharacter.group !== characterGroup || existingCharacter.emotions.normal.iconUrl !== iconUrl || existingCharacter.backgroundColor !== backgroundColor || existingCharacter.id !== characterId) {
+                // 設定が異なる場合は更新
+                setCharacters(prev => prev.map(char => 
+                  char.name === characterName 
+                    ? { 
+                        ...char, 
+                        id: characterId,
+                        group: characterGroup, 
+                        emotions: { ...char.emotions, normal: { iconUrl } },
+                        backgroundColor 
+                      }
+                    : char
+                ));
+                console.log(`「${characterName}」の設定を更新しました（characterId: ${existingCharacter.id}）`);
+              }
+            } else {
+              // 新しいキャラクターを追加
+              // 新しいグループを追加
+              if (characterGroup && characterGroup !== 'なし' && !groups.includes(characterGroup)) {
+                newGroups.push(characterGroup);
+              }
+
+              const emotions = {
+                normal: { iconUrl }
+              };
+
+              newCharacters.push({
+                id: characterId || Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                name: characterName,
+                group: characterGroup,
+                emotions,
+                backgroundColor // 背景色を追加
+              });
             }
-
-            const emotions = {
-              normal: { iconUrl }
-            };
-
-            newCharacters.push({
-              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-              name: characterName,
-              group: characterGroup,
-              emotions,
-              backgroundColor // 背景色を追加
-            });
-          } else if (characterName) {
-            duplicateNames.push(characterName);
           }
         }
       });
-
-      // 重複エラーメッセージの表示
-      if (duplicateNames.length > 0) {
-        const duplicateMessage = `以下のキャラクターは既に存在するためインポートされませんでした：\n${duplicateNames.join(', ')}`;
-        showNotification(duplicateMessage, 'error');
-      }
 
       // 新しいグループを追加（重複を除去）
       let actuallyAddedGroups: string[] = [];
@@ -1595,8 +1610,8 @@ export default function Home() {
           return newCharactersList;
         });
         showNotification(`${newCharacters.length}個のキャラクターをインポートしました。${actuallyAddedGroups.length > 0 ? `\n新しいグループ「${actuallyAddedGroups.join(', ')}」が追加されました。` : ''}`, 'success');
-      } else if (duplicateNames.length === 0) {
-        showNotification('インポート可能なキャラクターが見つかりませんでした。', 'info');
+      } else {
+        showNotification('キャラクター設定のインポートが完了しました。', 'success');
       }
     } catch (error) {
       console.error('キャラクター設定のCSVインポートエラー:', error);
@@ -1614,23 +1629,6 @@ export default function Home() {
         showNotification('無効な形式のためインポートできませんでした。', 'error');
         return;
       }
-      // インポートデータのキャラクターID→名前マップを作成（シーン→スクリプト→characters配列を探索）
-      const importIdToName: Record<string, string> = {};
-      // プロジェクト直下のcharacters（古い形式）
-      if (Array.isArray(data.characters)) {
-        data.characters.forEach((c: any) => { importIdToName[c.id] = c.name; });
-      }
-      // 各シーン・スクリプトのcharacters
-      data.scenes.forEach((scene: any) => {
-        scene.scripts?.forEach((script: any) => {
-          if (Array.isArray(script.characters)) {
-            script.characters.forEach((c: any) => { importIdToName[c.id] = c.name; });
-          }
-        });
-      });
-      // 現在のキャラクター名→IDマップ
-      const nameToId: Record<string, string> = {};
-      characters.forEach(c => { nameToId[c.name] = c.id; });
       // 各シーン・スクリプト・ブロックのcharacterIdを変換
       const mappedScenes = data.scenes.map((scene: any) => ({
         ...scene,
@@ -1638,21 +1636,38 @@ export default function Home() {
           ...script,
           blocks: script.blocks.map((block: any) => {
             let newCharId = '';
-            // 1. インポートデータのID→名前→現在のID
-            if (block.characterId && importIdToName[block.characterId] && nameToId[importIdToName[block.characterId]]) {
-              newCharId = nameToId[importIdToName[block.characterId]];
+            
+            // デバッグログ
+            console.log('Block processing:', {
+              blockId: block.id,
+              originalCharacterId: block.characterId,
+              currentCharacters: characters.map(c => ({ id: c.id, name: c.name }))
+            });
+            
+            // シンプルな判定: block.characterIdがcharacters内のIDに存在するかチェック
+            if (block.characterId && characters.some(c => c.id === block.characterId)) {
+              newCharId = block.characterId;
+              console.log('Character ID found:', {
+                blockCharacterId: block.characterId,
+                newCharId: newCharId
+              });
+            } else {
+              // characterIdが存在しない、またはcharacters内に見つからない場合は空文字（ト書き）
+              newCharId = '';
+              console.log('Character ID not found, treating as stage direction:', {
+                blockCharacterId: block.characterId
+              });
             }
-            // 2. 旧データがcharacterNameを持っている場合
-            if (!newCharId && block.characterName && nameToId[block.characterName]) {
-              newCharId = nameToId[block.characterName];
-            }
-            // 3. 旧データのcharacterIdが実はnameの場合
-            if (!newCharId && block.characterId && nameToId[block.characterId]) {
-              newCharId = nameToId[block.characterId];
-            }
+            
+            console.log('Final result:', {
+              blockId: block.id,
+              originalCharacterId: block.characterId,
+              newCharId: newCharId
+            });
+            
             return {
               ...block,
-              characterId: newCharId || '',
+              characterId: newCharId,
             };
           })
         }))

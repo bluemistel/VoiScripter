@@ -234,7 +234,16 @@ export default function Settings({
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
 
-                <div>
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.1.7</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                    <li>• v0.1.6の機能をデスクトップアプリ版でも利用できるように改修</li>
+                    <li>• プロジェクトのJSONエクスポート・インポート機能を改修しキャラクター設定のエクスポートと併用して別環境でも引き継げるように</li>
+                    <li>• キャラクター設定のCSVエクスポートで別環境でも同じ設定を引き継げるように改修</li>
+                    </ul>
+                  </div>
+
+                  <div>
                     <h4 className="font-medium text-foreground mb-2">v0.1.6</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                       <li>• プロジェクト内サブプロジェクト作成機能(シーン機能)を追加し、タブ形式でシーンを管理できるように</li>

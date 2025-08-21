@@ -214,8 +214,8 @@ export default function Header(props: HeaderProps) {
         const firstLine = lines[0] || '';
         const firstColumn = firstLine.split(',')[0]?.trim() || '';
         
-        // 1列目の1カラム目が「名前」ならキャラクター設定のインポート
-        const isCharacterImport = firstColumn === '名前';
+        // 1列目の1カラム目が「ID」または2カラム目が「名前」ならキャラクター設定のインポート
+        const isCharacterImport = firstColumn === 'ID' || firstColumn === '名前' || firstLine.split(',')[1]?.trim() === '名前';
         
         if (isCharacterImport) {
           // キャラクター設定のインポート
