@@ -283,17 +283,12 @@ export default function Home() {
         isFirstGroups.current = false;
       }
       
-      // projectId
+      // projectId（最後に開いていたプロジェクト）
       const lastProject = await loadDataWithDirectory('voiscripter_lastProject');
-      // lastProjectが有効なプロジェクト名かチェック
-      let validProjectId = 'default';
-      if (lastProject && lastProject !== 'lastProject' && lastProject.trim() !== '') {
-        validProjectId = lastProject;
-      }
-      setProjectId(validProjectId);
+      console.log('読み込まれたvoiscripter_lastProject:', lastProject);
       
-      // projectList（saveDirectory設定後に実行）
-      console.log('プロジェクトリスト読み込み開始 - 保存先:', savedDirectory);
+      // プロジェクトリストを先に取得（存在チェック用）
+      let availableProjects: string[] = [];
       if (savedDirectory === '') {
         // localStorageから読み込み
         const keys = Object.keys(localStorage)
@@ -301,26 +296,50 @@ export default function Home() {
             !k.endsWith('_lastScene') &&
             !k.endsWith('_undo') &&
             !k.endsWith('_redo'));
-        const projectKeys = keys.map(k => k.replace('voiscripter_project_', ''));
-        setProjectList(projectKeys);
-        console.log('localStorageからプロジェクトリスト読み込み:', projectKeys);
+        availableProjects = keys.map(k => k.replace('voiscripter_project_', ''));
+        console.log('localStorageから利用可能なプロジェクト:', availableProjects);
       } else if (window.electronAPI) {
         // ファイルから読み込み
         try {
           const keys = await window.electronAPI.listDataKeys() || [];
           console.log('ファイルから取得したキー一覧:', keys);
-          const projectKeys = keys.filter(k => k.startsWith('voiscripter_project_') &&
+          availableProjects = keys.filter(k => k.startsWith('voiscripter_project_') &&
             !k.endsWith('_lastScene') &&
             !k.endsWith('_undo') &&
             !k.endsWith('_redo'));
-          const projectNames = projectKeys.map(k => k.replace('voiscripter_project_', ''));
-          setProjectList(projectNames);
-          console.log('ファイルからプロジェクトリスト読み込み:', projectNames);
+          availableProjects = availableProjects.map(k => k.replace('voiscripter_project_', ''));
+          console.log('ファイルから利用可能なプロジェクト:', availableProjects);
         } catch (error) {
           console.error('プロジェクトリスト取得エラー:', error);
-          setProjectList([]);
+          availableProjects = [];
         }
       }
+      
+      // lastProjectが有効なプロジェクト名かチェック
+      let validProjectId = 'default';
+      if (lastProject && lastProject !== 'lastProject' && lastProject.trim() !== '') {
+        // プロジェクトリストに存在するかチェック
+        if (availableProjects.includes(lastProject)) {
+          validProjectId = lastProject;
+          console.log('最後に開いていたプロジェクトが有効です:', validProjectId);
+        } else {
+          console.log('最後に開いていたプロジェクトが存在しません:', lastProject);
+          // 存在しないプロジェクトIDの場合は、voiscripter_lastProjectをクリア
+          if (savedDirectory === '') {
+            localStorage.removeItem('voiscripter_lastProject');
+          } else if (window.electronAPI) {
+            window.electronAPI.deleteData('voiscripter_lastProject');
+          }
+        }
+      } else {
+        console.log('voiscripter_lastProjectが見つからないか無効です');
+      }
+      
+      setProjectId(validProjectId);
+      console.log('設定されたprojectId:', validProjectId);
+      
+      // projectListを設定
+      setProjectList(availableProjects);
       
       // デフォルトプロジェクトの初期化（存在しない場合）
       const defaultProjectExists = await loadDataWithDirectory('voiscripter_project_default');
@@ -347,8 +366,8 @@ export default function Home() {
         console.log('デフォルトプロジェクトは既に存在します');
       }
       
-      // undo/redo
-      const u = await loadDataWithDirectory(`voiscripter_${validProjectId}_undo`);
+      // undo/redo（projectId設定後に実行）
+      const u = await loadDataWithDirectory(`voiscripter_project_${validProjectId}_undo`);
       if (u) {
         try {
           const parsedUndo = JSON.parse(u);
@@ -364,7 +383,7 @@ export default function Home() {
         }
       }
       
-      const r = await loadDataWithDirectory(`voiscripter_${validProjectId}_redo`);
+      const r = await loadDataWithDirectory(`voiscripter_project_${validProjectId}_redo`);
       if (r) {
         try {
           const parsedRedo = JSON.parse(r);
@@ -463,9 +482,13 @@ export default function Home() {
     saveProject();
   }, [project, selectedSceneId, saveDirectory]);
 
+  // 初回マウント時のフラグ
+  const isInitialMount = useRef(true);
+
   // プロジェクト切替時の復元
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    
     const loadProject = async () => {
       const key = `voiscripter_project_${projectId}`;
       
@@ -499,6 +522,11 @@ export default function Home() {
             } else {
               setSelectedSceneId(null);
             }
+            
+            // 初回マウント時は保存しない（voiscripter_lastProjectの値を保持するため）
+            if (!isInitialMount.current) {
+              saveData('voiscripter_lastProject', projectId);
+            }
           }
         } catch (e) {
           console.error('プロジェクトデータのパースエラー', e);
@@ -519,6 +547,11 @@ export default function Home() {
         
         // 新規プロジェクトを保存
         saveData(`voiscripter_project_${projectId}`, JSON.stringify(newProject));
+        
+        // 初回マウント時は保存しない（voiscripter_lastProjectの値を保持するため）
+        if (!isInitialMount.current) {
+          saveData('voiscripter_lastProject', projectId);
+        }
       }
       
       // デフォルトプロジェクトの確認と初期化
@@ -547,6 +580,19 @@ export default function Home() {
     };
     loadProject();
   }, [projectId, saveDirectory]);
+
+  // 初回マウント完了フラグを設定
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // 初期データ読み込みが完了したらフラグを設定
+      const timer = setTimeout(() => {
+        isInitialMount.current = false;
+        console.log('初期マウント完了フラグを設定');
+      }, 1000); // 1秒後にフラグを設定
+      
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // プロジェクト削除時のscenes/selectedSceneIdリセット
   useEffect(() => {
@@ -606,15 +652,20 @@ export default function Home() {
       name: name,
       scripts: [{ id: Date.now().toString(), title: name, blocks: [], characters: [] }]
     };
-    setProject({
+    const newProject = {
       id: name,
       name: name,
       scenes: [newScene]
-    });
+    };
+    setProject(newProject);
     setSelectedSceneId(newSceneId);
     setProjectId(name);
     setUndoStack([]);
     setRedoStack([]);
+    
+    // 最後に開いていたプロジェクトとして保存
+    saveData('voiscripter_lastProject', name);
+    
     showNotification(`プロジェクト「${name}」を作成しました`, 'success');
     setTimeout(refreshProjectList, 200);
   };
@@ -1849,25 +1900,55 @@ export default function Home() {
         setDeleteConfirmation(null);
         return;
       }
-      // localStorageまたはファイルから削除
-      if (saveDirectory === '') {
-        localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}`);
-        localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}_lastScene`);
-        localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}_undo`);
-        localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}_redo`);
-      } else if (window.electronAPI) {
-        window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}`);
-        window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}_lastScene`);
-        window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}_undo`);
-        window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}_redo`);
-      }
-      showNotification(`プロジェクト「${deleteConfirmation.projectId}」を削除しました`, 'success');
-      setProjectId('default');
-      setDeleteConfirmation(null);
+      
+      // 削除処理を非同期で実行
+      const deleteProjectAsync = async () => {
+        // 削除されるプロジェクトが最後に開いていたプロジェクトかチェック
+        let isLastProject = false;
+        if (saveDirectory === '') {
+          const lastProject = localStorage.getItem('voiscripter_lastProject');
+          isLastProject = lastProject === deleteConfirmation.projectId;
+        } else if (window.electronAPI) {
+          try {
+            const lastProject = await window.electronAPI.loadData('voiscripter_lastProject');
+            isLastProject = lastProject === deleteConfirmation.projectId;
+          } catch (error) {
+            console.error('最後のプロジェクト確認エラー:', error);
+          }
+        }
+        
+        // localStorageまたはファイルから削除
+        if (saveDirectory === '') {
+          localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}`);
+          localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}_lastScene`);
+          localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}_undo`);
+          localStorage.removeItem(`voiscripter_project_${deleteConfirmation.projectId}_redo`);
+        } else if (window.electronAPI) {
+          window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}`);
+          window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}_lastScene`);
+          window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}_undo`);
+          window.electronAPI.deleteData(`voiscripter_project_${deleteConfirmation.projectId}_redo`);
+        }
+        
+        // 削除されたプロジェクトが最後に開いていたプロジェクトだった場合、defaultに設定
+        if (isLastProject) {
+          if (saveDirectory === '') {
+            localStorage.setItem('voiscripter_lastProject', 'default');
+          } else if (window.electronAPI) {
+            window.electronAPI.saveData('voiscripter_lastProject', 'default');
+          }
+        }
+        
+        showNotification(`プロジェクト「${deleteConfirmation.projectId}」を削除しました`, 'success');
+        setProjectId('default');
+        setDeleteConfirmation(null);
+      };
+      
+      deleteProjectAsync();
     } else if (deleteConfirmation.confirmed === false) {
       setDeleteConfirmation(null);
     }
-  }, [deleteConfirmation]);
+  }, [deleteConfirmation, saveDirectory]);
 
   // プロジェクトのJSONエクスポート
   const handleExportProjectJson = () => {
