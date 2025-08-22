@@ -131,6 +131,19 @@ export default function Home() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [undoStack, redoStack, project, selectedSceneId]);
 
+  // ウィンドウサイズの監視（Electron環境のみ）
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).electronAPI) {
+      const handleResize = () => {
+        // ウィンドウサイズの変更はElectron側で自動的に保存される
+        // ここでは必要に応じて追加の処理を行う
+      };
+
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
+
   // データ保存関数
   const saveData = (key: string, data: string) => {
     if (saveDirectory === '') {

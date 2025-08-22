@@ -81,6 +81,10 @@ declare global {
       
       // イベントリスナーの削除
       removeAllListeners: (channel: string) => void;
+      
+      // ウィンドウサイズと位置の取得・設定
+      getWindowBounds: () => Promise<{ x: number; y: number; width: number; height: number } | null>;
+      setWindowBounds: (bounds: { x: number; y: number; width: number; height: number }) => Promise<boolean>;
     };
     getLogoPath?: () => string;
   }
