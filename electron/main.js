@@ -316,31 +316,61 @@ function createWindow() {
 
   // ウィンドウサイズと位置の変更を監視して保存
   let saveWindowBoundsTimeout;
+  let lastSavedBounds = null;
+  
   const saveWindowBounds = () => {
+    try {
+      const bounds = mainWindow.getBounds();
+      
+      // 前回保存した値と同じ場合は保存しない
+      if (lastSavedBounds && 
+          lastSavedBounds.width === bounds.width && 
+          lastSavedBounds.height === bounds.height &&
+          lastSavedBounds.x === bounds.x && 
+          lastSavedBounds.y === bounds.y) {
+        return;
+      }
+      
+      const settingsPath = path.join(app.getPath('userData'), 'window-bounds.json');
+      fs.writeFileSync(settingsPath, JSON.stringify(bounds), 'utf8');
+      lastSavedBounds = bounds;
+      
+      if (isDev) {
+        console.log('ウィンドウサイズ保存:', bounds);
+      }
+    } catch (error) {
+      if (isDev) {
+        console.error('ウィンドウサイズ保存エラー:', error);
+      }
+    }
+  };
+  
+  // 初期値を設定
+  lastSavedBounds = windowBounds;
+
+  // ウィンドウサイズ変更時（操作が落ち着いてから保存）
+  mainWindow.on('resize', () => {
     if (saveWindowBoundsTimeout) {
       clearTimeout(saveWindowBoundsTimeout);
     }
-    saveWindowBoundsTimeout = setTimeout(() => {
-      try {
-        const bounds = mainWindow.getBounds();
-        const settingsPath = path.join(app.getPath('userData'), 'window-bounds.json');
-        fs.writeFileSync(settingsPath, JSON.stringify(bounds), 'utf8');
-        if (isDev) {
-          console.log('ウィンドウサイズ保存:', bounds);
-        }
-      } catch (error) {
-        if (isDev) {
-          console.error('ウィンドウサイズ保存エラー:', error);
-        }
-      }
-    }, 500); // 500msのディレイで保存（頻繁な保存を防ぐ）
-  };
-
-  // ウィンドウサイズ変更時
-  mainWindow.on('resize', saveWindowBounds);
+    saveWindowBoundsTimeout = setTimeout(saveWindowBounds, 100);
+  });
   
-  // ウィンドウ移動時
-  mainWindow.on('move', saveWindowBounds);
+  // ウィンドウ移動時（操作が落ち着いてから保存）
+  mainWindow.on('move', () => {
+    if (saveWindowBoundsTimeout) {
+      clearTimeout(saveWindowBoundsTimeout);
+    }
+    saveWindowBoundsTimeout = setTimeout(saveWindowBounds, 100);
+  });
+  
+  // ウィンドウが閉じられる前に最終保存
+  mainWindow.on('close', () => {
+    if (saveWindowBoundsTimeout) {
+      clearTimeout(saveWindowBoundsTimeout);
+    }
+    saveWindowBounds();
+  });
 
   // ウィンドウが閉じられた時の処理
   mainWindow.on('closed', () => {
