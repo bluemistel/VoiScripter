@@ -1105,17 +1105,16 @@ export default function Home() {
   };
 
   // CSVエクスポート（話者,セリフ）
-  const handleExportCSV = async (includeTogaki?: boolean, selectedOnly?: boolean) => {
-    // 現在選択中のシーンのスクリプトを使用
-    const currentScript = selectedScene?.scripts[0] || { id: '', title: '', blocks: [], characters: [] };
-    let targetBlocks = currentScript.blocks;
+  const handleExportCSV = async (includeTogaki?: boolean, selectedOnly?: boolean, fileFormat?: 'csv' | 'txt') => {
+    // 全シーンのスクリプトを結合
+    let allBlocks = project.scenes.flatMap(scene => scene.scripts[0]?.blocks || []);
     
     // 選択ブロックのみの場合
     if (selectedOnly && selectedBlockIds.length > 0) {
-      targetBlocks = currentScript.blocks.filter(block => selectedBlockIds.includes(block.id));
+      allBlocks = allBlocks.filter(block => selectedBlockIds.includes(block.id));
     }
     
-    const rows = targetBlocks
+    const rows = allBlocks
       .filter(block => includeTogaki ? true : block.characterId)
       .map(block => {
         if (!block.characterId) {
@@ -1139,18 +1138,26 @@ export default function Home() {
     };
 
     const csv = encodeCSV(rows);
-    const defaultName = `${project.name || 'project'}_${currentScript.title || 'script'}.csv`;
+    const extension = fileFormat === 'txt' ? 'txt' : 'csv';
+    const defaultName = `${project.name || 'project'}_all_scenes.${extension}`;
     
     if (window.electronAPI) {
       try {
-        await window.electronAPI.saveCSVFile(defaultName, csv);
+        if (fileFormat === 'txt') {
+          // txt形式の場合はUTF-8のカンマ区切りファイルとして保存
+          await window.electronAPI.saveCSVFile(defaultName, csv);
+        } else {
+          // csv形式の場合は従来通り
+          await window.electronAPI.saveCSVFile(defaultName, csv);
+        }
       } catch (error) {
-        console.error('CSV保存エラー:', error);
-        alert('CSVファイルの保存に失敗しました。');
+        console.error('ファイル保存エラー:', error);
+        alert('ファイルの保存に失敗しました。');
       }
     } else {
       // ブラウザ環境では従来の方法
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const mimeType = fileFormat === 'txt' ? 'text/plain;charset=utf-8;' : 'text/csv;charset=utf-8;';
+      const blob = new Blob([csv], { type: mimeType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -1160,19 +1167,18 @@ export default function Home() {
     }
   };
 
-  // セリフだけエクスポート
-  const handleExportSerifOnly = async (selectedOnly?: boolean) => {
-    // 現在選択中のシーンのスクリプトを使用
-    const currentScript = selectedScene?.scripts[0] || { id: '', title: '', blocks: [], characters: [] };
-    let targetBlocks = currentScript.blocks;
+  // セリフのみエクスポート（ト書きは含めない）
+  const handleExportSerifOnly = async (selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeTogaki?: boolean) => {
+    // 全シーンのスクリプトを結合
+    let allBlocks = project.scenes.flatMap(scene => scene.scripts[0]?.blocks || []);
     
     // 選択ブロックのみの場合
     if (selectedOnly && selectedBlockIds.length > 0) {
-      targetBlocks = currentScript.blocks.filter(block => selectedBlockIds.includes(block.id));
+      allBlocks = allBlocks.filter(block => selectedBlockIds.includes(block.id));
     }
     
-    const rows = targetBlocks
-      .filter(block => block.characterId) // ト書きは除外
+    const rows = allBlocks
+      .filter(block => includeTogaki ? true : block.characterId) // ト書きを含めるかどうかで制御
       .map(block => [block.text]);
     
     // CSVエンコード関数
@@ -1189,18 +1195,26 @@ export default function Home() {
     };
 
     const csv = encodeCSV(rows);
-    const defaultName = `${project.name || 'project'}_${currentScript.title || 'serif'}.csv`;
+    const extension = fileFormat === 'txt' ? 'txt' : 'csv';
+    const defaultName = `${project.name || 'project'}_all_scenes_${includeTogaki ? 'with_togaki' : 'serif_only'}.${extension}`;
     
     if (window.electronAPI) {
       try {
-        await window.electronAPI.saveCSVFile(defaultName, csv);
+        if (fileFormat === 'txt') {
+          // txt形式の場合はUTF-8のカンマ区切りファイルとして保存
+          await window.electronAPI.saveCSVFile(defaultName, csv);
+        } else {
+          // csv形式の場合は従来通り
+          await window.electronAPI.saveCSVFile(defaultName, csv);
+        }
       } catch (error) {
-        console.error('CSV保存エラー:', error);
-        alert('CSVファイルの保存に失敗しました。');
+        console.error('ファイル保存エラー:', error);
+        alert('ファイルの保存に失敗しました。');
       }
     } else {
       // ブラウザ環境では従来の方法
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const mimeType = fileFormat === 'txt' ? 'text/plain;charset=utf-8;' : 'text/csv;charset=utf-8;';
+      const blob = new Blob([csv], { type: mimeType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -1216,7 +1230,8 @@ export default function Home() {
     exportType: 'full' | 'serif-only',
     includeTogaki?: boolean,
     selectedOnly?: boolean,
-    sceneIds?: string[]
+    sceneIds?: string[],
+    fileFormat?: 'csv' | 'txt'
   ) => {
     // デバッグ用出力
     console.log('handleExportByGroups sceneIds:', sceneIds);
@@ -1267,7 +1282,8 @@ export default function Home() {
         } else {
           rows = groupBlocks.map(block => [block.text.replace(/\n/g, '\\n')]);
         }
-        filename = `${project.name || 'project'}_${scene.name}_${group}.csv`;
+        const extension = fileFormat === 'txt' ? 'txt' : 'csv';
+        filename = `${project.name || 'project'}_${scene.name}_${group}.${extension}`;
         // CSVエンコード関数
         const encodeCSV = (rows: string[][]) =>
           rows.map(row =>
@@ -1280,12 +1296,19 @@ export default function Home() {
         const csv = encodeCSV(rows);
         if (window.electronAPI) {
           try {
-            await window.electronAPI.saveCSVFile(filename, csv);
+            if (fileFormat === 'txt') {
+              // txt形式の場合はUTF-8のカンマ区切りファイルとして保存
+              await window.electronAPI.saveCSVFile(filename, csv);
+            } else {
+              // csv形式の場合は従来通り
+              await window.electronAPI.saveCSVFile(filename, csv);
+            }
           } catch (error) {
-            alert(`グループ「${group}」のCSVファイルの保存に失敗しました。`);
+            alert(`グループ「${group}」のファイルの保存に失敗しました。`);
           }
         } else {
-          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const mimeType = fileFormat === 'txt' ? 'text/plain;charset=utf-8;' : 'text/csv;charset=utf-8;';
+          const blob = new Blob([csv], { type: mimeType });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
@@ -1835,7 +1858,8 @@ export default function Home() {
     sceneIds: string[],
     exportType: 'full' | 'serif-only',
     includeTogaki: boolean,
-    selectedOnly: boolean
+    selectedOnly: boolean,
+    fileFormat?: 'csv' | 'txt'
   ) => {
     sceneIds.forEach(async (sceneId) => {
       const scene = project.scenes.find(s => s.id === sceneId);
@@ -1865,7 +1889,7 @@ export default function Home() {
           });
       } else if (exportType === 'serif-only') {
         rows = targetBlocks
-          .filter(block => block.characterId)
+          .filter(block => includeTogaki ? true : block.characterId) // ト書きを含めるかどうかで制御
           .map(block => [block.text.replace(/\n/g, '\\n')]);
       }
       if (!rows || rows.length === 0) {
@@ -1882,23 +1906,31 @@ export default function Home() {
           ).join(',')
         ).join('\r\n');
       const csv = encodeCSV(rows);
-      const filename = `${project.name || 'project'}_${scene.name}_${exportType}.csv`;
+      const extension = fileFormat === 'txt' ? 'txt' : 'csv';
+      const filename = `${project.name || 'project'}_${scene.name}_${exportType}.${extension}`;
       if (window.electronAPI) {
         try {
-          await window.electronAPI.saveCSVFile(filename, csv);
-          showNotification('CSVファイルを保存しました', 'success');
+          if (fileFormat === 'txt') {
+            // txt形式の場合はUTF-8のカンマ区切りファイルとして保存
+            await window.electronAPI.saveCSVFile(filename, csv);
+          } else {
+            // csv形式の場合は従来通り
+            await window.electronAPI.saveCSVFile(filename, csv);
+          }
+          showNotification(`${extension.toUpperCase()}ファイルを保存しました`, 'success');
         } catch (error) {
-          showNotification('CSVファイルの保存に失敗しました', 'error');
+          showNotification(`${extension.toUpperCase()}ファイルの保存に失敗しました`, 'error');
         }
       } else {
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const mimeType = fileFormat === 'txt' ? 'text/plain;charset=utf-8;' : 'text/csv;charset=utf-8;';
+        const blob = new Blob([csv], { type: mimeType });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = filename;
         a.click();
         URL.revokeObjectURL(url);
-        showNotification('CSVファイルをダウンロードしました', 'success');
+        showNotification(`${extension.toUpperCase()}ファイルをダウンロードしました`, 'success');
       }
     });
   };

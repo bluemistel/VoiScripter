@@ -37,10 +37,10 @@ interface HeaderProps {
   onUpdateCharacter: (character: Character) => void;
   onDeleteCharacter: (id: string) => void;
   onThemeChange: (isDark: boolean) => void;
-  onExportCSV: (includeTogaki?: boolean, selectedOnly?: boolean) => void;
-  onExportSerifOnly: (selectedOnly?: boolean) => void;
+  onExportCSV: (includeTogaki?: boolean, selectedOnly?: boolean, fileFormat?: 'csv' | 'txt') => void;
+  onExportSerifOnly: (selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeTogaki?: boolean) => void;
   onExportCharacterCSV: () => void;
-  onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean, selectedOnly?: boolean) => void;
+  onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean, selectedOnly?: boolean, sceneIds?: string[], fileFormat?: 'csv' | 'txt') => void;
   onExportToClipboard: (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean) => void;
   onExportProjectJson: () => void;
   onImportCSV: (file: File, options?: { mode: 'append' | 'new'; projectName?: string }) => void;
@@ -63,7 +63,7 @@ interface HeaderProps {
   onRenameScene: (sceneId: string, newName: string) => void;
   onDeleteScene: (sceneId: string) => void;
   onSelectScene: (sceneId: string) => void;
-  onExportSceneCSV: (sceneIds: string[], exportType: 'full' | 'serif-only', includeTogaki: boolean, selectedOnly: boolean) => void;
+  onExportSceneCSV: (sceneIds: string[], exportType: 'full' | 'serif-only', includeTogaki: boolean, selectedOnly: boolean, fileFormat?: 'csv' | 'txt') => void;
 }
 
 // CSVインポート時の選択ダイアログ

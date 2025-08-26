@@ -233,6 +233,14 @@ export default function Settings({
               <div className="flex flex-col max-h-[60vh] pr-2">
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
+                <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.1.8</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• デスクトップ版で最後に開いていたウィンドウのサイズと表示位置を記憶する機能を追加(ウィンドウ操作がちょっと重たくなります)</li>
+                      <li>• 最後に開いていたプロジェクトが開かれなかった不具合を修正</li>
+                      <li>• CSV形式とテキスト形式のエクスポートが選択できる機能を追加</li>
+                    </ul>
+                  </div>
 
                   <div>
                     <h4 className="font-medium text-foreground mb-2">v0.1.7</h4>

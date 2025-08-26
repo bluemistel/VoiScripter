@@ -9,14 +9,14 @@ interface CSVExportDialogProps {
   characters: Character[];
   groups: string[];
   selectedBlockIds: string[];
-  onExportCSV: (includeTogaki?: boolean, selectedOnly?: boolean) => void;
-  onExportSerifOnly: (selectedOnly?: boolean) => void;
-  onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean, selectedOnly?: boolean, sceneIds?: string[]) => void;
+  onExportCSV: (includeTogaki?: boolean, selectedOnly?: boolean, fileFormat?: 'csv' | 'txt') => void;
+  onExportSerifOnly: (selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeTogaki?: boolean) => void;
+  onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean, selectedOnly?: boolean, sceneIds?: string[], fileFormat?: 'csv' | 'txt') => void;
   onExportCharacterCSV: () => void;
   onExportToClipboard: (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean) => void;
   scenes: Scene[];
   selectedSceneId: string | null;
-  onExportSceneCSV: (sceneIds: string[], exportType: 'full' | 'serif-only', includeTogaki: boolean, selectedOnly: boolean) => void;
+  onExportSceneCSV: (sceneIds: string[], exportType: 'full' | 'serif-only', includeTogaki: boolean, selectedOnly: boolean, fileFormat?: 'csv' | 'txt') => void;
   onExportProjectJson: () => void;
 }
 
@@ -46,6 +46,7 @@ export default function CSVExportDialog({
   const [activeTab, setActiveTab] = useState<'script' | 'project' | 'character'>('script');
   const [useSceneExport, setUseSceneExport] = useState(false);
   const [sceneCheckboxes, setSceneCheckboxes] = useState<string[]>([]);
+  const [fileFormat, setFileFormat] = useState<'csv' | 'txt'>('csv');
 
   // このuseEffectを削除して、ト書き含めるの切り替えでグループごとエクスポートがリセットされないようにする
 
@@ -138,15 +139,15 @@ export default function CSVExportDialog({
       onExportToClipboard(exportType === 'serif-only', exportSelectedOnly, includeTogaki);
     } else if (useGroupExport && selectedGroups.length > 0) {
       // 特定のシーンのみCSVを出力が有効な場合はsceneCheckboxesを渡す
-      console.log('handleExport: onExportByGroups', { selectedGroups, exportType, includeTogaki, exportSelectedOnly, sceneIds: useSceneExport ? sceneCheckboxes : undefined });
-      onExportByGroups(selectedGroups, exportType, includeTogaki, exportSelectedOnly, useSceneExport ? sceneCheckboxes : undefined);
+      console.log('handleExport: onExportByGroups', { selectedGroups, exportType, includeTogaki, exportSelectedOnly, sceneIds: useSceneExport ? sceneCheckboxes : undefined, fileFormat });
+      onExportByGroups(selectedGroups, exportType, includeTogaki, exportSelectedOnly, useSceneExport ? sceneCheckboxes : undefined, fileFormat);
     } else if (!useGroupExport) {
       if (exportType === 'full') {
-        console.log('handleExport: onExportCSV', { includeTogaki, exportSelectedOnly });
-        onExportCSV(includeTogaki, exportSelectedOnly);
+        console.log('handleExport: onExportCSV', { includeTogaki, exportSelectedOnly, fileFormat });
+        onExportCSV(includeTogaki, exportSelectedOnly, fileFormat);
       } else {
-        console.log('handleExport: onExportSerifOnly', { exportSelectedOnly });
-        onExportSerifOnly(exportSelectedOnly);
+        console.log('handleExport: onExportSerifOnly', { exportSelectedOnly, fileFormat, includeTogaki });
+        onExportSerifOnly(exportSelectedOnly, fileFormat, includeTogaki);
       }
     }
     onClose();
@@ -159,6 +160,7 @@ export default function CSVExportDialog({
     setExportSelectedOnly(false);
     setExportToClipboard(false);
     setActiveTab('script');
+    setFileFormat('csv');
     onClose();
   };
 
@@ -217,7 +219,7 @@ export default function CSVExportDialog({
           <>
             {/* エクスポートタイプ選択 */}
             <div className="mb-4">
-              <span className="text-foreground mb-2 font-semibold">CSVのエクスポート形式(UTF-8)</span>
+              <span className="text-foreground mb-2 font-semibold">エクスポート形式(UTF-8)</span>
               <div className="space-y-2">
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
@@ -231,7 +233,7 @@ export default function CSVExportDialog({
                     }}
                     className="text-primary"
                   />
-                  <span className="text-foreground">話者とセリフの両方をエクスポート<br /><span className="text-xs text-muted-foreground">〈話者,セリフ〉のカンマ区切りのCSV形式で出力します。</span></span>
+                  <span className="text-foreground">話者とセリフの両方をエクスポート<br /><span className="text-xs text-muted-foreground">〈話者,セリフ〉のカンマ区切りの形式で出力します。</span></span>
                   
                 </label>
                 <label className="flex items-center space-x-2 cursor-pointer">
@@ -246,7 +248,7 @@ export default function CSVExportDialog({
                     }}
                     className="text-primary"
                   />
-                  <span className="text-foreground">セリフのみをエクスポート<br /><span className="text-xs text-muted-foreground">CSV形式でセリフを出力します。インポート未対応のソフト向け。</span></span>
+                  <span className="text-foreground">セリフのみをエクスポート<br /><span className="text-xs text-muted-foreground">セリフのみ出力します。インポート未対応のソフト向け。</span></span>
                 </label>
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
@@ -267,6 +269,23 @@ export default function CSVExportDialog({
                 </label>
               </div>
             </div>
+
+            {/* ファイル形式選択 */}
+            {!exportToClipboard && (
+              <div className="mb-4">
+                <label className="block text-foreground mb-2 font-semibold">
+                  ファイル形式
+                </label>
+                <select
+                  value={fileFormat}
+                  onChange={(e) => setFileFormat(e.target.value as 'csv' | 'txt')}
+                  className="w-full p-2 border rounded bg-background text-foreground border-border focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20"
+                >
+                  <option value="csv">.csv (CSV形式で保存)</option>
+                  <option value="txt">.txt (テキスト形式で保存)</option>
+                </select>
+              </div>
+            )}
 
             {/* エクスポート用のオプション選択チェックボックス */}            
             <span className="text-foreground mb-2 font-semibold">エクスポートオプション</span>
@@ -476,7 +495,8 @@ export default function CSVExportDialog({
                 sceneCheckboxes,
                 selectedGroups,
                 exportToClipboard,
-                activeTab
+                activeTab,
+                fileFormat
               });
               if (exportType === 'character-setting') {
                 onExportCharacterCSV();
@@ -487,7 +507,7 @@ export default function CSVExportDialog({
               } else if (useGroupExport && selectedGroups.length > 0) {
                 handleExport(exportType as 'full' | 'serif-only', includeTogaki);
               } else if (useSceneExport && sceneCheckboxes.length > 0 && !exportToClipboard) {
-                onExportSceneCSV(sceneCheckboxes, exportType as 'full' | 'serif-only', includeTogaki, exportSelectedOnly);
+                onExportSceneCSV(sceneCheckboxes, exportType as 'full' | 'serif-only', includeTogaki, exportSelectedOnly, fileFormat);
                 handleClose();
               } else if (exportType === 'full' || exportType === 'serif-only' || exportToClipboard) {
                 handleExport(exportType as 'full' | 'serif-only', includeTogaki);
