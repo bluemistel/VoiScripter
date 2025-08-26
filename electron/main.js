@@ -158,10 +158,42 @@ function createSplashWindow() {
 }
 
 function createWindow() {
+  // 保存されたウィンドウサイズと位置を読み込み
+  let windowBounds = { width: 1200, height: 800, x: undefined, y: undefined };
+  try {
+    const settingsPath = path.join(app.getPath('userData'), 'window-bounds.json');
+    if (fs.existsSync(settingsPath)) {
+      const bounds = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      // 画面サイズをチェックして、画面外にウィンドウが表示されないようにする
+      const { screen } = require('electron');
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+      
+      if (bounds.width && bounds.width >= 800 && bounds.width <= screenWidth) {
+        windowBounds.width = bounds.width;
+      }
+      if (bounds.height && bounds.height >= 600 && bounds.height <= screenHeight) {
+        windowBounds.height = bounds.height;
+      }
+      if (bounds.x !== undefined && bounds.x >= 0 && bounds.x + windowBounds.width <= screenWidth) {
+        windowBounds.x = bounds.x;
+      }
+      if (bounds.y !== undefined && bounds.y >= 0 && bounds.y + windowBounds.height <= screenHeight) {
+        windowBounds.y = bounds.y;
+      }
+    }
+  } catch (error) {
+    if (isDev) {
+      console.error('ウィンドウサイズ読み込みエラー:', error);
+    }
+  }
+
   // メインウィンドウを作成
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: windowBounds.width,
+    height: windowBounds.height,
+    x: windowBounds.x,
+    y: windowBounds.y,
     minWidth: 800,
     minHeight: 600,
     webPreferences: {
@@ -280,6 +312,64 @@ function createWindow() {
   mainWindow.on('blur', () => {
     // ウィンドウがフォーカスを失った時にレンダラープロセスに通知
     mainWindow.webContents.send('window-blurred');
+  });
+
+  // ウィンドウサイズと位置の変更を監視して保存
+  let saveWindowBoundsTimeout;
+  let lastSavedBounds = null;
+  
+  const saveWindowBounds = () => {
+    try {
+      const bounds = mainWindow.getBounds();
+      
+      // 前回保存した値と同じ場合は保存しない
+      if (lastSavedBounds && 
+          lastSavedBounds.width === bounds.width && 
+          lastSavedBounds.height === bounds.height &&
+          lastSavedBounds.x === bounds.x && 
+          lastSavedBounds.y === bounds.y) {
+        return;
+      }
+      
+      const settingsPath = path.join(app.getPath('userData'), 'window-bounds.json');
+      fs.writeFileSync(settingsPath, JSON.stringify(bounds), 'utf8');
+      lastSavedBounds = bounds;
+      
+      if (isDev) {
+        console.log('ウィンドウサイズ保存:', bounds);
+      }
+    } catch (error) {
+      if (isDev) {
+        console.error('ウィンドウサイズ保存エラー:', error);
+      }
+    }
+  };
+  
+  // 初期値を設定
+  lastSavedBounds = windowBounds;
+
+  // ウィンドウサイズ変更時（操作が落ち着いてから保存）
+  mainWindow.on('resize', () => {
+    if (saveWindowBoundsTimeout) {
+      clearTimeout(saveWindowBoundsTimeout);
+    }
+    saveWindowBoundsTimeout = setTimeout(saveWindowBounds, 100);
+  });
+  
+  // ウィンドウ移動時（操作が落ち着いてから保存）
+  mainWindow.on('move', () => {
+    if (saveWindowBoundsTimeout) {
+      clearTimeout(saveWindowBoundsTimeout);
+    }
+    saveWindowBoundsTimeout = setTimeout(saveWindowBounds, 100);
+  });
+  
+  // ウィンドウが閉じられる前に最終保存
+  mainWindow.on('close', () => {
+    if (saveWindowBoundsTimeout) {
+      clearTimeout(saveWindowBoundsTimeout);
+    }
+    saveWindowBounds();
   });
 
   // ウィンドウが閉じられた時の処理
@@ -670,6 +760,23 @@ ipcMain.handle('saveCSVFile', async (event, defaultName, csvContent) => {
     }
     throw error;
   }
+});
+
+// ウィンドウサイズと位置の取得
+ipcMain.handle('get-window-bounds', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    return mainWindow.getBounds();
+  }
+  return null;
+});
+
+// ウィンドウサイズと位置の設定
+ipcMain.handle('set-window-bounds', (event, bounds) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setBounds(bounds);
+    return true;
+  }
+  return false;
 }); 
 
 // ディレクトリ間データ移動

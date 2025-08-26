@@ -32,7 +32,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onWindowBlurred: (callback) => ipcRenderer.on('window-blurred', callback),
   
   // イベントリスナーの削除
-  removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
+  removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
+  
+  // ウィンドウサイズと位置の取得
+  getWindowBounds: () => ipcRenderer.invoke('get-window-bounds'),
+  
+  // ウィンドウサイズと位置の設定
+  setWindowBounds: (bounds) => ipcRenderer.invoke('set-window-bounds', bounds)
 });
 
 // セキュリティのため、Node.jsのAPIは直接公開しない
