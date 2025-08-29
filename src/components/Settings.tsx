@@ -233,7 +233,15 @@ export default function Settings({
               <div className="flex flex-col max-h-[60vh] pr-2">
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
-                <div>
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.1.9</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• エクスポート時のダイアログ、キャラクター設定のダイアログをウィンドウの表示領域が足りない場合にスクロールできるように改修</li>
+                      <li>• エクスポート時、特定の組み合わせかつエクスポートの切り替えが行われた際、一部エクスポートオプションのチェックボックスが不正の組み合わせになってしまう不具合を修正</li>
+                    </ul>
+                  </div>
+
+                  <div>
                     <h4 className="font-medium text-foreground mb-2">v0.1.8</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                       <li>• デスクトップ版で最後に開いていたウィンドウのサイズと表示位置を記憶する機能を追加(ウィンドウ操作がちょっと重たくなります)</li>

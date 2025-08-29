@@ -254,23 +254,24 @@ export default function CSVExportDialog({
                   />
                   <span className="text-foreground">セリフのみをエクスポート<br /><span className="text-xs text-muted-foreground">セリフのみ出力します。インポート未対応のソフト向け。</span></span>
                 </label>
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="exportType"
-                    value="clipboard"
-                    checked={exportToClipboard}
-                    onChange={(e) => {
-                      setExportToClipboard(e.target.checked);
-                      if (e.target.checked) {
-                        setExportType('serif-only');
-                        setUseGroupExport(false);
-                      }
-                    }}
-                    className="text-primary"
-                  />
-                  <span className="text-foreground">クリップボードにセリフをコピーする<br /><span className="text-xs text-muted-foreground">別のソフトへ貼り付ける場合に使用します。</span></span>
-                </label>
+                                 <label className="flex items-center space-x-2 cursor-pointer">
+                   <input
+                     type="radio"
+                     name="exportType"
+                     value="clipboard"
+                     checked={exportToClipboard}
+                     onChange={(e) => {
+                       setExportToClipboard(e.target.checked);
+                       if (e.target.checked) {
+                         setExportType('serif-only');
+                         setUseGroupExport(false);
+                         setUseSceneExport(false);
+                       }
+                     }}
+                     className="text-primary"
+                   />
+                   <span className="text-foreground">クリップボードにセリフをコピーする<br /><span className="text-xs text-muted-foreground">別のソフトへ貼り付ける場合に使用します。</span></span>
+                 </label>
               </div>
             </div>
 
@@ -299,7 +300,12 @@ export default function CSVExportDialog({
                 <input
                   type="checkbox"
                   checked={useSceneExport}
-                  onChange={e => setUseSceneExport(e.target.checked)}
+                  onChange={(e) => {
+                    setUseSceneExport(e.target.checked);
+                    if (e.target.checked) {
+                      setExportSelectedOnly(false);
+                    }
+                  }}
                   className="text-primary"
                   disabled={exportToClipboard}
                 />
