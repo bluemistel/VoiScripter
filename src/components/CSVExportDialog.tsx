@@ -167,52 +167,56 @@ export default function CSVExportDialog({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300">
-      <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6 transition-opacity duration-300">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-foreground">エクスポート</h3>
-          <button
-            onClick={handleClose}
-            className="text-muted-foreground hover:text-foreground text-2xl"
-            title="閉じる"
-          >
-            ×
-          </button>
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300 p-4">
+      <div className="bg-background border rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col transition-opacity duration-300">
+        <div className="flex-shrink-0 p-6 pb-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-foreground">エクスポート</h3>
+            <button
+              onClick={handleClose}
+              className="text-muted-foreground hover:text-foreground text-2xl"
+              title="閉じる"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* タブ切り替え */}
+          <div className="flex border-b mb-4">
+            <button
+              onClick={() => setActiveTab('script')}
+              className={`flex-1 px-4 py-2 font-medium transition-colors ${
+                activeTab === 'script'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              台本
+            </button>
+            <button
+              onClick={() => setActiveTab('project')}
+              className={`flex-1 px-4 py-2 font-medium transition-colors ${
+                activeTab === 'project'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              プロジェクト
+            </button>
+            <button
+              onClick={() => setActiveTab('character')}
+              className={`flex-1 px-4 py-2 font-medium transition-colors ${
+                activeTab === 'character'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              キャラクター
+            </button>
+          </div>
         </div>
 
-        {/* タブ切り替え */}
-        <div className="flex border-b mb-4">
-          <button
-            onClick={() => setActiveTab('script')}
-            className={`flex-1 px-4 py-2 font-medium transition-colors ${
-              activeTab === 'script'
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            台本
-          </button>
-          <button
-            onClick={() => setActiveTab('project')}
-            className={`flex-1 px-4 py-2 font-medium transition-colors ${
-              activeTab === 'project'
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            プロジェクト
-          </button>
-          <button
-            onClick={() => setActiveTab('character')}
-            className={`flex-1 px-4 py-2 font-medium transition-colors ${
-              activeTab === 'character'
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            キャラクター
-          </button>
-        </div>
+        <div className="flex-1 overflow-y-auto px-6 pb-6">
 
         {/* 台本タブの内容 */}
         {activeTab === 'script' && (
@@ -517,6 +521,7 @@ export default function CSVExportDialog({
           >
             {exportToClipboard ? 'クリップボードに出力' : 'エクスポート'}
           </button>
+        </div>
         </div>
       </div>
     </div>

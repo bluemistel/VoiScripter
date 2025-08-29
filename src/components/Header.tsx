@@ -534,29 +534,33 @@ export default function Header(props: HeaderProps) {
         </div>
       )}
       {isCharacterModalOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300">
-          <div className="bg-card border rounded-lg p-6 w-full max-w-3xl mx-4 shadow-xl transition-opacity duration-300">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-card-foreground">キャラクター管理</h2>
-              <button
-                onClick={() => setIsCharacterModalOpen(false)}
-                className="text-muted-foreground hover:text-foreground text-2xl"
-                title="閉じる"
-              >
-                ×
-              </button>
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300 p-4">
+          <div className="bg-card border rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-xl transition-opacity duration-300">
+            <div className="flex-shrink-0 p-6 pb-4">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-card-foreground">キャラクター管理</h2>
+                <button
+                  onClick={() => setIsCharacterModalOpen(false)}
+                  className="text-muted-foreground hover:text-foreground text-2xl"
+                  title="閉じる"
+                >
+                  ×
+                </button>
+              </div>
             </div>
-            <CharacterManager
-              characters={characters}
-              onAddCharacter={onAddCharacter}
-              onUpdateCharacter={onUpdateCharacter}
-              onDeleteCharacter={onDeleteCharacter}
-              groups={groups}
-              onAddGroup={onAddGroup}
-              onDeleteGroup={onDeleteGroup}
-              onReorderCharacters={onReorderCharacters}
-              onReorderGroups={onReorderGroups}
-            />
+            <div className="flex-1 overflow-y-auto px-6 pb-6">
+              <CharacterManager
+                characters={characters}
+                onAddCharacter={onAddCharacter}
+                onUpdateCharacter={onUpdateCharacter}
+                onDeleteCharacter={onDeleteCharacter}
+                groups={groups}
+                onAddGroup={onAddGroup}
+                onDeleteGroup={onDeleteGroup}
+                onReorderCharacters={onReorderCharacters}
+                onReorderGroups={onReorderGroups}
+              />
+            </div>
           </div>
         </div>
       )}
