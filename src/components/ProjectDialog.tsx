@@ -8,13 +8,19 @@ interface ProjectDialogProps {
   onClose: () => void;
   onConfirm: (projectName: string) => void;
   existingProjects: string[];
+  title?: string;
+  submitButtonText?: string;
+  placeholder?: string;
 }
 
 export default function ProjectDialog({
   isOpen,
   onClose,
   onConfirm,
-  existingProjects
+  existingProjects,
+  title = '新しいプロジェクト',
+  submitButtonText = '作成',
+  placeholder = 'プロジェクト名を入力'
 }: ProjectDialogProps) {
   const [projectName, setProjectName] = useState('');
   const [error, setError] = useState('');
@@ -50,7 +56,7 @@ export default function ProjectDialog({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4">
         <div className="flex justify-between items-center p-4 border-b">
-          <h2 className="text-lg font-semibold text-foreground">新しいプロジェクト</h2>
+          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
           <button
             onClick={handleCancel}
             className="p-1 hover:bg-accent rounded transition-colors"
@@ -73,7 +79,7 @@ export default function ProjectDialog({
                 setError('');
               }}
               className="w-full p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
-              placeholder="プロジェクト名を入力"
+              placeholder={placeholder}
               autoFocus
             />
             {error && (
@@ -93,7 +99,7 @@ export default function ProjectDialog({
               type="submit"
               className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
             >
-              作成
+              {submitButtonText}
             </button>
           </div>
         </form>

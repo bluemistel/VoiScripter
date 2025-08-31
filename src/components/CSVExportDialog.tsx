@@ -18,6 +18,7 @@ interface CSVExportDialogProps {
   selectedSceneId: string | null;
   onExportSceneCSV: (sceneIds: string[], exportType: 'full' | 'serif-only', includeTogaki: boolean, selectedOnly: boolean, fileFormat?: 'csv' | 'txt') => void;
   onExportProjectJson: () => void;
+  project: any; // プロジェクトデータ
 }
 
 export default function CSVExportDialog({
@@ -34,7 +35,8 @@ export default function CSVExportDialog({
   scenes,
   selectedSceneId,
   onExportSceneCSV,
-  onExportProjectJson
+  onExportProjectJson,
+  project
 }: CSVExportDialogProps) {
   type ExportType = 'full' | 'serif-only' | 'character-setting' | 'project';
   const [exportType, setExportType] = useState<ExportType>('full');

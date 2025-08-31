@@ -37,6 +37,11 @@ interface ScriptEditorProps {
   selectedBlockIds: string[];
   onSelectedBlockIdsChange: (selectedBlockIds: string[]) => void;
   onOpenCSVExport: () => void;
+  characters: Character[];
+  onDuplicateBlock: (blockId: string) => void;
+  onSelectAllBlocks: () => void;
+  onDeselectAllBlocks: () => void;
+  onToggleBlockSelection: (blockId: string) => void;
 }
 
 interface SortableBlockProps {

@@ -10,7 +10,8 @@ import {
   Cog6ToothIcon,
   PencilIcon,
   Bars3Icon,
-  PlusIcon
+  PlusIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 import CharacterManager from './CharacterManager';
 import Settings from './Settings';
@@ -64,6 +65,12 @@ interface HeaderProps {
   onDeleteScene: (sceneId: string) => void;
   onSelectScene: (sceneId: string) => void;
   onExportSceneCSV: (sceneIds: string[], exportType: 'full' | 'serif-only', includeTogaki: boolean, selectedOnly: boolean, fileFormat?: 'csv' | 'txt') => void;
+  onNewProject: () => void;
+  project: Project;
+  onOpenSettings: () => void;
+  projectList: string[];
+  onProjectChange: (projectId: string) => void;
+  onDeleteProject: () => void;
 }
 
 // CSVインポート時の選択ダイアログ
@@ -172,7 +179,13 @@ export default function Header(props: HeaderProps) {
     onRenameScene,
     onDeleteScene,
     onSelectScene,
-    onExportSceneCSV
+    onExportSceneCSV,
+    onNewProject,
+    project,
+    onOpenSettings,
+    projectList,
+    onProjectChange,
+    onDeleteProject
   } = props;
   const logoPath = useLogoPath();
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
@@ -380,12 +393,23 @@ export default function Header(props: HeaderProps) {
   };
 
   return (
-    <header className="bg-background shadow-sm sticky top-0 z-50 border-b">
+    <header className="bg-background shadow-sm border-b">
+      {/* 上部ヘッダー（スクロールで非表示） */}
       <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-16">
         <h1 className="text-2xl font-bold text-primary tracking-tight flex items-center">
           <img src={logoPath} alt="VoiScripter" className="h-8 mr-2" />
-          <span className="ml-4 pr-6 text-lg font-normal text-foreground align-middle group relative">
-            {projectName}
+          <div className="ml-4 pr-6 text-lg font-normal text-foreground align-middle group relative">
+            <select
+              value={projectName}
+              onChange={(e) => onProjectChange(e.target.value)}
+              className="bg-background border-none text-foreground cursor-pointer hover:bg-accent rounded px-2 py-1 focus:bg-background focus:outline-none"
+            >
+              {projectList.map(projectId => (
+                <option key={projectId} value={projectId}>
+                  {projectId === 'default' ? '新しいプロジェクト' : projectId}
+                </option>
+              ))}
+            </select>
             <button
               onClick={() => setIsRenameDialogOpen(true)}
               className="ml-2 p-1 rounded hover:bg-accent align-middle hidden group-hover:inline-block absolute top-1/2 -translate-y-1/2"
@@ -393,9 +417,16 @@ export default function Header(props: HeaderProps) {
             >
               <PencilIcon className="w-5 h-5 inline-block" />
             </button>
-          </span>
+          </div>
         </h1>
         <div className="flex items-center space-x-2">
+          <button
+            onClick={onNewProject}
+            className="p-2 text-primary hover:bg-accent rounded-lg transition"
+            title="新しいプロジェクト"
+          >
+            <PlusIcon className="w-7 h-7"/>
+          </button>
           <button
             onClick={() => setIsCSVExportDialogOpen(true)}
             className="p-2 text-primary hover:bg-accent rounded-lg transition"
@@ -462,16 +493,23 @@ export default function Header(props: HeaderProps) {
             )}
           </button>
           <button
-            onClick={() => setIsSettingsOpen(true)}
+            onClick={onOpenSettings}
             className="p-2 text-primary hover:bg-accent rounded-lg transition"
             title="設定"
           >
             <Cog6ToothIcon className="w-7 h-7" />
           </button>
+          <button
+            onClick={onDeleteProject}
+            className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition"
+            title="プロジェクトを削除"
+          >
+            <TrashIcon className="w-7 h-7" />
+          </button>
         </div>
       </div>
-      {/* headerとmainの間にシーンタブ＋追加ボタン */}
-      <div className="flex items-center space-x-2 px-4 py-2 border-b bg-background">
+      {/* 下部ヘッダー（シーンタブ、固定表示） */}
+      <div className="sticky top-0 z-40 flex items-center space-x-2 px-4 py-2 border-b bg-background">
         {scenes.length > 1 && (
           <div
             ref={sceneTabContainerRef}
@@ -550,6 +588,8 @@ export default function Header(props: HeaderProps) {
             </div>
             <div className="flex-1 overflow-y-auto px-6 pb-6">
               <CharacterManager
+                isOpen={true}
+                onClose={() => {}}
                 characters={characters}
                 onAddCharacter={onAddCharacter}
                 onUpdateCharacter={onUpdateCharacter}
@@ -589,6 +629,7 @@ export default function Header(props: HeaderProps) {
         selectedSceneId={selectedSceneId}
         onExportSceneCSV={onExportSceneCSV}
         onExportProjectJson={onExportProjectJson}
+        project={project}
       />
       <ImportChoiceDialog
          isOpen={isImportChoiceDialogOpen && !!pendingImportFile && !!pendingImportType}

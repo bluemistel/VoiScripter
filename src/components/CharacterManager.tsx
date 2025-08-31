@@ -34,6 +34,8 @@ interface CharacterManagerProps {
   onDeleteGroup: (group: string) => void;
   onReorderCharacters?: (newOrder: Character[]) => void; // 並び替え用
   onReorderGroups?: (newOrder: string[]) => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 function SortableCharacter({ character, isEditing, children, ...props }: any) {
@@ -93,7 +95,9 @@ export default function CharacterManager({
   onAddGroup,
   onDeleteGroup,
   onReorderCharacters,
-  onReorderGroups
+  onReorderGroups,
+  isOpen,
+  onClose
 }: CharacterManagerProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [isEditingId, setIsEditingId] = useState<string | null>(null);
@@ -226,221 +230,242 @@ export default function CharacterManager({
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-      <div className="space-y-4">
-        {/* キャラクター一覧を2段組グリッドで表示＋ドラッグ＆ドロップ */}
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={characters.map(c => c.id)} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {characters.map(character => (
-                <SortableCharacter key={character.id} character={character} isEditing={isEditingId === character.id}>
-                  {isEditingId === character.id ? (
-                    <form onSubmit={handleEditSubmit} className="flex-1 space-y-2">
-                      <input
-                        type="text"
-                        value={editCharacter?.name || ''}
-                        onChange={e => setEditCharacter(prev => ({
-                          ...(prev ?? {}),
-                          name: e.target.value
-                        }))}
-                        placeholder="キャラクター名"
-                        className="w-full p-2 border rounded bg-background text-foreground"
-                        required
-                      />
-                      <select
-                        value={editCharacter?.group || 'なし'}
-                        onChange={e => setEditCharacter(prev => ({
-                          ...(prev ?? {}),
-                          group: e.target.value
-                        }))}
-                        className="w-full p-2 border rounded bg-background text-foreground"
-                      >
-                        <option value="なし">なし</option>
-                        {groups.map(group => (
-                          <option key={group} value={group}>{group}</option>
-                        ))}
-                      </select>
-                      <div className="flex items-center space-x-2 mb-1">
-                        <input
-                          type="text"
-                          value={editCharacter?.emotions?.normal?.iconUrl || ''}
-                          onChange={e => setEditCharacter(prev => ({
-                            ...(prev ?? {}),
-                            emotions: {
-                              normal: { iconUrl: e.target.value }
-                            }
-                          } as Partial<Character>))}
-                          placeholder="アイコンURLまたは画像を選択"
-                          className="flex-1 p-2 border rounded bg-background text-foreground"
-                        />
-                        <label className="cursor-pointer bg-primary text-primary-foreground px-3 py-1 rounded text-xs hover:bg-primary/90 transition-colors">
-                          ファイルを選択
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={e => handleIconFileChange(e, true)}
-                            className="hidden"
-                          />
-                        </label>
-                      </div>
-                      <div className="flex justify-end space-x-2">
-                        <button
-                          type="button"
-                          onClick={() => { setIsEditingId(null); setEditCharacter(null); }}
-                          className="px-3 py-1 text-sm text-muted-foreground hover:bg-accent rounded"
-                        >
-                          キャンセル
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
-                        >
-                          保存
-                        </button>
-                      </div>
-                    </form>
-                  ) : (
-                    <>
-                      <div>
-                        <div className="flex flex-wrap gap-2 md:mt-0">
-                          <div className="flex items-center space-x-1">
-                            {character.emotions.normal.iconUrl ? (
-                              <img src={character.emotions.normal.iconUrl} alt={character.name} className="w-14 h-14 rounded-full border object-cover" />
-                            ) : (
-                              <div 
-                                className="relative w-14 h-14 rounded-full border flex items-center justify-center text-center overflow-hidden group"
-                                style={{ backgroundColor: character.backgroundColor || '#e5e7eb' }}
-                              >
-                                <span 
-                                  className={`text-xs font-bold text-foreground px-1 max-w-[80px] whitespace-no-wrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}
-                                  style={{
-                                    textShadow: `
-                                      -1px -1px 0 var(--color-background),  
-                                       1px -1px 0 var(--color-background),
-                                      -1px  1px 0 var(--color-background),
-                                       1px  1px 0 var(--color-background)
-                                    `
-                                  }}
-                                >
-                                  {character.name.length > 8 ? character.name.slice(0, 8) + '…' : character.name}
-                                </span>
-                                {/* ペンアイコン（hover時のみ表示） */}
-                                <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                  <button
-                                    onClick={() => openColorPicker(character.id, character.backgroundColor || '#e5e7eb')}
-                                    className="p-1 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
-                                  >
-                                    <PencilIcon className="w-3 h-3 text-gray-700" />
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-foreground ">{character.name}</h3>
-                            <p className="text-sm text-muted-foreground mt-1">グループ: {character.group || 'なし'}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-1 ml-auto items-end">
-                        <button onClick={() => {
-                          setIsEditingId(character.id);
-                          setEditCharacter({ ...character });
-                        }} className="p-2 text-destructive hover:bg-destructive/10 rounded flex items-center">
-                          <PencilIcon className="w-5 h-5" />
-                          <span className="ml-1 text-xs">編集</span>
-                        </button>
-                        <button onClick={() => onDeleteCharacter(character.id)} className="p-2 text-destructive hover:bg-destructive/10 rounded flex items-center">
-                          <TrashIcon className="w-5 h-5" />
-                          <span className="ml-1 text-xs">削除</span>
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </SortableCharacter>
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
-        {isAdding ? (
-          <form onSubmit={handleSubmit} className="border rounded p-3 space-y-3 bg-background">
-            <input
-              type="text"
-              value={newCharacter.name}
-              onChange={e => setNewCharacter(prev => ({ ...prev, name: e.target.value }))}
-              placeholder="キャラクター名"
-              className="w-full p-2 border rounded bg-background text-foreground"
-              required
-            />
-            <select
-              value={newCharacter.group || 'なし'}
-              onChange={e => setNewCharacter(prev => ({ ...prev, group: e.target.value }))}
-              className="w-full p-2 border rounded bg-background text-foreground"
-            >
-              <option value="なし">なし</option>
-              {groups.map(group => (
-                <option key={group} value={group}>{group}</option>
-              ))}
-            </select>
-            <div className="flex items-center space-x-2 mb-1">
-              <input
-                type="text"
-                value={newCharacter.emotions?.normal?.iconUrl || ''}
-                onChange={e => setNewCharacter(prev => ({
-                  ...prev,
-                  emotions: {
-                    normal: { iconUrl: e.target.value }
-                  }
-                } as Partial<Character>))}
-                placeholder="アイコンURLまたは画像を選択"
-                className="flex-1 p-2 border rounded text-foreground"
-              />
-              <label className="cursor-pointer bg-primary text-primary-foreground px-3 py-1 rounded text-xs hover:bg-primary/90 transition-colors">
-                ファイルを選択
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={e => handleIconFileChange(e, false)}
-                  className="hidden"
-                />
-              </label>
-            </div>
-            <div className="flex justify-end space-x-2">
-              <button
-                type="button"
-                onClick={() => setIsAdding(false)}
-                className="px-3 py-1 text-sm text-muted-foreground hover:bg-accent rounded"
-              >
-                キャンセル
-              </button>
-              <button
-                type="submit"
-                className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
-              >
-                追加
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="flex space-x-2">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-background border rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex-shrink-0 p-6 pb-4 border-b">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold text-foreground">キャラクター管理</h3>
             <button
-              onClick={() => setIsGroupSettingsOpen(true)}
-              className="flex-1 flex items-center justify-center space-x-2 p-2 border rounded hover:bg-muted/80 text-foreground"
-              style={{ flex: '0 0 33.333%', backgroundColor: 'var(--color-muted)', color: 'var(--color-muted-foreground)' }}
+              onClick={onClose}
+              className="text-muted-foreground hover:text-foreground text-2xl"
+              title="閉じる"
             >
-              <Cog6ToothIcon className="w-4 h-4" />
-              <span>グループ設定</span>
-            </button>
-            <button
-              onClick={() => setIsAdding(true)}
-              className="flex-1 flex items-center justify-center space-x-2 p-2 border rounded hover:bg-primary/80 text-foreground"
-              style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-primary-foreground)' }}
-            >
-              <PlusIcon className="w-5 h-5" />
-              <span>キャラクターを追加</span>
+              ×
             </button>
           </div>
-        )}
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-4">
+            {/* キャラクター一覧を2段組グリッドで表示＋ドラッグ＆ドロップ */}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={characters.map(c => c.id)} strategy={rectSortingStrategy}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {characters.map(character => (
+                    <SortableCharacter key={character.id} character={character} isEditing={isEditingId === character.id}>
+                      {isEditingId === character.id ? (
+                        <form onSubmit={handleEditSubmit} className="flex-1 space-y-2">
+                          <input
+                            type="text"
+                            value={editCharacter?.name || ''}
+                            onChange={e => setEditCharacter(prev => ({
+                              ...(prev ?? {}),
+                              name: e.target.value
+                            }))}
+                            placeholder="キャラクター名"
+                            className="w-full p-2 border rounded bg-background text-foreground"
+                            required
+                          />
+                          <select
+                            value={editCharacter?.group || 'なし'}
+                            onChange={e => setEditCharacter(prev => ({
+                              ...(prev ?? {}),
+                              group: e.target.value
+                            }))}
+                            className="w-full p-2 border rounded bg-background text-foreground"
+                          >
+                            <option value="なし">なし</option>
+                            {groups.map(group => (
+                              <option key={group} value={group}>{group}</option>
+                            ))}
+                          </select>
+                          <div className="flex items-center space-x-2 mb-1">
+                            <input
+                              type="text"
+                              value={editCharacter?.emotions?.normal?.iconUrl || ''}
+                              onChange={e => setEditCharacter(prev => ({
+                                ...(prev ?? {}),
+                                emotions: {
+                                  normal: { iconUrl: e.target.value }
+                                }
+                              } as Partial<Character>))}
+                              placeholder="アイコンURLまたは画像を選択"
+                              className="flex-1 p-2 border rounded bg-background text-foreground"
+                            />
+                            <label className="cursor-pointer bg-primary text-primary-foreground px-3 py-1 rounded text-xs hover:bg-primary/90 transition-colors">
+                              ファイルを選択
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={e => handleIconFileChange(e, true)}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+                          <div className="flex justify-end space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => { setIsEditingId(null); setEditCharacter(null); }}
+                              className="px-3 py-1 text-sm text-muted-foreground hover:bg-accent rounded"
+                            >
+                              キャンセル
+                            </button>
+                            <button
+                              type="submit"
+                              className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                            >
+                              保存
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <>
+                          <div>
+                            <div className="flex flex-wrap gap-2 md:mt-0">
+                              <div className="flex items-center space-x-1">
+                                {character.emotions.normal.iconUrl ? (
+                                  <img src={character.emotions.normal.iconUrl} alt={character.name} className="w-14 h-14 rounded-full border object-cover" />
+                                ) : (
+                                  <div 
+                                    className="relative w-14 h-14 rounded-full border flex items-center justify-center text-center overflow-hidden group"
+                                    style={{ backgroundColor: character.backgroundColor || '#e5e7eb' }}
+                                  >
+                                    <span 
+                                      className={`text-xs font-bold text-foreground px-1 max-w-[80px] whitespace-no-wrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}
+                                      style={{
+                                        textShadow: `
+                                          -1px -1px 0 var(--color-background),  
+                                           1px -1px 0 var(--color-background),
+                                          -1px  1px 0 var(--color-background),
+                                           1px  1px 0 var(--color-background)
+                                        `
+                                      }}
+                                    >
+                                      {character.name.length > 8 ? character.name.slice(0, 8) + '…' : character.name}
+                                    </span>
+                                    {/* ペンアイコン（hover時のみ表示） */}
+                                    <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                      <button
+                                        onClick={() => openColorPicker(character.id, character.backgroundColor || '#e5e7eb')}
+                                        className="p-1 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+                                      >
+                                        <PencilIcon className="w-3 h-3 text-gray-700" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <h3 className="font-semibold text-foreground ">{character.name}</h3>
+                                <p className="text-sm text-muted-foreground mt-1">グループ: {character.group || 'なし'}</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1 ml-auto items-end">
+                            <button onClick={() => {
+                              setIsEditingId(character.id);
+                              setEditCharacter({ ...character });
+                            }} className="p-2 text-destructive hover:bg-destructive/10 rounded flex items-center">
+                              <PencilIcon className="w-5 h-5" />
+                              <span className="ml-1 text-xs">編集</span>
+                            </button>
+                            <button onClick={() => onDeleteCharacter(character.id)} className="p-2 text-destructive hover:bg-destructive/10 rounded flex items-center">
+                              <TrashIcon className="w-5 h-5" />
+                              <span className="ml-1 text-xs">削除</span>
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </SortableCharacter>
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+            {isAdding ? (
+              <form onSubmit={handleSubmit} className="border rounded p-3 space-y-3 bg-background">
+                <input
+                  type="text"
+                  value={newCharacter.name}
+                  onChange={e => setNewCharacter(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="キャラクター名"
+                  className="w-full p-2 border rounded bg-background text-foreground"
+                  required
+                />
+                <select
+                  value={newCharacter.group || 'なし'}
+                  onChange={e => setNewCharacter(prev => ({ ...prev, group: e.target.value }))}
+                  className="w-full p-2 border rounded bg-background text-foreground"
+                >
+                  <option value="なし">なし</option>
+                  {groups.map(group => (
+                    <option key={group} value={group}>{group}</option>
+                  ))}
+                </select>
+                <div className="flex items-center space-x-2 mb-1">
+                  <input
+                    type="text"
+                    value={newCharacter.emotions?.normal?.iconUrl || ''}
+                    onChange={e => setNewCharacter(prev => ({
+                      ...prev,
+                      emotions: {
+                        normal: { iconUrl: e.target.value }
+                      }
+                    } as Partial<Character>))}
+                    placeholder="アイコンURLまたは画像を選択"
+                    className="flex-1 p-2 border rounded text-foreground"
+                  />
+                  <label className="cursor-pointer bg-primary text-primary-foreground px-3 py-1 rounded text-xs hover:bg-primary/90 transition-colors">
+                    ファイルを選択
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={e => handleIconFileChange(e, false)}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAdding(false)}
+                    className="px-3 py-1 text-sm text-muted-foreground hover:bg-accent rounded"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                  >
+                    追加
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setIsGroupSettingsOpen(true)}
+                  className="flex-1 flex items-center justify-center space-x-2 p-2 border rounded hover:bg-muted/80 text-foreground"
+                  style={{ flex: '0 0 33.333%', backgroundColor: 'var(--color-muted)', color: 'var(--color-muted-foreground)' }}
+                >
+                  <Cog6ToothIcon className="w-4 h-4" />
+                  <span>グループ設定</span>
+                </button>
+                <button
+                  onClick={() => setIsAdding(true)}
+                  className="flex-1 flex items-center justify-center space-x-2 p-2 border rounded hover:bg-primary/80 text-foreground"
+                  style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-primary-foreground)' }}
+                >
+                  <PlusIcon className="w-5 h-5" />
+                  <span>キャラクターを追加</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
       
       {/* グループ設定ダイアログ */}
       {isGroupSettingsOpen && (
