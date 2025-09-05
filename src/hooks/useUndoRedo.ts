@@ -12,6 +12,7 @@ export interface UndoRedoHook {
   undo: () => ProjectHistory | null;
   redo: () => ProjectHistory | null;
   clearHistory: () => void;
+  clearOtherProjectHistory: (currentProjectId: string) => void;
 }
 
 export type ProjectHistory = { project: Project; selectedSceneId: string | null };
@@ -26,40 +27,22 @@ export const useUndoRedo = (
 
   // Undo/Redoスタックの保存
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     if (!projectId || undoStack.length === 0) return;
     
-    // 前回の保存内容と比較して、実際に変更があった場合のみ保存
-    const currentUndoData = JSON.stringify(undoStack);
-    const lastSavedUndoData = localStorage.getItem(`voiscripter_project_${projectId}_undo_lastSaved`);
-    
-    if (lastSavedUndoData === currentUndoData) {
-      return; // 変更がない場合は保存しない
-    }
-    
     const timeoutId = setTimeout(() => {
-      dataManagement.saveData(`voiscripter_project_${projectId}_undo`, currentUndoData);
-      // 保存完了後に最終保存内容を記録
-      localStorage.setItem(`voiscripter_project_${projectId}_undo_lastSaved`, currentUndoData);
+      dataManagement.saveData(`voiscripter_project_${projectId}_undo`, JSON.stringify(undoStack));
     }, 1000); // 1秒後に保存
     
     return () => clearTimeout(timeoutId);
   }, [undoStack, projectId]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     if (!projectId || redoStack.length === 0) return;
     
-    // 前回の保存内容と比較して、実際に変更があった場合のみ保存
-    const currentRedoData = JSON.stringify(redoStack);
-    const lastSavedRedoData = localStorage.getItem(`voiscripter_project_${projectId}_redo_lastSaved`);
-    
-    if (lastSavedRedoData === currentRedoData) {
-      return; // 変更がない場合は保存しない
-    }
-    
     const timeoutId = setTimeout(() => {
-      dataManagement.saveData(`voiscripter_project_${projectId}_redo`, currentRedoData);
-      // 保存完了後に最終保存内容を記録
-      localStorage.setItem(`voiscripter_project_${projectId}_redo_lastSaved`, currentRedoData);
+      dataManagement.saveData(`voiscripter_project_${projectId}_redo`, JSON.stringify(redoStack));
     }, 1000); // 1秒後に保存
     
     return () => clearTimeout(timeoutId);
@@ -97,6 +80,7 @@ export const useUndoRedo = (
 
   // 履歴に追加
   const pushToHistory = (project: Project, selectedSceneId: string | null) => {
+    
     if (isUndoRedoOperation.current) {
       isUndoRedoOperation.current = false;
       return;
@@ -146,6 +130,27 @@ export const useUndoRedo = (
     setRedoStack([]);
   };
 
+  // 他のプロジェクトの履歴を削除（現在のプロジェクト以外）
+  const clearOtherProjectHistory = (currentProjectId: string) => {
+    if (typeof window === 'undefined') return;
+    
+    // localStorageから全てのキーを取得
+    const keys = Object.keys(localStorage);
+    
+    // アンドゥ・リドゥ関連のキーをフィルタリング
+    const undoRedoKeys = keys.filter(key => 
+      key.startsWith('voiscripter_project_') && 
+      (key.endsWith('_undo') || key.endsWith('_redo'))
+    );
+    
+    // 現在のプロジェクト以外のキーを削除
+    undoRedoKeys.forEach(key => {
+      if (!key.includes(`voiscripter_project_${currentProjectId}_`)) {
+        localStorage.removeItem(key);
+      }
+    });
+  };
+
   return {
     undoStack,
     redoStack,
@@ -155,6 +160,7 @@ export const useUndoRedo = (
     pushToHistory,
     undo,
     redo,
-    clearHistory
+    clearHistory,
+    clearOtherProjectHistory
   };
 };

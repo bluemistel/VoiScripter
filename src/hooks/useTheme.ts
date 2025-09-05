@@ -10,6 +10,8 @@ export const useTheme = (): ThemeHook => {
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
     const applyTheme = () => {
       const userTheme = localStorage.getItem('theme');
       const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -35,6 +37,8 @@ export const useTheme = (): ThemeHook => {
   }, []);
 
   const setTheme = (isDark: boolean) => {
+    if (typeof window === 'undefined') return;
+    
     setIsDarkMode(isDark);
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
     document.documentElement.classList.toggle('dark', isDark);

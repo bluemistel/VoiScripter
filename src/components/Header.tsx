@@ -393,7 +393,7 @@ export default function Header(props: HeaderProps) {
   };
 
   return (
-    <header className="bg-background shadow-sm border-b">
+    <header className="bg-background shadow-sm  sticky top-0 z-50 border-b">
       {/* 上部ヘッダー（スクロールで非表示） */}
       <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-16">
         <h1 className="text-2xl font-bold text-primary tracking-tight flex items-center">
@@ -589,7 +589,7 @@ export default function Header(props: HeaderProps) {
             <div className="flex-1 overflow-y-auto px-6 pb-6">
               <CharacterManager
                 isOpen={true}
-                onClose={() => {}}
+                onClose={() => setIsCharacterModalOpen(false)}
                 characters={characters}
                 onAddCharacter={onAddCharacter}
                 onUpdateCharacter={onUpdateCharacter}

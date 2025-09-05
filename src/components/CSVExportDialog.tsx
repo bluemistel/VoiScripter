@@ -136,19 +136,19 @@ export default function CSVExportDialog({
 
   const handleExport = (exportType: 'full' | 'serif-only', includeTogaki: boolean) => {
     if (exportToClipboard) {
-      console.log('handleExport: exportToClipboard', { exportType, includeTogaki, exportSelectedOnly });
+      //console.log('handleExport: exportToClipboard', { exportType, includeTogaki, exportSelectedOnly });
       // プロジェクト全体のテキストをコピー
       onExportToClipboard(exportType === 'serif-only', exportSelectedOnly, includeTogaki);
     } else if (useGroupExport && selectedGroups.length > 0) {
       // 特定のシーンのみCSVを出力が有効な場合はsceneCheckboxesを渡す
-      console.log('handleExport: onExportByGroups', { selectedGroups, exportType, includeTogaki, exportSelectedOnly, sceneIds: useSceneExport ? sceneCheckboxes : undefined, fileFormat });
+      //console.log('handleExport: onExportByGroups', { selectedGroups, exportType, includeTogaki, exportSelectedOnly, sceneIds: useSceneExport ? sceneCheckboxes : undefined, fileFormat });
       onExportByGroups(selectedGroups, exportType, includeTogaki, exportSelectedOnly, useSceneExport ? sceneCheckboxes : undefined, fileFormat);
     } else if (!useGroupExport) {
       if (exportType === 'full') {
-        console.log('handleExport: onExportCSV', { includeTogaki, exportSelectedOnly, fileFormat });
+        //console.log('handleExport: onExportCSV', { includeTogaki, exportSelectedOnly, fileFormat });
         onExportCSV(includeTogaki, exportSelectedOnly, fileFormat);
       } else {
-        console.log('handleExport: onExportSerifOnly', { exportSelectedOnly, fileFormat, includeTogaki });
+        //console.log('handleExport: onExportSerifOnly', { exportSelectedOnly, fileFormat, includeTogaki });
         onExportSerifOnly(exportSelectedOnly, fileFormat, includeTogaki);
       }
     }
@@ -500,16 +500,6 @@ export default function CSVExportDialog({
         <div className="flex flex-col space-y-2 mt-4">
           <button
             onClick={() => {
-              console.log('Export button clicked', {
-                exportType,
-                useGroupExport,
-                useSceneExport,
-                sceneCheckboxes,
-                selectedGroups,
-                exportToClipboard,
-                activeTab,
-                fileFormat
-              });
               if (exportType === 'character-setting') {
                 onExportCharacterCSV();
                 handleClose();

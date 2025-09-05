@@ -14,6 +14,8 @@ export const useDataManagement = (): DataManagementHook => {
 
   // データ保存関数
   const saveData = useCallback((key: string, data: string) => {
+    if (typeof window === 'undefined') return;
+    
     if (saveDirectory === '') {
       // localStorageに保存
       try {
@@ -26,23 +28,23 @@ export const useDataManagement = (): DataManagementHook => {
           
           // 大きなデータの種類に応じて処理
           if (key.includes('_undo') || key.includes('_redo')) {
-            console.log('Skipping large undo/redo data to prevent localStorage overflow');
+            //console.log('Skipping large undo/redo data to prevent localStorage overflow');
             return;
           } else if (key.includes('_characters')) {
-            console.log('Skipping large character data to prevent localStorage overflow');
+            //console.log('Skipping large character data to prevent localStorage overflow');
             return;
           } else if (key.includes('_groups')) {
-            console.log('Skipping large group data to prevent localStorage overflow');
+            //console.log('Skipping large group data to prevent localStorage overflow');
             return;
           }
           
           // その他の大きなデータもスキップ
-          console.log(`Skipping large data for key: ${key}`);
+          //console.log(`Skipping large data for key: ${key}`);
           return;
         }
         
         localStorage.setItem(key, data);
-        console.log(`Successfully saved to localStorage: ${key} (${dataSize} bytes)`);
+        //console.log(`Successfully saved to localStorage: ${key} (${dataSize} bytes)`);
       } catch (error) {
         console.error('localStorage save error:', error);
         console.error('Error details:', {
@@ -56,15 +58,15 @@ export const useDataManagement = (): DataManagementHook => {
         // QuotaExceededErrorの場合、古いデータを削除して再試行
         if (error instanceof Error && error.name === 'QuotaExceededError') {
           try {
-            console.log('QuotaExceededError detected, attempting cleanup...');
+            //console.log('QuotaExceededError detected, attempting cleanup...');
             // 古いundo/redoデータを削除
             const keys = Object.keys(localStorage);
             const undoRedoKeys = keys.filter(k => k.includes('_undo') || k.includes('_redo'));
-            console.log('Removing undo/redo keys:', undoRedoKeys);
+            //console.log('Removing undo/redo keys:', undoRedoKeys);
             undoRedoKeys.forEach(k => localStorage.removeItem(k));
             // 再試行
             localStorage.setItem(key, data);
-            console.log('Retry save successful after cleanup');
+            //console.log('Retry save successful after cleanup');
           } catch (retryError) {
             console.error('Retry save failed:', retryError);
             console.error('Retry error details:', {
@@ -74,7 +76,7 @@ export const useDataManagement = (): DataManagementHook => {
           }
         }
       }
-    } else if (window.electronAPI) {
+    } else if (typeof window !== 'undefined' && window.electronAPI) {
       // ファイルに保存
       window.electronAPI?.saveData(key, data);
     }
@@ -82,6 +84,8 @@ export const useDataManagement = (): DataManagementHook => {
 
   // データ読み込み関数
   const loadData = useCallback(async (key: string): Promise<string | null> => {
+    if (typeof window === 'undefined') return null;
+    
     if (saveDirectory === '') {
       // localStorageから読み込み
       return localStorage.getItem(key);
@@ -94,6 +98,8 @@ export const useDataManagement = (): DataManagementHook => {
 
   // データ削除関数
   const deleteData = useCallback((key: string) => {
+    if (typeof window === 'undefined') return;
+    
     if (saveDirectory === '') {
       localStorage.removeItem(key);
     } else if (window.electronAPI) {
@@ -103,6 +109,8 @@ export const useDataManagement = (): DataManagementHook => {
 
   // データキー一覧取得関数
   const listDataKeys = useCallback(async (): Promise<string[]> => {
+    if (typeof window === 'undefined') return [];
+    
     if (saveDirectory === '') {
       return Object.keys(localStorage);
     } else if (window.electronAPI) {
@@ -122,14 +130,14 @@ export const useDataManagement = (): DataManagementHook => {
           const settings = await window.electronAPI.loadSettings();
           savedDirectory = settings.saveDirectory || '';
           setSaveDirectory(savedDirectory);
-          console.log('設定から読み込んだ保存先:', savedDirectory);
+          //console.log('設定から読み込んだ保存先:', savedDirectory);
         } catch (error) {
           console.error('設定読み込みエラー:', error);
         }
       } else {
         savedDirectory = localStorage.getItem('voiscripter_saveDirectory') || '';
         setSaveDirectory(savedDirectory);
-        console.log('localStorageから読み込んだ保存先:', savedDirectory);
+        //console.log('localStorageから読み込んだ保存先:', savedDirectory);
       }
     };
     

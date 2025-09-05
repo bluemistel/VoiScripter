@@ -51,11 +51,11 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
           const data = localStorage.getItem(key);
           if (data) {
             await dataManagement.saveData(key, data);
-            console.log(`データ移動成功: ${key}`);
+            //console.log(`データ移動成功: ${key}`);
           }
         }
         
-        console.log(`${keys.length}個のデータをlocalStorageからファイルに移動しました`);
+        //console.log(`${keys.length}個のデータをlocalStorageからファイルに移動しました`);
       } else if (fromStorage === 'file' && toStorage === 'localStorage') {
         // ファイルからlocalStorageに移動
         const keys = await dataManagement.listDataKeys() || [];
@@ -64,11 +64,11 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
           const data = await dataManagement.loadData(key);
           if (data) {
             localStorage.setItem(key, data);
-            console.log(`データ読み込み成功: ${key}`);
+            //console.log(`データ読み込み成功: ${key}`);
           }
         }
         
-        console.log(`${keys.length}個のデータをファイルからlocalStorageに移動しました`);
+        //console.log(`${keys.length}個のデータをファイルからlocalStorageに移動しました`);
       }
     } catch (error) {
       console.error('データ移動処理エラー:', error);

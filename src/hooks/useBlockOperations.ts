@@ -6,6 +6,7 @@ export interface BlockOperationsHook {
   handleDuplicateBlock: (project: Project, selectedSceneId: string | null, blockId: string) => Project;
   handleInsertBlock: (project: Project, selectedSceneId: string | null, block: ScriptBlock, index: number) => Project;
   handleMoveBlock: (project: Project, selectedSceneId: string | null, blockId: string, direction: 'up' | 'down') => Project;
+  handleMoveBlockByIndex: (project: Project, selectedSceneId: string | null, fromIndex: number, toIndex: number) => Project;
   handleUpdateBlock: (project: Project, selectedSceneId: string | null, blockId: string, updates: Partial<ScriptBlock>) => Project;
   handleSelectAllBlocks: (project: Project, selectedSceneId: string | null) => string[];
   handleDeselectAllBlocks: () => string[];
@@ -164,6 +165,38 @@ export const useBlockOperations = (): BlockOperationsHook => {
     };
   };
 
+  // ブロック移動（インデックスベース）
+  const handleMoveBlockByIndex = (project: Project, selectedSceneId: string | null, fromIndex: number, toIndex: number): Project => {
+    if (!selectedSceneId) return project;
+    
+    const currentScript = project.scenes.find(s => s.id === selectedSceneId)?.scripts[0];
+    if (!currentScript) return project;
+    
+    if (fromIndex < 0 || fromIndex >= currentScript.blocks.length || 
+        toIndex < 0 || toIndex >= currentScript.blocks.length) {
+      return project;
+    }
+    
+    const newBlocks = [...currentScript.blocks];
+    const [movedBlock] = newBlocks.splice(fromIndex, 1);
+    newBlocks.splice(toIndex, 0, movedBlock);
+    
+    return {
+      ...project,
+      scenes: project.scenes.map(scene =>
+        scene.id === selectedSceneId
+          ? {
+              ...scene,
+              scripts: scene.scripts.map(script => ({
+                ...script,
+                blocks: newBlocks
+              }))
+            }
+          : scene
+      )
+    };
+  };
+
   // ブロック更新
   const handleUpdateBlock = (project: Project, selectedSceneId: string | null, blockId: string, updates: Partial<ScriptBlock>): Project => {
     if (!selectedSceneId) return project;
@@ -216,6 +249,7 @@ export const useBlockOperations = (): BlockOperationsHook => {
     handleDuplicateBlock,
     handleInsertBlock,
     handleMoveBlock,
+    handleMoveBlockByIndex,
     handleUpdateBlock,
     handleSelectAllBlocks,
     handleDeselectAllBlocks,

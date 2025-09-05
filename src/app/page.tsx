@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Header from '@/components/Header';
 import ScriptEditor from '@/components/ScriptEditor';
 import Settings from '@/components/Settings';
@@ -24,6 +24,11 @@ import { useUIState } from '@/hooks/useUIState';
 import { useDataProcessing } from '@/hooks/useDataProcessing';
 
 export default function Home() {
+  // テキストエリアref配列（ScriptEditorとuseKeyboardShortcutsで共有）
+  const textareaRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
+  const setIsUndoRedoOperationRef = useRef<((isUndoRedo: boolean) => void) | null>(null);
+  const setIsCtrlEnterBlockRef = useRef<((isCtrlEnter: boolean) => void) | null>(null);
+
   // カスタムフックの初期化
   const dataManagement = useDataManagement();
   const dataProcessing = useDataProcessing(dataManagement);
@@ -103,56 +108,95 @@ export default function Home() {
   // 設定フック
   const settings = useSettings(dataManagement);
 
+  // selectedSceneIdの自動初期化
+  useEffect(() => {
+    if (!selectedSceneId && project.scenes.length > 0) {
+      setSelectedSceneId(project.scenes[0].id);
+    }
+  }, [selectedSceneId, project.scenes]);
+
   // キーボードショートカットフック
   const keyboardShortcuts = useKeyboardShortcuts(
     undoRedo,
     () => {
-      const newProject = blockOperations.handleAddBlock(project, selectedSceneId, characters);
+      // 現在のシーンとブロックを取得
+      // console.log('page.tsx - onAddBlock callback - selectedSceneId:', selectedSceneId);
+      if (!selectedSceneId) {
+        // console.log('page.tsx - onAddBlock callback - selectedSceneId is null, returning');
+        return;
+      }
+      
+      const currentScene = project.scenes.find(s => s.id === selectedSceneId);
+      if (!currentScene) return;
+      
+      const currentScript = currentScene.scripts[0];
+      if (!currentScript) return;
+      
+      // 最後のセリフブロックからキャラクター情報を引き継ぐ
+      const lastSerif = [...currentScript.blocks].reverse().find(b => b.characterId);
+      const charId = lastSerif?.characterId || characters[0]?.id || '';
+      const emotion = lastSerif?.emotion || 'normal';
+      
+      const newBlock: ScriptBlock = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        characterId: charId,
+        emotion,
+        text: ''
+      };
+      
+      // 最後のブロックの後に挿入
+      const insertIndex = currentScript.blocks.length;
+      const newProject = blockOperations.handleInsertBlock(project, selectedSceneId, newBlock, insertIndex);
       setProject(newProject);
     },
+    () => {}, // onDeleteSelectedBlocks - 使用しない
+    () => {}, // onDuplicateSelectedBlocks - 使用しない
+    () => {}, // onMoveBlockUp - 使用しない
+    () => {}, // onMoveBlockDown - 使用しない
+    () => {}, // onSelectAll - 使用しない
+    () => {}, // onDeselectAll - 使用しない
+    // ScriptEditor用の追加パラメータ
+    (block: ScriptBlock, index: number) => {
+      const newProject = blockOperations.handleInsertBlock(project, selectedSceneId, block, index);
+      setProject(newProject);
+    },
+    (blockId: string) => {
+      const newProject = blockOperations.handleDeleteBlock(project, selectedSceneId, blockId);
+      setProject(newProject);
+    },
+    (blockId: string, updates: Partial<ScriptBlock>) => {
+      const newProject = blockOperations.handleUpdateBlock(project, selectedSceneId, blockId, updates);
+      setProject(newProject);
+    },
+    (fromIndex: number, toIndex: number) => {
+      const newProject = blockOperations.handleMoveBlockByIndex(project, selectedSceneId, fromIndex, toIndex);
+      setProject(newProject);
+    },
+    () => uiState.setIsCSVExportDialogOpen(true),
     () => {
-      // 選択されたブロックを削除
-      if (selectedBlockIds.length > 0) {
-        let newProject = project;
-        for (const blockId of selectedBlockIds) {
-          newProject = blockOperations.handleDeleteBlock(newProject, selectedSceneId, blockId);
-        }
-        setProject(newProject);
-        setSelectedBlockIds([]);
-      }
+      // 最下段へスクロール
+      window.scrollTo(0, document.body.scrollHeight);
     },
     () => {
-      // 選択されたブロックを複製
-      if (selectedBlockIds.length > 0) {
-        let newProject = project;
-        for (const blockId of selectedBlockIds) {
-          newProject = blockOperations.handleDuplicateBlock(newProject, selectedSceneId, blockId);
-        }
-        setProject(newProject);
-      }
+      // 最上段へスクロール
+      window.scrollTo(0, 0);
     },
-    () => {
-      // 選択されたブロックを上に移動
-      if (selectedBlockIds.length > 0) {
-        let newProject = project;
-        for (const blockId of selectedBlockIds) {
-          newProject = blockOperations.handleMoveBlock(newProject, selectedSceneId, blockId, 'up');
-        }
-        setProject(newProject);
-      }
+    // ScriptEditorの状態
+    project.scenes.find(s => s.id === selectedSceneId)?.scripts[0]?.blocks || [],
+    characters,
+    undefined,
+    textareaRefs,
+    (target) => {
+      // ScriptEditorのmanualFocusTargetを設定
+      // この関数はScriptEditor内で使用される
     },
-    () => {
-      // 選択されたブロックを下に移動
-      if (selectedBlockIds.length > 0) {
-        let newProject = project;
-        for (const blockId of selectedBlockIds) {
-          newProject = blockOperations.handleMoveBlock(newProject, selectedSceneId, blockId, 'down');
-        }
-        setProject(newProject);
+    (isCtrlEnter) => {
+      // ScriptEditorのisCtrlEnterBlockフラグを設定
+      if (setIsCtrlEnterBlockRef.current) {
+        setIsCtrlEnterBlockRef.current(isCtrlEnter);
+        // console.log('page.tsx - Set isCtrlEnterBlock to:', isCtrlEnter);
       }
-    },
-    () => setSelectedBlockIds(blockOperations.handleSelectAllBlocks(project, selectedSceneId)),
-    () => setSelectedBlockIds(blockOperations.handleDeselectAllBlocks())
+    }
   );
 
   // 初期化処理
@@ -166,9 +210,70 @@ export default function Home() {
   // プロジェクト変更時の履歴保存
   useEffect(() => {
     if (project.id && !undoRedo.isUndoRedoOperation.current) {
+      // console.log('page.tsx - Pushing to history:', { projectId: project.id, selectedSceneId });
       undoRedo.pushToHistory(project, selectedSceneId);
     }
   }, [project, selectedSceneId]);
+
+  // プロジェクト切り替え時に他のプロジェクトの履歴を削除
+  useEffect(() => {
+    if (project.id) {
+      undoRedo.clearOtherProjectHistory(project.id);
+    }
+  }, [project.id]);
+
+  // アンドゥ・リドゥの結果を処理
+  useEffect(() => {
+    if (keyboardShortcuts.undoResult) {
+      // console.log('page.tsx - Undo result:', keyboardShortcuts.undoResult);
+      // console.log('page.tsx - Current project before undo:', project.id);
+      // console.log('page.tsx - Current selectedSceneId before undo:', selectedSceneId);
+      
+      // アンドゥ操作であることをScriptEditorに通知
+      if (setIsUndoRedoOperationRef.current) {
+        setIsUndoRedoOperationRef.current(true);
+        // console.log('page.tsx - Set isUndoRedoOperation to true');
+      }
+      
+      setProject(keyboardShortcuts.undoResult.project);
+      setSelectedSceneId(keyboardShortcuts.undoResult.selectedSceneId);
+      
+      // console.log('page.tsx - Set project to:', keyboardShortcuts.undoResult.project.id);
+      // console.log('page.tsx - Set selectedSceneId to:', keyboardShortcuts.undoResult.selectedSceneId);
+      
+      // アンドゥ操作後にisUndoRedoOperationをリセット
+      setTimeout(() => {
+        undoRedo.isUndoRedoOperation.current = false;
+        // console.log('page.tsx - Reset isUndoRedoOperation after undo');
+      }, 100);
+    }
+  }, [keyboardShortcuts.undoResult]);
+
+  useEffect(() => {
+    if (keyboardShortcuts.redoResult) {
+      // console.log('page.tsx - Redo result:', keyboardShortcuts.redoResult);
+      // console.log('page.tsx - Current project before redo:', project.id);
+      // console.log('page.tsx - Current selectedSceneId before redo:', selectedSceneId);
+      
+      // リドゥ操作であることをScriptEditorに通知
+      if (setIsUndoRedoOperationRef.current) {
+        setIsUndoRedoOperationRef.current(true);
+        // console.log('page.tsx - Set isUndoRedoOperation to true');
+      }
+      
+      setProject(keyboardShortcuts.redoResult.project);
+      setSelectedSceneId(keyboardShortcuts.redoResult.selectedSceneId);
+      
+      // console.log('page.tsx - Set project to:', keyboardShortcuts.redoResult.project.id);
+      // console.log('page.tsx - Set selectedSceneId to:', keyboardShortcuts.redoResult.selectedSceneId);
+      
+      // リドゥ操作後にisUndoRedoOperationをリセット
+      setTimeout(() => {
+        undoRedo.isUndoRedoOperation.current = false;
+        // console.log('page.tsx - Reset isUndoRedoOperation after redo');
+      }, 100);
+    }
+  }, [keyboardShortcuts.redoResult]);
 
   // プロジェクト変更時の最終シーン保存
   useEffect(() => {
@@ -287,7 +392,7 @@ export default function Home() {
   };
 
   return (
-    <div className={`min-h-screen ${theme.isDarkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-900'}`}>
+    <div className={`min-h-screen ${theme.isDarkMode ? 'dark bg-background text-foreground ' : 'bg-background text-foreground'} transition-colors duration-300 `}>
       <Header
         characters={characters}
         onAddCharacter={characterManagement.handleAddCharacter}
@@ -390,9 +495,10 @@ export default function Home() {
               }
             }}
             onMoveBlock={(fromIndex, toIndex) => {
-              // インデックスベースの移動を実装する必要があります
-              // 現在はdirectionベースの移動のみサポート
-              console.log('Move block from', fromIndex, 'to', toIndex);
+              if (project && selectedSceneId) {
+                const newProject = blockOperations.handleMoveBlockByIndex(project, selectedSceneId, fromIndex, toIndex);
+                setProject(newProject);
+              }
             }}
             selectedBlockIds={uiState.selectedBlockIds}
             onSelectedBlockIdsChange={uiState.setSelectedBlockIds}
@@ -416,6 +522,15 @@ export default function Home() {
             onToggleBlockSelection={(blockId) => {
               const newSelectedBlockIds = uiState.handleToggleBlockSelection(blockId, uiState.selectedBlockIds);
               uiState.setSelectedBlockIds(newSelectedBlockIds);
+            }}
+            textareaRefs={textareaRefs}
+            setIsCtrlEnterBlock={(setIsCtrlEnterBlockFn) => {
+              // ScriptEditorのsetIsCtrlEnterBlock関数を参照に保存
+              setIsCtrlEnterBlockRef.current = setIsCtrlEnterBlockFn;
+            }}
+            setIsUndoRedoOperation={(setIsUndoRedoOperationFn) => {
+              // ScriptEditorのsetIsUndoRedoOperation関数を参照に保存
+              setIsUndoRedoOperationRef.current = setIsUndoRedoOperationFn;
             }}
           />
         ) : (

@@ -65,7 +65,7 @@ export const useDataProcessing = (dataManagement: DataManagementHook): DataProce
         keysToDelete.forEach(key => {
           try {
             localStorage.removeItem(key);
-            console.log(`古いデータを削除: ${key}`);
+            // console.log(`古いデータを削除: ${key}`);
           } catch (error) {
             console.error(`データ削除エラー (${key}):`, error);
           }

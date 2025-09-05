@@ -46,13 +46,13 @@ export const useCharacterManagement = (
             backgroundColor: char.backgroundColor || '#e5e7eb'
           }));
           setCharacters(charsWithGroups);
-          console.log('キャラクター設定読み込み成功:', charsWithGroups.length, '個');
+          //console.log('キャラクター設定読み込み成功:', charsWithGroups.length, '個');
         } catch (error) {
           console.error('キャラクター設定パースエラー:', error);
           setCharacters([]);
         }
       } else {
-        console.log('キャラクター設定が見つかりません');
+        //console.log('キャラクター設定が見つかりません');
         setCharacters([]);
       }
       
@@ -64,7 +64,7 @@ export const useCharacterManagement = (
           if (Array.isArray(parsedGroups)) {
             setGroups(parsedGroups);
             isFirstGroups.current = false;
-            console.log('グループ設定読み込み成功:', parsedGroups.length, '個');
+            //console.log('グループ設定読み込み成功:', parsedGroups.length, '個');
           } else {
             console.warn('Invalid groups data format:', parsedGroups);
             setGroups([]);
@@ -76,7 +76,7 @@ export const useCharacterManagement = (
           isFirstGroups.current = false;
         }
       } else {
-        console.log('グループ設定が見つかりません');
+        //console.log('グループ設定が見つかりません');
         setGroups([]);
         isFirstGroups.current = false;
       }
@@ -116,7 +116,7 @@ export const useCharacterManagement = (
     
     if (characters.length > 0) {
       dataManagement.saveData('voiscripter_characters', JSON.stringify(characters));
-      console.log('キャラクター設定を保存:', characters.length, '個');
+      //console.log('キャラクター設定を保存:', characters.length, '個');
     }
   }, [characters]);
 
@@ -127,7 +127,7 @@ export const useCharacterManagement = (
     
     if (groups.length > 0) {
       dataManagement.saveData('voiscripter_groups', JSON.stringify(groups));
-      console.log('グループ設定を保存:', groups.length, '個');
+      //console.log('グループ設定を保存:', groups.length, '個');
     }
   }, [groups]);
 
@@ -138,20 +138,20 @@ export const useCharacterManagement = (
     if (dataManagement.saveDirectory !== '') {
       if (characters.length > 0) {
         dataManagement.saveData('voiscripter_characters', JSON.stringify(characters));
-        console.log('saveDirectory変更後、キャラクター設定を保存:', characters.length, '個');
+        //console.log('saveDirectory変更後、キャラクター設定を保存:', characters.length, '個');
       }
       if (groups.length > 0) {
         dataManagement.saveData('voiscripter_groups', JSON.stringify(groups));
-        console.log('saveDirectory変更後、グループ設定を保存:', groups.length, '個');
+        //console.log('saveDirectory変更後、グループ設定を保存:', groups.length, '個');
       }
     } else {
       if (characters.length > 0) {
         localStorage.setItem('voiscripter_characters', JSON.stringify(characters));
-        console.log('localStorage変更後、キャラクター設定を保存:', characters.length, '個');
+        //console.log('localStorage変更後、キャラクター設定を保存:', characters.length, '個');
       }
       if (groups.length > 0) {
         localStorage.setItem('voiscripter_groups', JSON.stringify(groups));
-        console.log('localStorage変更後、グループ設定を保存:', groups.length, '個');
+        //console.log('localStorage変更後、グループ設定を保存:', groups.length, '個');
       }
     }
   }, [dataManagement.saveDirectory, characters, groups]);
@@ -285,7 +285,7 @@ export const useCharacterManagement = (
                       }
                     : char
                 ));
-                console.log(`「${characterName}」の設定を更新しました（characterId: ${existingCharacter.id}）`);
+                //console.log(`「${characterName}」の設定を更新しました（characterId: ${existingCharacter.id}）`);
               }
             } else {
               if (characterGroup && characterGroup !== 'なし' && !groups.includes(characterGroup)) {

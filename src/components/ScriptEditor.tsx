@@ -42,6 +42,10 @@ interface ScriptEditorProps {
   onSelectAllBlocks: () => void;
   onDeselectAllBlocks: () => void;
   onToggleBlockSelection: (blockId: string) => void;
+  textareaRefs?: React.MutableRefObject<(HTMLTextAreaElement | null)[]>;
+  setManualFocusTarget?: (target: { index: number; id: string } | null) => void;
+  setIsCtrlEnterBlock?: (setIsCtrlEnterBlockFn: (isCtrlEnter: boolean) => void) => void;
+  setIsUndoRedoOperation?: (setIsUndoRedoOperationFn: (isUndoRedo: boolean) => void) => void;
 }
 
 interface SortableBlockProps {
@@ -301,7 +305,16 @@ export default function ScriptEditor({
   onMoveBlock,
   selectedBlockIds,
   onSelectedBlockIdsChange,
-  onOpenCSVExport
+  onOpenCSVExport,
+  characters,
+  onDuplicateBlock,
+  onSelectAllBlocks,
+  onDeselectAllBlocks,
+  onToggleBlockSelection,
+  textareaRefs: externalTextareaRefs,
+  setManualFocusTarget: externalSetManualFocusTarget,
+  setIsCtrlEnterBlock: externalSetIsCtrlEnterBlock,
+  setIsUndoRedoOperation: externalSetIsUndoRedoOperation
 }: ScriptEditorProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -310,10 +323,42 @@ export default function ScriptEditor({
     })
   );
 
-  // テキストエリアref配列
-  const textareaRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
+  // テキストエリアref配列（外部から渡された場合はそれを使用、そうでなければ内部で作成）
+  const internalTextareaRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
+  const textareaRefs = externalTextareaRefs || internalTextareaRefs;
   const [isButtonFixed, setIsButtonFixed] = useState(false);
   const [manualFocusTarget, setManualFocusTarget] = useState<{ index: number; id: string } | null>(null);
+  
+  // 外部から渡されたsetManualFocusTargetを使用、なければ内部のものを使用
+  const setManualFocusTargetFn = externalSetManualFocusTarget || setManualFocusTarget;
+  
+  // 外部から渡されたsetIsCtrlEnterBlockを使用、なければ内部のものを使用
+  const setIsCtrlEnterBlockFn = externalSetIsCtrlEnterBlock || ((isCtrlEnter: boolean) => {
+    isCtrlEnterBlock.current = isCtrlEnter;
+  });
+  
+  // 外部から渡されたsetIsUndoRedoOperationを使用、なければ内部のものを使用
+  const setIsUndoRedoOperationFn = externalSetIsUndoRedoOperation || ((isUndoRedo: boolean) => {
+    isUndoRedoOperation.current = isUndoRedo;
+  });
+  
+  // 外部から渡されたsetIsCtrlEnterBlock関数を外部に渡す
+  useEffect(() => {
+    if (externalSetIsCtrlEnterBlock) {
+      externalSetIsCtrlEnterBlock((isCtrlEnter: boolean) => {
+        isCtrlEnterBlock.current = isCtrlEnter;
+      });
+    }
+  }, [externalSetIsCtrlEnterBlock]);
+  
+  // 外部から渡されたsetIsUndoRedoOperation関数を外部に渡す
+  useEffect(() => {
+    if (externalSetIsUndoRedoOperation) {
+      externalSetIsUndoRedoOperation((isUndoRedo: boolean) => {
+        isUndoRedoOperation.current = isUndoRedo;
+      });
+    }
+  }, [externalSetIsUndoRedoOperation]);
   
   // マウス選択用の状態
   const [lastClickedIndex, setLastClickedIndex] = useState<number>(-1);
@@ -385,6 +430,11 @@ export default function ScriptEditor({
       const lastIdx = script.blocks.length - 1;
       const lastRef = textareaRefs.current[lastIdx];
       if (lastRef) {
+        // 手動フォーカスターゲットが設定されている場合は自動スクロールを無効にする
+        if (manualFocusTarget) {
+          return;
+        }
+        
         // 現在のスクロール位置を取得
         const currentScrollY = window.scrollY;
         const windowHeight = window.innerHeight;
@@ -486,20 +536,38 @@ export default function ScriptEditor({
   // 最後に追加されたブロックに自動フォーカス
   const prevBlockCount = useRef(script.blocks.length);
   const insertIdx = useRef<number>(-1);
+  const isCtrlEnterBlock = useRef<boolean>(false); // Ctrl+Enterで追加されたブロックかどうかのフラグ
+  const isUndoRedoOperation = useRef<boolean>(false); // アンドゥ・リドゥ操作かどうかのフラグ
   
   useEffect(() => {
     if (script.blocks.length > prevBlockCount.current) {
       // 手動フォーカスターゲットがある場合は自動フォーカスをスキップ
       if (manualFocusTarget) {
-        console.log('Skipping auto focus due to manual focus target');
-        setManualFocusTarget(null);
+        //console.log('Skipping auto focus due to manual focus target');
+        setManualFocusTargetFn(null);
+        prevBlockCount.current = script.blocks.length;
+        return;
+      }
+      
+      // Ctrl+Enterで追加されたブロックの場合は自動フォーカスをスキップ
+      if (isCtrlEnterBlock.current) {
+        //console.log('Skipping auto focus due to Ctrl+Enter block');
+        isCtrlEnterBlock.current = false;
+        prevBlockCount.current = script.blocks.length;
+        return;
+      }
+      
+      // アンドゥ・リドゥ操作の場合は自動フォーカスをスキップ
+      if (isUndoRedoOperation.current) {
+        //console.log('Skipping auto focus due to undo/redo operation');
+        isUndoRedoOperation.current = false;
         prevBlockCount.current = script.blocks.length;
         return;
       }
       
       // 挿入されたインデックスがある場合はそのインデックスにフォーカス
       if (insertIdx.current >= 0) {
-        console.log(`Auto focusing inserted block at index: ${insertIdx.current}`);
+        //console.log(`Auto focusing inserted block at index: ${insertIdx.current}`);
         setTimeout(() => {
           textareaRefs.current[insertIdx.current]?.focus();
           onSelectedBlockIdsChange([script.blocks[insertIdx.current]?.id || '']); // 単一選択に変更
@@ -510,7 +578,7 @@ export default function ScriptEditor({
       }
       
       // 通常の最後のブロックへの自動フォーカス
-      console.log('Auto focusing last block');
+      //console.log('Auto focusing last block');
       setTimeout(() => {
         const lastIdx = script.blocks.length - 1;
         textareaRefs.current[lastIdx]?.focus();
@@ -587,7 +655,7 @@ export default function ScriptEditor({
           }
         }
         
-        setManualFocusTarget(null);
+        setManualFocusTargetFn(null);
       }, 5);
     }
   }, [manualFocusTarget]);
@@ -675,80 +743,14 @@ export default function ScriptEditor({
     }, 500);
   };
 
-  // ショートカットキー
+  // テキストエリア内の矢印キー処理のみ
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // フォーカス中のtextareaを特定
       const activeIdx = textareaRefs.current.findIndex(ref => ref === document.activeElement);
-      // Ctrl+B: 新規ブロック
-      if (e.ctrlKey && !e.altKey && e.key === 'b') {
-        e.preventDefault();
-        onAddBlock();
-        setTimeout(() => {
-          const lastIdx = script.blocks.length;
-          setManualFocusTarget({ index: lastIdx, id: script.blocks[lastIdx]?.id || '' });
-        }, 10); // タイミングを調整
-      }
-      // Ctrl+Alt+B: 新規ト書き
-      else if (e.ctrlKey && e.altKey && e.key === 'b') {
-        e.preventDefault();
-        const idx = activeIdx >= 0 ? activeIdx + 1 : script.blocks.length;
-        const newBlock: ScriptBlock = {
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          characterId: '',
-          emotion: 'normal',
-          text: ''
-        };
-        insertIdx.current = idx; // 挿入インデックスを設定
-        onInsertBlock(newBlock, idx);
-        setTimeout(() => {
-          setManualFocusTarget({ index: idx, id: newBlock.id });
-        }, 10); // タイミングを調整
-      }
-      // Alt+B: 選択中のブロックを削除
-      else if (!e.ctrlKey && e.altKey && e.key === 'b') {
-        if (activeIdx >= 0) {
-          e.preventDefault();
-          onDeleteBlock(script.blocks[activeIdx].id);
-          setTimeout(() => {
-            // 削除後に次のブロック、なければ前のブロックにフォーカス
-            if (textareaRefs.current[activeIdx]) {
-              textareaRefs.current[activeIdx]?.focus();
-            } else if (textareaRefs.current[activeIdx - 1]) {
-              textareaRefs.current[activeIdx - 1]?.focus();
-            }
-          }, 0);
-        }
-      }
-      // Alt+↑: 上のキャラクターを選択（ト書き以外）
-      else if (!e.ctrlKey && e.altKey && e.key === 'ArrowUp') {
-        if (activeIdx >= 0) {
-          const block = script.blocks[activeIdx];
-          if (block.characterId) {
-            const charIdx = script.characters.findIndex(c => c.id === block.characterId);
-            if (charIdx > 0) {
-              e.preventDefault();
-              onUpdateBlock(block.id, { characterId: script.characters[charIdx - 1].id });
-            }
-          }
-        }
-      }
-      // Alt+↓: 下のキャラクターを選択（ト書き以外）
-      else if (!e.ctrlKey && e.altKey && e.key === 'ArrowDown') {
-        if (activeIdx >= 0) {
-          const block = script.blocks[activeIdx];
-          if (block.characterId) {
-            const charIdx = script.characters.findIndex(c => c.id === block.characterId);
-            if (charIdx >= 0 && charIdx < script.characters.length - 1) {
-              e.preventDefault();
-              onUpdateBlock(block.id, { characterId: script.characters[charIdx + 1].id });
-            }
-          }
-        }
-      }
-
+      
       // ↑: 上のブロック（テキストエリアの最上段のみ）
-      else if (!e.ctrlKey && e.key === 'ArrowUp') {
+      if (!e.ctrlKey && e.key === 'ArrowUp' && !e.altKey && !e.shiftKey) {
         if (activeIdx > 0) {
           const textarea = textareaRefs.current[activeIdx] as HTMLTextAreaElement | null;
           if (textarea) {
@@ -793,7 +795,7 @@ export default function ScriptEditor({
         }
       }
       // ↓: 下のブロック（テキストエリアの最下段のみ）
-      else if (!e.ctrlKey && e.key === 'ArrowDown') {
+      else if (!e.ctrlKey && e.key === 'ArrowDown' && !e.altKey && !e.shiftKey) {
         if (activeIdx >= 0 && activeIdx < script.blocks.length - 1) {
           const textarea = textareaRefs.current[activeIdx] as HTMLTextAreaElement | null;
           if (textarea) {
@@ -838,69 +840,10 @@ export default function ScriptEditor({
           }
         }
       }
-      // Ctrl+Enter: 直後にキャラクター引き継ぎ新規ブロック
-      else if (e.ctrlKey && e.key === 'Enter') {
-        if (activeIdx >= 0) {
-          e.preventDefault();
-          const currentBlock = script.blocks[activeIdx];
-          const newBlock: ScriptBlock = {
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            characterId: currentBlock.characterId,
-            emotion: currentBlock.emotion,
-            text: ''
-          };
-          insertIdx.current = activeIdx + 1; // 挿入インデックスを設定
-          onInsertBlock(newBlock, activeIdx + 1);
-          setTimeout(() => {
-            setManualFocusTarget({ index: activeIdx + 1, id: newBlock.id });
-          }, 50); // タイミングを調整（50msに延長）
-        }
-      }
-      // Ctrl+↑: ブロック上移動
-      else if (e.ctrlKey && e.key === 'ArrowUp') {
-        if (activeIdx > 0) {
-          e.preventDefault();
-          const movedBlockId = script.blocks[activeIdx].id;
-          onMoveBlock(activeIdx, activeIdx - 1);
-          onSelectedBlockIdsChange([movedBlockId]); // 移動したブロックのIDを保持
-          setTimeout(() => {
-            setManualFocusTarget({ index: activeIdx - 1, id: movedBlockId });
-            ensureBlockVisible(activeIdx - 1, 50);
-          }, 10); // タイミングを調整
-        }
-      }
-      // Ctrl+↓: ブロック下移動
-      else if (e.ctrlKey && e.key === 'ArrowDown') {
-        if (activeIdx >= 0 && activeIdx < script.blocks.length - 1) {
-          e.preventDefault();
-          const movedBlockId = script.blocks[activeIdx].id;
-          onMoveBlock(activeIdx, activeIdx + 1);
-          onSelectedBlockIdsChange([movedBlockId]); // 移動したブロックのIDを保持
-          setTimeout(() => {
-            setManualFocusTarget({ index: activeIdx + 1, id: movedBlockId });
-            ensureBlockVisible(activeIdx + 1, 50);
-          }, 10); // タイミングを調整
-        }
-      }
-      // Ctrl+, : 最下段へ
-      if (e.ctrlKey && e.key === ',') {
-        e.preventDefault();
-        handleScrollBottom();
-      }
-      // Ctrl+M: CSVエクスポートダイアログを開く
-      else if (e.ctrlKey && e.key === 'm') {
-        e.preventDefault();
-        onOpenCSVExport();
-      }
-      // Ctrl+Alt+, : 最上段へ
-      else if (e.ctrlKey && e.altKey && e.key === ',') {
-        e.preventDefault();
-        handleScrollTop();
-      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [script.blocks, onAddBlock, onInsertBlock, onMoveBlock, onDeleteBlock]);
+  }, [script.blocks]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -908,6 +851,14 @@ export default function ScriptEditor({
       const oldIndex = script.blocks.findIndex(block => block.id === active.id);
       const newIndex = script.blocks.findIndex(block => block.id === over.id);
       onMoveBlock(oldIndex, newIndex);
+      
+      // ドラッグ&ドロップ後のスクロール位置補正
+      setTimeout(() => {
+        const targetRef = textareaRefs.current[newIndex];
+        if (targetRef) {
+          ensureBlockVisible(newIndex, 50);
+        }
+      }, 50);
     }
   };
 
@@ -922,7 +873,7 @@ export default function ScriptEditor({
     insertIdx.current = insertIndex; // 挿入インデックスを設定
     onInsertBlock(newBlock, insertIndex);
     setTimeout(() => {
-      setManualFocusTarget({ index: insertIndex, id: newBlock.id });
+      setManualFocusTargetFn({ index: insertIndex, id: newBlock.id });
     }, 10);
   };
 
@@ -952,10 +903,29 @@ export default function ScriptEditor({
                   <div key={block.id} className="mb-1 last:mb-0">
                     <SortableBlock
                       block={block}
-                      characters={script.characters}
-                      character={script.characters.find(c => c.id === block.characterId)}
+                      characters={characters}
+                      character={characters.find(c => c.id === block.characterId)}
                       onUpdate={updates => onUpdateBlock(block.id, updates)}
-                      onDelete={() => onDeleteBlock(block.id)}
+                      onDelete={() => {
+                        onDeleteBlock(block.id);
+                        
+                        // 削除後のフォーカス処理
+                        setTimeout(() => {
+                          // 削除されたブロックの位置を考慮してフォーカスを設定
+                          let focusIndex = index;
+                          
+                          // 最上段の場合はそのまま、それ以外は一つ上のブロックにフォーカス
+                          if (index > 0) {
+                            focusIndex = index - 1;
+                          }
+                          
+                          const focusRef = textareaRefs.current[focusIndex];
+                          if (focusRef) {
+                            focusRef.focus();
+                            onSelectedBlockIdsChange([script.blocks[focusIndex]?.id || '']);
+                          }
+                        }, 50);
+                      }}
                       onDuplicate={() => {
                         const newBlock: ScriptBlock = {
                           ...block,
@@ -965,17 +935,33 @@ export default function ScriptEditor({
                         insertIdx.current = index + 1; // 複製ブロックの挿入インデックスを設定
                         onInsertBlock(newBlock, index + 1);
                         setTimeout(() => {
-                          setManualFocusTarget({ index: index + 1, id: newBlock.id });
+                          setManualFocusTargetFn({ index: index + 1, id: newBlock.id });
                         }, 10); // タイミングを調整
                       }}
                       onMoveUp={() => {
                         if (index > 0) {
                           onMoveBlock(index, index - 1);
+                          
+                          // 移動後のスクロール位置補正
+                          setTimeout(() => {
+                            const targetRef = textareaRefs.current[index - 1];
+                            if (targetRef) {
+                              ensureBlockVisible(index - 1, 50);
+                            }
+                          }, 50);
                         }
                       }}
                       onMoveDown={() => {
                         if (index < script.blocks.length - 1) {
                           onMoveBlock(index, index + 1);
+                          
+                          // 移動後のスクロール位置補正
+                          setTimeout(() => {
+                            const targetRef = textareaRefs.current[index + 1];
+                            if (targetRef) {
+                              ensureBlockVisible(index + 1, 50);
+                            }
+                          }, 50);
                         }
                       }}
                       textareaRef={el => textareaRefs.current[index] = el}

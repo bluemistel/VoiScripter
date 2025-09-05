@@ -145,40 +145,22 @@ export const useProjectManagement = (
 
   // Undo/Redoスタックの保存（遅延実行）
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     if (!project.id || undoStack.length === 0) return;
     
-    // 前回の保存内容と比較して、実際に変更があった場合のみ保存
-    const currentUndoData = JSON.stringify(undoStack);
-    const lastSavedUndoData = localStorage.getItem(`voiscripter_project_${project.id}_undo_lastSaved`);
-    
-    if (lastSavedUndoData === currentUndoData) {
-      return; // 変更がない場合は保存しない
-    }
-    
     const timeoutId = setTimeout(() => {
-      dataManagement.saveData(`voiscripter_project_${project.id}_undo`, currentUndoData);
-      // 保存完了後に最終保存内容を記録
-      localStorage.setItem(`voiscripter_project_${project.id}_undo_lastSaved`, currentUndoData);
+      dataManagement.saveData(`voiscripter_project_${project.id}_undo`, JSON.stringify(undoStack));
     }, 1000); // 1秒後に保存
     
     return () => clearTimeout(timeoutId);
   }, [undoStack, project.id]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     if (!project.id || redoStack.length === 0) return;
     
-    // 前回の保存内容と比較して、実際に変更があった場合のみ保存
-    const currentRedoData = JSON.stringify(redoStack);
-    const lastSavedRedoData = localStorage.getItem(`voiscripter_project_${project.id}_redo_lastSaved`);
-    
-    if (lastSavedRedoData === currentRedoData) {
-      return; // 変更がない場合は保存しない
-    }
-    
     const timeoutId = setTimeout(() => {
-      dataManagement.saveData(`voiscripter_project_${project.id}_redo`, currentRedoData);
-      // 保存完了後に最終保存内容を記録
-      localStorage.setItem(`voiscripter_project_${project.id}_redo_lastSaved`, currentRedoData);
+      dataManagement.saveData(`voiscripter_project_${project.id}_redo`, JSON.stringify(redoStack));
     }, 1000); // 1秒後に保存
     
     return () => clearTimeout(timeoutId);
@@ -243,23 +225,13 @@ export const useProjectManagement = (
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    // 前回の保存内容と比較して、実際に変更があった場合のみ保存
-    const currentProjectData = JSON.stringify(project);
-    const lastSavedProjectData = localStorage.getItem(`voiscripter_project_${project.id}_lastSaved`);
-    
-    if (lastSavedProjectData === currentProjectData) {
-      return; // 変更がない場合は保存しない
-    }
-    
     const timeoutId = setTimeout(() => {
       const saveProject = () => {
         const key = `voiscripter_project_${project.id}`;
-        dataManagement.saveData(key, currentProjectData);
+        dataManagement.saveData(key, JSON.stringify(project));
         if (selectedSceneId) {
           dataManagement.saveData(`voiscripter_project_${project.id}_lastScene`, selectedSceneId);
         }
-        // 保存完了後に最終保存内容を記録
-        localStorage.setItem(`voiscripter_project_${project.id}_lastSaved`, currentProjectData);
       };
       
       saveProject();
@@ -372,12 +344,44 @@ export const useProjectManagement = (
   };
 
   // プロジェクト削除
-  const handleDeleteProject = () => {
+  const handleDeleteProject = async () => {
     if (projectId === 'default') {
       onNotification('デフォルトプロジェクトは削除できません', 'error');
       return;
     }
-    // 削除確認は親コンポーネントで実装
+    
+    try {
+      // プロジェクトデータを削除
+      await dataManagement.deleteData(`voiscripter_project_${projectId}`);
+      await dataManagement.deleteData(`voiscripter_project_${projectId}_lastScene`);
+      await dataManagement.deleteData(`voiscripter_project_${projectId}_undo`);
+      await dataManagement.deleteData(`voiscripter_project_${projectId}_redo`);
+      await dataManagement.deleteData(`voiscripter_project_${projectId}_characters`);
+      await dataManagement.deleteData(`voiscripter_project_${projectId}_groups`);
+      await dataManagement.deleteData(`voiscripter_project_${projectId}_lastSaved`);
+      
+      // localStorageからも削除（SSR対応のため）
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(`voiscripter_project_${projectId}_undo_lastSaved`);
+        localStorage.removeItem(`voiscripter_project_${projectId}_redo_lastSaved`);
+        localStorage.removeItem(`voiscripter_project_${projectId}_lastSaved`);
+      }
+      
+      // プロジェクトリストから削除
+      setProjectList(prev => prev.filter(p => p !== projectId));
+      
+      // デフォルトプロジェクトに切り替え
+      setProjectId('default');
+      
+      // 最後に開いていたプロジェクトを更新
+      await dataManagement.saveData('voiscripter_lastProject', 'default');
+      
+      onNotification(`プロジェクト「${projectId}」を削除しました`, 'success');
+    } catch (error) {
+      console.error('プロジェクト削除エラー:', error);
+      onNotification('プロジェクトの削除に失敗しました', 'error');
+      throw error;
+    }
   };
 
   // プロジェクト名変更

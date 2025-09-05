@@ -105,7 +105,7 @@ export const moveDataBetweenStorage = async (
         const data = localStorage.getItem(key);
         if (data) {
           await dataManagement.saveData(key, data);
-          console.log(`データ移動成功: ${key}`);
+          //console.log(`データ移動成功: ${key}`);
         }
       }
       
@@ -118,7 +118,7 @@ export const moveDataBetweenStorage = async (
         const data = await dataManagement.loadData(key);
         if (data) {
           localStorage.setItem(key, data);
-          console.log(`データ読み込み成功: ${key}`);
+          //console.log(`データ読み込み成功: ${key}`);
         }
       }
       
