@@ -624,14 +624,14 @@ export default function Home() {
 
       {/* 削除確認ダイアログ */}
       {deleteConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300 p-4">
+          <div className="bg-background rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-bold mb-4">プロジェクトの削除</h3>
             <p className="mb-6">このプロジェクトを削除しますか？この操作は元に戻せません。</p>
             <div className="flex space-x-4">
                               <button
                   onClick={() => setDeleteConfirmation(null)}
-                  className="px-4 py-2 bg-gray-300 dark:bg-gray-600 rounded hover:bg-gray-400 dark:hover:bg-gray-500"
+                  className="px-4 py-2 text-muted-foreground hover:bg-accent rounded"
                 >
                   キャンセル
                 </button>
@@ -645,7 +645,7 @@ export default function Home() {
                       showNotification('プロジェクトの削除に失敗しました', 'error');
                     }
                   }}
-                  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                  className="px-4 py-2 bg-destructive text-destructive-foreground rounded hover:bg-destructive/80"
                 >
                   削除
                 </button>

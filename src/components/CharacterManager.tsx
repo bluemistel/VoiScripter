@@ -219,9 +219,11 @@ export default function CharacterManager({
     if (!onReorderGroups) return;
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      const oldIndex = groups.findIndex(g => g === active.id);
-      const newIndex = groups.findIndex(g => g === over.id);
-      if (oldIndex !== -1 && newIndex !== -1) {
+      // active.id と over.id は "${group}-${index}" の形式
+      const oldIndex = parseInt(active.id.toString().split('-').pop() || '0');
+      const newIndex = parseInt(over.id.toString().split('-').pop() || '0');
+      
+      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
         const newOrder = [...groups];
         const [removed] = newOrder.splice(oldIndex, 1);
         newOrder.splice(newIndex, 0, removed);

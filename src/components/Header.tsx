@@ -11,7 +11,8 @@ import {
   PencilIcon,
   Bars3Icon,
   PlusIcon,
-  TrashIcon
+  TrashIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
 import CharacterManager from './CharacterManager';
 import Settings from './Settings';
@@ -248,12 +249,6 @@ export default function Header(props: HeaderProps) {
     event.target.value = '';
   };
 
-  // シーン管理用state（仮実装）
-  // const [scenes, setScenes] = useState<Scene[]>([]); // 削除
-  // const [isAddSceneDialogOpen, setIsAddSceneDialogOpen] = useState(false); // 削除
-  // const [newSceneName, setNewSceneName] = useState(''); // 削除
-  // const [sceneError, setSceneError] = useState(''); // 削除
-
   // シーン名変更用state
   const [isRenameSceneDialogOpen, setIsRenameSceneDialogOpen] = useState(false);
   const [renameTargetSceneId, setRenameTargetSceneId] = useState<string | null>(null);
@@ -264,26 +259,6 @@ export default function Header(props: HeaderProps) {
   const [isDeleteSceneDialogOpen, setIsDeleteSceneDialogOpen] = useState(false);
   const [deleteTargetSceneId, setDeleteTargetSceneId] = useState<string | null>(null);
   const [deleteTargetSceneName, setDeleteTargetSceneName] = useState('');
-
-  // シーン追加ハンドラ
-  // const handleAddScene = () => { // 削除
-  //   if (!newSceneName.trim()) { // 削除
-  //     setSceneError('シーン名を入力してください'); // 削除
-  //     return; // 削除
-  //   } // 削除
-  //   if (scenes.length >= 30) { // 削除
-  //     setSceneError('シーンは最大30個までです'); // 削除
-  //     return; // 削除
-  //   } // 削除
-  //   if (scenes.some(s => s.name === newSceneName.trim())) { // 削除
-  //     setSceneError('同名のシーンが既に存在します'); // 削除
-  //     return; // 削除
-  //   } // 削除
-  //   setScenes([...scenes, { id: Date.now().toString(), name: newSceneName.trim(), scripts: [] }]); // 削除
-  //   setNewSceneName(''); // 削除
-  //   setSceneError(''); // 削除
-  //   setIsAddSceneDialogOpen(false); // 削除
-  // }; // 削除
 
   // シーン名変更ダイアログを開く
   const openRenameSceneDialog = (sceneId: string, currentName: string) => {
@@ -398,7 +373,7 @@ export default function Header(props: HeaderProps) {
       <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-16">
         <h1 className="text-2xl font-bold text-primary tracking-tight flex items-center">
           <img src={logoPath} alt="VoiScripter" className="h-8 mr-2" />
-          <div className="ml-4 pr-6 text-lg font-normal text-foreground align-middle group relative">
+          <div className="ml-2 text-lg font-normal text-foreground align-middle group relative">
             <select
               value={projectName}
               onChange={(e) => onProjectChange(e.target.value)}
@@ -410,34 +385,44 @@ export default function Header(props: HeaderProps) {
                 </option>
               ))}
             </select>
+          </div>
+          {/* プロジェクト操作ボタン */}
+          <div className="flex items-center space-x-1 ml-2">
             <button
               onClick={() => setIsRenameDialogOpen(true)}
-              className="ml-2 p-1 rounded hover:bg-accent align-middle hidden group-hover:inline-block absolute top-1/2 -translate-y-1/2"
+              className="p-1 text-primary hover:bg-accent rounded-lg transition"
               title="プロジェクト名を変更"
             >
-              <PencilIcon className="w-5 h-5 inline-block" />
+              <PencilIcon className="w-7 h-7" />
+            </button>
+            <button
+              onClick={onNewProject}
+              className="p-1 text-primary hover:bg-accent rounded-lg transition"
+              title="新しいプロジェクト"
+            >
+              <DocumentTextIcon className="w-7 h-7"/>
+            </button>
+            <button
+              onClick={onDeleteProject}
+              className="p-1 text-destructive hover:bg-destructive/10 rounded-lg transition"
+              title="プロジェクトを削除"
+            >
+              <TrashIcon className="w-7 h-7" />
             </button>
           </div>
         </h1>
         <div className="flex items-center space-x-2">
           <button
-            onClick={onNewProject}
-            className="p-2 text-primary hover:bg-accent rounded-lg transition"
-            title="新しいプロジェクト"
-          >
-            <PlusIcon className="w-7 h-7"/>
-          </button>
-          <button
             onClick={() => setIsCSVExportDialogOpen(true)}
-            className="p-2 text-primary hover:bg-accent rounded-lg transition"
-            title="CSVエクスポート"
+            className="p-1 text-primary hover:bg-accent rounded-lg transition"
+            title="エクスポート"
           >
             <ArrowUpTrayIcon className="w-7 h-7"/>
           </button>
           <div className="relative" ref={importMenuRef}>
             <button
               onClick={() => setIsImportMenuOpen(v => !v)}
-              className="p-2 text-primary hover:bg-accent rounded-lg transition"
+              className="p-1 text-primary hover:bg-accent rounded-lg transition"
               title="インポート"
             >
               <ArrowDownTrayIcon className="w-7 h-7"/>
@@ -476,14 +461,14 @@ export default function Header(props: HeaderProps) {
           </div>
           <button
             onClick={() => setIsCharacterModalOpen(true)}
-            className="p-2 text-primary hover:bg-accent rounded-lg transition"
+            className="p-1 text-primary hover:bg-accent rounded-lg transition"
             title="キャラクター設定"
           >
             <UsersIcon className="w-7 h-7" />
           </button>
           <button
             onClick={toggleTheme}
-            className="p-2 text-primary hover:bg-accent rounded-lg transition"
+            className="p-1 text-primary hover:bg-accent rounded-lg transition"
             title="ダークモード切替"
           >
             {isDarkMode ? (
@@ -494,17 +479,10 @@ export default function Header(props: HeaderProps) {
           </button>
           <button
             onClick={onOpenSettings}
-            className="p-2 text-primary hover:bg-accent rounded-lg transition"
+            className="p-1 text-primary hover:bg-accent rounded-lg transition"
             title="設定"
           >
             <Cog6ToothIcon className="w-7 h-7" />
-          </button>
-          <button
-            onClick={onDeleteProject}
-            className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition"
-            title="プロジェクトを削除"
-          >
-            <TrashIcon className="w-7 h-7" />
           </button>
         </div>
       </div>
