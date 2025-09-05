@@ -379,9 +379,9 @@ export default function Header(props: HeaderProps) {
               onChange={(e) => onProjectChange(e.target.value)}
               className="bg-background border-none text-foreground cursor-pointer hover:bg-accent rounded px-2 py-1 focus:bg-background focus:outline-none"
             >
-              {projectList.map(projectId => (
+              {projectList.filter(projectId => projectId !== 'default').map(projectId => (
                 <option key={projectId} value={projectId}>
-                  {projectId === 'default' ? '新しいプロジェクト' : projectId}
+                  {projectId}
                 </option>
               ))}
             </select>
