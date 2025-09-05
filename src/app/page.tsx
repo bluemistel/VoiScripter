@@ -199,13 +199,7 @@ export default function Home() {
     }
   );
 
-  // 初期化処理
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const last = localStorage.getItem('voiscripter_lastProject');
-      if (last && last !== 'lastProject') setProjectId(last);
-    }
-  }, []);
+  // 初期化処理は useProjectManagement フック内で行われるため、ここでは不要
 
   // プロジェクト変更時の履歴保存
   useEffect(() => {

@@ -41,12 +41,16 @@ export const useProjectManagement = (
   const [undoStack, setUndoStack] = useState<ProjectHistory[]>([{ project: { id: 'default', name: '新しいプロジェクト', scenes: [] }, selectedSceneId: null }]);
   const [redoStack, setRedoStack] = useState<ProjectHistory[]>([]);
   const isUndoRedoOperation = useRef(false);
+  const isInitialized = useRef<boolean>(false);
 
   // 初回マウント時にデータを読み込み
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (isInitialized.current) return; // 既に初期化済みの場合はスキップ
     
     const loadInitialData = async () => {
+      console.log('useProjectManagement - Starting initialization');
+      isInitialized.current = true;
       // プロジェクトリストを先に取得（存在チェック用）
       let availableProjects: string[] = [];
       if (dataManagement.saveDirectory === '') {
@@ -80,14 +84,21 @@ export const useProjectManagement = (
       
       // 最後に開いていたプロジェクトを読み込み
       const lastProject = await dataManagement.loadData('voiscripter_lastProject');
+      console.log('useProjectManagement - Last project from localStorage:', lastProject);
       let validProjectId = 'default';
       if (lastProject && lastProject !== 'lastProject' && lastProject.trim() !== '') {
         if (availableProjects.includes(lastProject)) {
           validProjectId = lastProject;
+          console.log('useProjectManagement - Using last project:', validProjectId);
+        } else {
+          console.log('useProjectManagement - Last project not found in available projects, using default');
         }
+      } else {
+        console.log('useProjectManagement - No valid last project, using default');
       }
       
       setProjectId(validProjectId);
+      console.log('useProjectManagement - Set projectId to:', validProjectId);
       
       // 選択されたプロジェクトのデータを読み込み
       const selectedProjectData = await dataManagement.loadData(`voiscripter_project_${validProjectId}`);
@@ -141,7 +152,7 @@ export const useProjectManagement = (
     };
     
     loadInitialData();
-  }, [dataManagement.saveDirectory]);
+  }, []); // 依存配列を空にして初回のみ実行
 
   // Undo/Redoスタックの保存（遅延実行）
   useEffect(() => {
