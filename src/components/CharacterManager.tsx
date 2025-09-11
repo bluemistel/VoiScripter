@@ -517,7 +517,7 @@ export default function CharacterManager({
                                       className="w-4 h-4 text-primary bg-background border-gray-300 rounded focus:ring-primary focus:ring-2"
                                     />
                                     <label htmlFor={`project-enabled-${character.id}`} className="text-xs text-foreground">
-                                      現在のプロジェクトで使用
+                                      現在の台本で使用する
                                     </label>
                                   </div>
                                 )}
@@ -730,8 +730,8 @@ export default function CharacterManager({
           <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
             <h3 className="text-lg font-semibold text-foreground mb-4">確認</h3>
             <p className="mb-4 text-foreground">
-              ・現在のプロジェクトで使用しないキャラクターはプルダウンから非表示にします。<br />
-              ・非表示にするキャラクターのセリフはそのままです。不要な場合は手動でセリフを削除してください。
+              ・編集中の台本で使用しないキャラクターをプルダウンから非表示にします。<br />
+              ・非表示にするキャラクターのセリフはそのまま残ります。不要な場合はセリフを削除してください。
             </p>
             <div className="flex justify-end space-x-2">
               <button

@@ -20,7 +20,7 @@ export default function Settings({
   enterOnlyBlockAdd = false,
   onEnterOnlyBlockAddChange
 }: SettingsProps) {
-  const [activeTab, setActiveTab] = useState<'settings' | 'help' | 'license' | 'changelog'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'help' | 'license' | 'changelog' | 'bugreport'>('settings');
   const [isSelectingDirectory, setIsSelectingDirectory] = useState(false);
   const [fontFamily, setFontFamily] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -112,6 +112,17 @@ export default function Settings({
               <span>更新履歴</span>
             </button>
             <button
+              onClick={() => setActiveTab('bugreport')}
+              className={`w-full p-3 text-left flex items-center space-x-2 transition-colors ${
+                activeTab === 'bugreport' 
+                  ? 'bg-primary text-primary-foreground' 
+                  : 'hover:bg-accent'
+              }`}
+            >
+              <QuestionMarkCircleIcon className="w-5 h-5" />
+              <span>バグ報告</span>
+            </button>
+            <button
               onClick={() => setActiveTab('license')}
               className={`w-full p-3 text-left flex items-center space-x-2 transition-colors ${
                 activeTab === 'license' 
@@ -196,13 +207,12 @@ export default function Settings({
                         className="w-4 h-4 text-primary bg-background border-gray-300 rounded focus:ring-primary focus:ring-2"
                       />
                       <label htmlFor="enterOnlyBlockAdd" className="text-sm font-medium text-foreground">
-                        Enter入力のみでブロックを追加
+                        Enterキーのみでブロックを追加
                       </label>
                     </div>
                     <div className="text-sm text-muted-foreground ml-7">
-                      <p>• チェックをONにすると、セリフ入力エリアでEnterキーを押すだけでテキストブロックが追加されます</p>
-                      <p>• 改行の入力はShift+EnterまたはCtrl+Enterに変更されます</p>
-                      <p>• チェックをOFFにすると、従来通りCtrl+Enterでブロック追加、Enterで改行になります</p>
+                      <p>• チェックをONにすると、セリフ入力エリアでEnterキーを押すだけでテキストブロックが追加されるようになります</p>
+                      <p>• 改行の入力はShift+Enterに変更されます</p>
                     </div>
                   </div>
                 </div>
@@ -226,6 +236,11 @@ export default function Settings({
                       <li>• エクスポートしたファイルは、VoiScripterでも読み込むことができ、対応合成音声ソフトにインポートすることができます。</li>
                       <li>• 作業状態は随時保存されており、閉じても前回の状態から再開できます。</li>
                     </ul>
+                    <div className="mt-3 ml-4">
+                      <a href="https://scrapbox.io/VoiScripter/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-sm">
+                        詳しい使い方
+                      </a>
+                    </div>
                   </div>
                   
                   <div>
@@ -261,6 +276,22 @@ export default function Settings({
               <div className="flex flex-col max-h-[60vh] pr-2">
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.2.0</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• 内部コードのリファクタリングを実施</li>
+                      <li>• ヘッダーUIの一部アイコン化、細部調整を実施</li>
+                      <li>• 設定画面にEnter入力のみでブロックを追加する詳細設定オプションを追加</li>
+                      <li>• シーンタブの入れ替え機能を追加</li>
+                      <li>• プロジェクトごとにキャラクターの有効無効を切り替えられる機能を追加</li>
+                      <li>• キャラクター設定のエクスポートにプロジェクトごとの無効化設定を追加</li>
+                      <li>• ヘルプメニューにCosenseの<a href="https://scrapbox.io/VoiScripter/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-sm">
+                        詳しい使い方
+                      </a>を追加</li>
+                      <li>• 設定に「バグ報告フォーム」を追加。不具合があればご報告いただければ幸いです</li>
+                    </ul>
+                  </div>
+
                   <div>
                     <h4 className="font-medium text-foreground mb-2">v0.1.9</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
@@ -365,6 +396,37 @@ export default function Settings({
                       <li>• ダークモード対応</li>
                       <li>• デスクトップアプリ対応(開発中)</li>
                     </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'bugreport' && (
+              <div className="flex flex-col max-h-[60vh] pr-2">
+                <h4 className="font-medium text-foreground mb-4">バグ報告</h4>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      不具合の内容を以下のフォームから記載して送信してください。<br />
+                      不具合の内容は確認でき次第修正いたしますが、すぐに修正されるわけではありません。
+                    </p>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      可能な限り「何をしたら発生するか」「必ず発生するか」「ブラウザ版かデスクトップ版か」「表示されたエラー情報」など情報を頂けると助かります。
+                    </p>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      ご報告いただいた後に個別に連絡を差し上げることは難しいためご了承ください。
+                    </p>
+                    <div className="mt-4">
+                      <a 
+                        href="https://forms.gle/JksUg736A2p32UzT8" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
+                      >
+                        <QuestionMarkCircleIcon className="w-5 h-5 mr-2" />
+                        バグ報告フォーム
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>
