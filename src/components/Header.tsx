@@ -14,6 +14,21 @@ import {
   TrashIcon,
   DocumentTextIcon
 } from '@heroicons/react/24/outline';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  horizontalListSortingStrategy
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import CharacterManager from './CharacterManager';
 import Settings from './Settings';
 import CSVExportDialog from './CSVExportDialog';
@@ -32,6 +47,91 @@ const useLogoPath = () => {
 
   return logoPath;
 };
+
+// ソート可能なシーンタブコンポーネント
+function SortableSceneTab({ 
+  scene, 
+  isSelected, 
+  onSelect, 
+  onRename, 
+  onDelete, 
+  children 
+}: {
+  scene: Scene;
+  isSelected: boolean;
+  onSelect: () => void;
+  onRename: () => void;
+  onDelete: () => void;
+  children?: React.ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: scene.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1
+  };
+
+  // ドラッグ状態を管理
+  const [isDragStarted, setIsDragStarted] = useState(false);
+  const [mouseDownTime, setMouseDownTime] = useState<number | null>(null);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setMouseDownTime(Date.now());
+    setIsDragStarted(false);
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    const currentTime = Date.now();
+    const timeDiff = mouseDownTime ? currentTime - mouseDownTime : 0;
+    
+    // ドラッグが開始されていない、かつ短時間のクリックの場合のみシーン切り替え
+    if (!isDragStarted && timeDiff < 200) {
+      onSelect();
+    }
+    
+    setMouseDownTime(null);
+    setIsDragStarted(false);
+  };
+
+  const handleDragStart = () => {
+    setIsDragStarted(true);
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ ...style, minWidth: 100, maxWidth: 120 }}
+      className={`relative px-4 py-1 rounded text-foreground text-sm font-medium mr-1 whitespace-nowrap flex-shrink-0 cursor-pointer group ${isSelected ? 'bg-secondary text-secondary-foreground' : 'bg-muted hover:bg-accent'}`}
+      {...attributes}
+      {...listeners}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      onDragStart={handleDragStart}
+      onDoubleClick={onRename}
+    >
+      <span className="overflow-hidden text-ellipsis whitespace-nowrap block max-w-[80px]" title={scene.name}>
+        {scene.name}
+      </span>
+      {/* ×ボタン（ホバー時のみ表示） */}
+      <button
+        onClick={e => { e.stopPropagation(); onDelete(); }}
+        className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-destructive/20 text-destructive hidden group-hover:inline-block"
+        title="シーンを削除"
+      >
+        ×
+      </button>
+      {children}
+    </div>
+  );
+}
 
 interface HeaderProps {
   characters: Character[];
@@ -65,6 +165,7 @@ interface HeaderProps {
   onRenameScene: (sceneId: string, newName: string) => void;
   onDeleteScene: (sceneId: string) => void;
   onSelectScene: (sceneId: string) => void;
+  onReorderScenes?: (newOrder: Scene[]) => void;
   onExportSceneCSV: (sceneIds: string[], exportType: 'full' | 'serif-only', includeTogaki: boolean, selectedOnly: boolean, fileFormat?: 'csv' | 'txt') => void;
   onNewProject: () => void;
   project: Project;
@@ -72,6 +173,8 @@ interface HeaderProps {
   projectList: string[];
   onProjectChange: (projectId: string) => void;
   onDeleteProject: () => void;
+  getCharacterProjectStates: (currentProjectId: string, projectList?: string[]) => {[characterId: string]: boolean};
+  saveCharacterProjectStates: (currentProjectId: string, characterStates: {[characterId: string]: boolean}, projectList?: string[]) => void;
 }
 
 // CSVインポート時の選択ダイアログ
@@ -180,13 +283,16 @@ export default function Header(props: HeaderProps) {
     onRenameScene,
     onDeleteScene,
     onSelectScene,
+    onReorderScenes,
     onExportSceneCSV,
     onNewProject,
     project,
     onOpenSettings,
     projectList,
     onProjectChange,
-    onDeleteProject
+    onDeleteProject,
+    getCharacterProjectStates,
+    saveCharacterProjectStates
   } = props;
   const logoPath = useLogoPath();
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
@@ -199,6 +305,30 @@ export default function Header(props: HeaderProps) {
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   
   const importMenuRef = useRef<HTMLDivElement>(null);
+
+  // シーンのドラッグ&ドロップ用センサー
+  const sceneSensors = useSensors(useSensor(PointerSensor));
+  
+  // シーンの並び替えハンドラー
+  const handleSceneDragStart = (event: DragStartEvent) => {
+    // ドラッグ開始時の処理
+    //console.log('Drag started:', event.active.id);
+  };
+
+  const handleSceneDragEnd = (event: DragEndEvent) => {
+    if (!onReorderScenes) return;
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = scenes.findIndex(s => s.id === active.id);
+      const newIndex = scenes.findIndex(s => s.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newOrder = [...scenes];
+        const [removed] = newOrder.splice(oldIndex, 1);
+        newOrder.splice(newIndex, 0, removed);
+        onReorderScenes(newOrder);
+      }
+    }
+  };
 
   // メニュー外クリックでメニューを閉じる
   useEffect(() => {
@@ -428,7 +558,7 @@ export default function Header(props: HeaderProps) {
               <ArrowDownTrayIcon className="w-7 h-7"/>
             </button>
             {isImportMenuOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-popover border rounded-lg shadow-lg z-10">
+              <div className="absolute right-0 mt-2 w-48 bg-popover border rounded-lg shadow-lg z-50">
                 <label className="block w-full text-left px-4 py-2 hover:bg-accent text-foreground cursor-pointer">
                   CSVインポート（話者,セリフ）
                   <input
@@ -489,33 +619,36 @@ export default function Header(props: HeaderProps) {
       {/* 下部ヘッダー（シーンタブ、固定表示） */}
       <div className="sticky top-0 z-40 flex items-center space-x-2 px-4 py-2 border-b bg-background">
         {scenes.length > 1 && (
-          <div
-            ref={sceneTabContainerRef}
-            className="flex overflow-x-auto no-scrollbar max-w-full"
-            style={{ maxWidth: `calc(${maxVisibleTabs} * 120px)` }}
+          <DndContext 
+            sensors={sceneSensors} 
+            collisionDetection={closestCenter}
+            onDragStart={handleSceneDragStart}
+            onDragEnd={handleSceneDragEnd}
           >
-            {scenes.map((scene, idx) => (
+            <SortableContext 
+              items={scenes.map(s => s.id)} 
+              strategy={horizontalListSortingStrategy}
+            >
               <div
-                key={scene.id}
-                className={`relative px-4 py-1 rounded text-foreground text-sm font-medium mr-1 whitespace-nowrap flex-shrink-0 cursor-pointer group ${selectedSceneId === scene.id ? 'bg-secondary text-secondary-foreground' : 'bg-muted hover:bg-accent'}`}
-                style={{ minWidth: 100, maxWidth: 120 }}
-                onClick={() => onSelectScene(scene.id)}
-                onDoubleClick={() => openRenameSceneDialog(scene.id, scene.name)}
+                ref={sceneTabContainerRef}
+                className="flex overflow-x-auto no-scrollbar max-w-full"
+                style={{ maxWidth: `calc(${maxVisibleTabs} * 120px)` }}
               >
-                <span className="overflow-hidden text-ellipsis whitespace-nowrap block max-w-[80px]" title={scene.name}>
-                  {scene.name}
-                </span>
-                {/* ×ボタン（ホバー時のみ表示） */}
-                <button
-                  onClick={e => { e.stopPropagation(); openDeleteSceneDialog(scene.id, scene.name); }}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-destructive/20 text-destructive hidden group-hover:inline-block"
-                  title="シーンを削除"
-                >
-                  ×
-                </button>
+                {scenes.map((scene, idx) => (
+                  <SortableSceneTab
+                    key={scene.id}
+                    scene={scene}
+                    isSelected={selectedSceneId === scene.id}
+                    onSelect={() => onSelectScene(scene.id)}
+                    onRename={() => openRenameSceneDialog(scene.id, scene.name)}
+                    onDelete={() => openDeleteSceneDialog(scene.id, scene.name)}
+                  >
+                    {/* childrenは空でOK */}
+                  </SortableSceneTab>
+                ))}
               </div>
-            ))}
-          </div>
+            </SortableContext>
+          </DndContext>
         )}
         {/* シーン追加ボタン */}
         {scenes.length < 30 && (
@@ -577,7 +710,7 @@ export default function Header(props: HeaderProps) {
                 onDeleteGroup={onDeleteGroup}
                 onReorderCharacters={onReorderCharacters}
                 onReorderGroups={onReorderGroups}
-              />
+                currentProjectId={project.id} projectList={projectList} getCharacterProjectStates={getCharacterProjectStates} saveCharacterProjectStates={saveCharacterProjectStates}              />
             </div>
           </div>
         </div>

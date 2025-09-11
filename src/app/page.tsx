@@ -59,14 +59,16 @@ export default function Home() {
     setProjectList,
     handleCreateProject
   } = projectManagement;
-  
+    
   // キャラクター管理フック
   const characterManagement = useCharacterManagement(
     dataManagement,
     showNotification,
     setProject,
-    selectedSceneId
+    selectedSceneId,
+    projectList || []
   );
+  
   const {
     characters,
     setCharacters,
@@ -77,7 +79,11 @@ export default function Home() {
     handleDeleteCharacter,
     handleAddGroup,
     handleDeleteGroup,
-    handleImportCharacterCSV
+    handleReorderCharacters,
+    handleReorderGroups,
+    handleImportCharacterCSV,
+    getCharacterProjectStates,
+    saveCharacterProjectStates
   } = characterManagement;
   
   // エクスポート・インポートフック
@@ -85,12 +91,14 @@ export default function Home() {
     project,
     characters,
     selectedBlockIds,
+    selectedSceneId,
     dataManagement,
     showNotification,
     setProject,
     setProjectId,
-    setProjectList,
-    setSelectedSceneId
+    projectManagement.setProjectList,
+    setSelectedSceneId,
+    setCharacters
   );
 
   // Undo/Redoフック
@@ -419,50 +427,22 @@ export default function Home() {
         onRenameScene={projectManagement.handleRenameScene}
         onDeleteScene={projectManagement.handleDeleteScene}
         onSelectScene={projectManagement.handleSelectScene}
+        onReorderScenes={projectManagement.handleReorderScenes}
         onExportSceneCSV={exportImport.handleExportSceneCSV}
         onNewProject={handleNewProject}
         project={project}
         onOpenSettings={() => uiState.setIsSettingsOpen(true)}
+        projectList={projectManagement.projectList}
+        onProjectChange={(projectId) => {
+          setProjectId(projectId);
+          // プロジェクトを読み込む処理は既存のuseEffectで実行される
+        }}
         onDeleteProject={() => {
           // プロジェクト削除の確認ダイアログを表示
           setDeleteConfirmation({ projectId: project.id, confirmed: null });
         }}
-        projectList={projectList}
-        onProjectChange={async (projectId) => {
-          setProjectId(projectId);
-          try {
-            // プロジェクトデータを読み込み
-            const projectData = await dataManagement.loadData(`voiscripter_project_${projectId}`);
-            if (projectData) {
-              const parsedProject = JSON.parse(projectData);
-              setProject(parsedProject);
-              
-              // 最後に開いていたシーンを読み込み
-              const lastScene = await dataManagement.loadData(`voiscripter_project_${projectId}_lastScene`);
-              if (lastScene && parsedProject.scenes.some((s: any) => s.id === lastScene)) {
-                setSelectedSceneId(lastScene);
-              } else if (parsedProject.scenes.length > 0) {
-                setSelectedSceneId(parsedProject.scenes[0].id);
-              }
-              
-              // キャラクターとグループを読み込み
-              const charactersData = await dataManagement.loadData(`voiscripter_project_${projectId}_characters`);
-              if (charactersData) {
-                setCharacters(JSON.parse(charactersData));
-              }
-              
-              const groupsData = await dataManagement.loadData(`voiscripter_project_${projectId}_groups`);
-              if (groupsData) {
-                setGroups(JSON.parse(groupsData));
-              }
-              
-              showNotification('プロジェクトを切り替えました', 'success');
-            }
-          } catch (error) {
-            console.error('プロジェクト読み込みエラー:', error);
-            showNotification('プロジェクトの読み込みに失敗しました', 'error');
-          }
-        }}
+        getCharacterProjectStates={characterManagement.getCharacterProjectStates}
+        saveCharacterProjectStates={characterManagement.saveCharacterProjectStates}
       />
       
       <main className="container mx-auto px-4 py-8">
@@ -526,6 +506,8 @@ export default function Home() {
               // ScriptEditorのsetIsUndoRedoOperation関数を参照に保存
               setIsUndoRedoOperationRef.current = setIsUndoRedoOperationFn;
             }}
+            enterOnlyBlockAdd={settings.enterOnlyBlockAdd}
+            currentProjectId={projectId}
           />
         ) : (
           <div className="text-center py-12">
@@ -603,6 +585,10 @@ export default function Home() {
         onDeleteGroup={characterManagement.handleDeleteGroup}
         onReorderCharacters={characterManagement.handleReorderCharacters}
         onReorderGroups={characterManagement.handleReorderGroups}
+        currentProjectId={projectId}
+        projectList={projectList}
+        getCharacterProjectStates={characterManagement.getCharacterProjectStates}
+        saveCharacterProjectStates={characterManagement.saveCharacterProjectStates}
       />
 
       {/* Settings */}
@@ -611,6 +597,8 @@ export default function Home() {
         onClose={() => uiState.setIsSettingsOpen(false)}
         saveDirectory={settings.saveDirectory}
         onSaveDirectoryChange={settings.handleSaveDirectoryChange}
+        enterOnlyBlockAdd={settings.enterOnlyBlockAdd}
+        onEnterOnlyBlockAddChange={settings.handleEnterOnlyBlockAddChange}
       />
 
       {/* 通知 */}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Character, Emotion } from '@/types';
 import { PlusIcon, TrashIcon, PencilIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 import {
@@ -36,6 +36,10 @@ interface CharacterManagerProps {
   onReorderGroups?: (newOrder: string[]) => void;
   isOpen: boolean;
   onClose: () => void;
+  currentProjectId?: string; // 現在のプロジェクトID
+  projectList: string[]; // プロジェクトリスト
+  getCharacterProjectStates: (currentProjectId: string, projectList?: string[]) => {[characterId: string]: boolean};
+  saveCharacterProjectStates: (currentProjectId: string, characterStates: {[characterId: string]: boolean}, projectList?: string[]) => void;
 }
 
 function SortableCharacter({ character, isEditing, children, ...props }: any) {
@@ -97,8 +101,15 @@ export default function CharacterManager({
   onReorderCharacters,
   onReorderGroups,
   isOpen,
-  onClose
+  onClose,
+  currentProjectId,
+  projectList,
+  getCharacterProjectStates,
+  saveCharacterProjectStates
 }: CharacterManagerProps) {
+  // デバッグ用ログ
+  //console.log('CharacterManager - received projectList:', projectList, 'type:', typeof projectList);
+  
   const [isAdding, setIsAdding] = useState(false);
   const [isEditingId, setIsEditingId] = useState<string | null>(null);
   const [isGroupSettingsOpen, setIsGroupSettingsOpen] = useState(false);
@@ -106,7 +117,8 @@ export default function CharacterManager({
   const [newCharacter, setNewCharacter] = useState<Partial<Character>>({
     name: '',
     group: 'なし',
-    emotions: { ...emptyEmotions }
+    emotions: { ...emptyEmotions },
+    disabledProjects: []
   });
 
   // 編集用
@@ -115,6 +127,133 @@ export default function CharacterManager({
   // カラーピッカー用の状態
   const [showColorPicker, setShowColorPicker] = useState<string | null>(null);
   const [tempBackgroundColor, setTempBackgroundColor] = useState<string>('#e5e7eb');
+  
+  // キャラクターのプロジェクト使用状況を管理
+  const [characterProjectStates, setCharacterProjectStates] = useState<{[characterId: string]: boolean}>({});
+  const [showCloseDialog, setShowCloseDialog] = useState(false);
+
+  // フォールバック用の関数を定義
+  const fallbackGetCharacterProjectStates = (currentProjectId: string, projectList: string[]) => {
+    const initialState: {[characterId: string]: boolean} = {};
+    
+    // projectListがundefinedの場合はデフォルトで全キャラクターを有効にする
+    if (!projectList) {
+      characters.forEach(char => {
+        initialState[char.id] = true;
+      });
+      return initialState;
+    }
+    
+    // 新規プロジェクトかどうかを判定
+    const isNewProject = projectList.length === 0 || !projectList.includes(currentProjectId);
+    
+    characters.forEach(char => {
+      if (isNewProject) {
+        // 新規プロジェクトの場合はすべてON
+        initialState[char.id] = true;
+      } else {
+        // 既存プロジェクトの場合はdisabledProjectsの設定に従う
+        // disabledProjectsが空配列またはundefinedの場合は全プロジェクトで有効
+        const isEnabled = !char.disabledProjects || char.disabledProjects.length === 0 || !char.disabledProjects.includes(currentProjectId);
+        initialState[char.id] = isEnabled;
+      }
+    });
+    
+    return initialState;
+  };
+
+  // ダイアログが開かれた時またはプロジェクトが切り替わった時にキャラクターの現在の状態を初期化
+  useEffect(() => {
+    if (isOpen && currentProjectId) {
+      // projectListがundefinedの場合は空配列を渡す
+      const safeProjectList = projectList || [];
+      
+      // getCharacterProjectStatesが関数でない場合はフォールバック処理
+      if (typeof getCharacterProjectStates !== 'function') {
+        console.error('getCharacterProjectStates is not a function:', typeof getCharacterProjectStates);
+        const initialState = fallbackGetCharacterProjectStates(currentProjectId, safeProjectList);
+        setCharacterProjectStates(initialState);
+        return;
+      }
+      
+      const initialState = getCharacterProjectStates(currentProjectId, safeProjectList);
+      setCharacterProjectStates(initialState);
+      
+    }
+  }, [isOpen, currentProjectId, projectList, getCharacterProjectStates]);
+
+  // ダイアログを閉じる処理
+  const handleClose = () => {
+    if (currentProjectId) {
+      // 無効にされたキャラクターがあるかチェック
+      const disabledCharacters = characters.filter(char => {
+        const wasEnabled = !char.disabledProjects || char.disabledProjects.length === 0 || !char.disabledProjects.includes(currentProjectId);
+        const isNowDisabled = !characterProjectStates[char.id];
+        return wasEnabled && isNowDisabled;
+      });
+
+      if (disabledCharacters.length > 0) {
+        setShowCloseDialog(true);
+        return;
+      }
+    }
+    
+    // 変更を保存してダイアログを閉じる
+    saveCharacterStates();
+    onClose();
+  };
+
+  // フォールバック用の保存関数を定義
+  const fallbackSaveCharacterProjectStates = (currentProjectId: string, characterStates: {[characterId: string]: boolean}, projectList: string[]) => {
+    // projectListがundefinedの場合は処理をスキップ
+    if (!projectList) {
+      //console.log('fallbackSaveCharacterProjectStates - projectList is undefined, skipping...');
+      return;
+    }
+    
+    // 新規プロジェクトかどうかを判定
+    const isNewProject = projectList.length === 0 || !projectList.includes(currentProjectId);
+
+    characters.forEach(char => {
+      const isEnabled = characterStates[char.id];
+      const disabledProjects = char.disabledProjects || [];
+      
+      if (isNewProject) {
+        // 新規プロジェクトの場合はdisabledProjectsを更新
+        if (!isEnabled && !disabledProjects.includes(currentProjectId)) {
+          char.disabledProjects = [...disabledProjects, currentProjectId];
+        } else if (isEnabled && disabledProjects.includes(currentProjectId)) {
+          char.disabledProjects = disabledProjects.filter(id => id !== currentProjectId);
+        }
+      } else {
+        // 既存プロジェクトの場合はdisabledProjectsを更新
+        if (!isEnabled && !disabledProjects.includes(currentProjectId)) {
+          char.disabledProjects = [...disabledProjects, currentProjectId];
+        } else if (isEnabled && disabledProjects.includes(currentProjectId)) {
+          char.disabledProjects = disabledProjects.filter(id => id !== currentProjectId);
+        }
+      }
+      
+      // キャラクターを更新
+      onUpdateCharacter(char);
+    });
+  };
+
+  // キャラクターの状態を保存
+  const saveCharacterStates = () => {
+    if (!currentProjectId) return;
+    // projectListがundefinedの場合は空配列を渡す
+    const safeProjectList = projectList || [];
+    
+    // saveCharacterProjectStatesが関数でない場合はフォールバック処理
+    if (typeof saveCharacterProjectStates !== 'function') {
+      console.error('saveCharacterProjectStates is not a function:', typeof saveCharacterProjectStates);
+      fallbackSaveCharacterProjectStates(currentProjectId, characterProjectStates, safeProjectList);
+      return;
+    }
+    
+    saveCharacterProjectStates(currentProjectId, characterProjectStates, safeProjectList);
+  };
 
   // 画像ファイル→DataURL変換
   const handleIconFileChange = (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
@@ -241,7 +380,7 @@ export default function CharacterManager({
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold text-foreground">キャラクター管理</h3>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="text-muted-foreground hover:text-foreground text-2xl"
               title="閉じる"
             >
@@ -360,9 +499,28 @@ export default function CharacterManager({
                                   </div>
                                 )}
                               </div>
-                              <div>
+                              <div className="flex-1">
                                 <h3 className="font-semibold text-foreground ">{character.name}</h3>
                                 <p className="text-sm text-muted-foreground mt-1">グループ: {character.group || 'なし'}</p>
+                                {currentProjectId && (
+                                  <div className="flex items-center space-x-2 mt-2">
+                                    <input
+                                      type="checkbox"
+                                      id={`project-enabled-${character.id}`}
+                                      checked={characterProjectStates[character.id] || false}
+                                      onChange={e => {
+                                        setCharacterProjectStates(prev => ({
+                                          ...prev,
+                                          [character.id]: e.target.checked
+                                        }));
+                                      }}
+                                      className="w-4 h-4 text-primary bg-background border-gray-300 rounded focus:ring-primary focus:ring-2"
+                                    />
+                                    <label htmlFor={`project-enabled-${character.id}`} className="text-xs text-foreground">
+                                      現在のプロジェクトで使用
+                                    </label>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -561,6 +719,37 @@ export default function CharacterManager({
                   キャンセル
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 確認ダイアログ */}
+      {showCloseDialog && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4">確認</h3>
+            <p className="mb-4 text-foreground">
+              ・現在のプロジェクトで使用しないキャラクターはプルダウンから非表示にします。<br />
+              ・非表示にするキャラクターのセリフはそのままです。不要な場合は手動でセリフを削除してください。
+            </p>
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setShowCloseDialog(false)}
+                className="px-4 py-2 text-muted-foreground hover:bg-accent rounded"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => {
+                  saveCharacterStates();
+                  setShowCloseDialog(false);
+                  onClose();
+                }}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold"
+              >
+                OK
+              </button>
             </div>
           </div>
         </div>

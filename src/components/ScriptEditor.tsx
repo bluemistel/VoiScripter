@@ -46,6 +46,8 @@ interface ScriptEditorProps {
   setManualFocusTarget?: (target: { index: number; id: string } | null) => void;
   setIsCtrlEnterBlock?: (setIsCtrlEnterBlockFn: (isCtrlEnter: boolean) => void) => void;
   setIsUndoRedoOperation?: (setIsUndoRedoOperationFn: (isUndoRedo: boolean) => void) => void;
+  enterOnlyBlockAdd?: boolean;
+  currentProjectId?: string;
 }
 
 interface SortableBlockProps {
@@ -58,6 +60,11 @@ interface SortableBlockProps {
   onMoveUp: () => void;
   onMoveDown: () => void;
   onClick: (event: React.MouseEvent) => void;
+  enterOnlyBlockAdd?: boolean;
+  currentProjectId?: string;
+  script: Script;
+  onInsertBlock: (block: ScriptBlock, index: number) => void;
+  insertIdx: React.MutableRefObject<number>;
 }
 
 function SortableBlock({
@@ -71,7 +78,12 @@ function SortableBlock({
   onMoveDown,
   onClick,
   textareaRef,
-  isSelected
+  isSelected,
+  enterOnlyBlockAdd = false,
+  currentProjectId,
+  script,
+  onInsertBlock,
+  insertIdx
 }: SortableBlockProps & { textareaRef: (el: HTMLTextAreaElement | null) => void; isSelected: boolean }) {
   const {
     attributes,
@@ -113,6 +125,7 @@ function SortableBlock({
       style={style}
       className={`flex items-start space-x-2 p-2 border rounded-lg shadow mb-2 transition-colors ${isSelected && !isTextareaFocused ? 'ring-2 ring-primary ring-opacity-50' : ''}`}
       onClick={onClick}
+      data-block-index={script.blocks.findIndex(b => b.id === block.id)}
     >
       <div
         {...attributes}
@@ -132,8 +145,25 @@ function SortableBlock({
               className="w-full p-2 pt-2 border rounded min-h-[40px] bg-muted text-foreground focus:ring-1 focus:ring-ring text-sm italic focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400 resize-none overflow-hidden"
               rows={1}
               style={{ height: 'auto', borderRadius: '20px 20px 20px 0' }}
-              onFocus={() => setIsTextareaFocused(true)}
-              onBlur={() => setIsTextareaFocused(false)}
+              onKeyDown={e => {
+                // チェックボックスの状態に応じてEnter操作のみで切り替え
+                const shouldAddBlock = enterOnlyBlockAdd 
+                  ? (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey)  // Enter入力のみモード
+                  : (e.key === 'Enter' && e.ctrlKey);                 // 従来のCtrl+Enterモード
+                
+                if (shouldAddBlock) {
+                  e.preventDefault();
+                  const newBlock: ScriptBlock = {
+                    id: Date.now().toString(),
+                    characterId: character?.id || '',
+                    emotion: 'normal',
+                    text: ''
+                  };
+                  const currentIndex = script.blocks.findIndex(b => b.id === block.id);
+                  insertIdx.current = currentIndex + 1; // 挿入インデックスを設定
+                  onInsertBlock(newBlock, currentIndex + 1);
+                }
+              }}
               onInput={e => {
                 const target = e.target as HTMLTextAreaElement;
                 target.style.height = 'auto';
@@ -150,9 +180,18 @@ function SortableBlock({
                 style={{ height: '2.5rem' }}
               >
                 <option value="">ト書きを入力</option>
-                {characters.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
+                {characters
+                  .filter(c => 
+                    // ト書きは常に表示
+                    c.id === '' || 
+                    // 現在のプロジェクトで有効なキャラクターのみ表示
+                    !currentProjectId || 
+                    !c.disabledProjects || 
+                    !c.disabledProjects.includes(currentProjectId)
+                  )
+                  .map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
               </select>
               <div className="flex flex-row space-x-1.5 mt-0">
                 <button
@@ -226,6 +265,25 @@ function SortableBlock({
                 ref={textareaRef}
                 value={block.text}
                 onChange={e => onUpdate({ text: e.target.value })}
+                onKeyDown={e => {
+                  // チェックボックスの状態に応じてEnter操作のみで切り替え
+                  const shouldAddBlock = enterOnlyBlockAdd 
+                    ? (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey)  // Enter入力のみモード
+                    : (e.key === 'Enter' && e.ctrlKey);                 // 従来のCtrl+Enterモード
+                  
+                  if (shouldAddBlock) {
+                    e.preventDefault();
+                    const newBlock: ScriptBlock = {
+                      id: Date.now().toString(),
+                      characterId: character?.id || '',
+                      emotion: 'normal',
+                      text: ''
+                    };
+                    const currentIndex = script.blocks.findIndex(b => b.id === block.id);
+                    insertIdx.current = currentIndex + 1; // 挿入インデックスを設定
+                    onInsertBlock(newBlock, currentIndex + 1);
+                  }
+                }}
                 placeholder="セリフを入力"
                 className="rounded-2xl border p-2 bg-card shadow-md min-h-[60px] text-sm w-full text-foreground focus:ring-1 focus:ring-ring focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400 resize-none overflow-hidden"
                 rows={1}
@@ -250,9 +308,18 @@ function SortableBlock({
                 style={{ height: '2.5rem' }}
               >
                 <option value="">ト書きを入力</option>
-                {characters.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
+                {characters
+                  .filter(c => 
+                    // ト書きは常に表示
+                    c.id === '' || 
+                    // 現在のプロジェクトで有効なキャラクターのみ表示
+                    !currentProjectId || 
+                    !c.disabledProjects || 
+                    !c.disabledProjects.includes(currentProjectId)
+                  )
+                  .map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
               </select>
               <div className="flex flex-row space-x-1.5 mt-0">
                 <button
@@ -314,7 +381,9 @@ export default function ScriptEditor({
   textareaRefs: externalTextareaRefs,
   setManualFocusTarget: externalSetManualFocusTarget,
   setIsCtrlEnterBlock: externalSetIsCtrlEnterBlock,
-  setIsUndoRedoOperation: externalSetIsUndoRedoOperation
+  setIsUndoRedoOperation: externalSetIsUndoRedoOperation,
+  enterOnlyBlockAdd = false,
+  currentProjectId
 }: ScriptEditorProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -967,6 +1036,11 @@ export default function ScriptEditor({
                       textareaRef={el => textareaRefs.current[index] = el}
                       isSelected={selectedBlockIds.includes(block.id)}
                       onClick={(event) => handleBlockClick(block.id, index, event)}
+                      enterOnlyBlockAdd={enterOnlyBlockAdd}
+                      currentProjectId={currentProjectId}
+                      script={script}
+                      onInsertBlock={onInsertBlock}
+                      insertIdx={insertIdx}
                     />
                     {/* ブロック間のト書き追加 */}
                     <div className="flex justify-center my-1 group">

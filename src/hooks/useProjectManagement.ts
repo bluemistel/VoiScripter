@@ -8,7 +8,7 @@ export interface ProjectManagementHook {
   projectId: string;
   setProjectId: (id: string) => void;
   projectList: string[];
-  setProjectList: (list: string[]) => void;
+  setProjectList: (list: string[] | ((prev: string[]) => string[])) => void;
   selectedSceneId: string | null;
   setSelectedSceneId: (id: string | null) => void;
   undoStack: ProjectHistory[];
@@ -22,6 +22,7 @@ export interface ProjectManagementHook {
   handleRenameScene: (sceneId: string, newName: string) => void;
   handleDeleteScene: (sceneId: string) => void;
   handleSelectScene: (sceneId: string) => void;
+  handleReorderScenes: (newOrder: Scene[]) => void;
   isUndoRedoOperation: React.MutableRefObject<boolean>;
   projects: Project[];
 }
@@ -34,6 +35,14 @@ export const useProjectManagement = (
 ): ProjectManagementHook => {
   const [project, setProject] = useState<Project>({ id: 'default', name: '新しいプロジェクト', scenes: [] });
   const [projectId, setProjectId] = useState<string>('default');
+  // プロジェクトリストを更新する関数（関数型の更新にも対応）
+  const updateProjectList = (updater: string[] | ((prev: string[]) => string[])) => {
+    if (typeof updater === 'function') {
+      setProjectList(updater);
+    } else {
+      setProjectList(updater);
+    }
+  };
   const [projectList, setProjectList] = useState<string[]>([]);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   
@@ -49,7 +58,7 @@ export const useProjectManagement = (
     if (isInitialized.current) return; // 既に初期化済みの場合はスキップ
     
     const loadInitialData = async () => {
-      console.log('useProjectManagement - Starting initialization');
+      //console.log('useProjectManagement - Starting initialization');
       isInitialized.current = true;
       // プロジェクトリストを先に取得（存在チェック用）
       let availableProjects: string[] = [];
@@ -81,24 +90,25 @@ export const useProjectManagement = (
       }
       
       setProjectList(availableProjects);
+      //console.log('useProjectManagement - setProjectList called with:', availableProjects);
       
       // 最後に開いていたプロジェクトを読み込み
       const lastProject = await dataManagement.loadData('voiscripter_lastProject');
-      console.log('useProjectManagement - Last project from localStorage:', lastProject);
+      //console.log('useProjectManagement - Last project from localStorage:', lastProject);
       let validProjectId = 'default';
       if (lastProject && lastProject !== 'lastProject' && lastProject.trim() !== '') {
         if (availableProjects.includes(lastProject)) {
           validProjectId = lastProject;
-          console.log('useProjectManagement - Using last project:', validProjectId);
+          //console.log('useProjectManagement - Using last project:', validProjectId);
         } else {
-          console.log('useProjectManagement - Last project not found in available projects, using default');
+          //console.log('useProjectManagement - Last project not found in available projects, using default');
         }
       } else {
-        console.log('useProjectManagement - No valid last project, using default');
+        //console.log('useProjectManagement - No valid last project, using default');
       }
       
       setProjectId(validProjectId);
-      console.log('useProjectManagement - Set projectId to:', validProjectId);
+      //console.log('useProjectManagement - Set projectId to:', validProjectId);
       
       // 選択されたプロジェクトのデータを読み込み
       const selectedProjectData = await dataManagement.loadData(`voiscripter_project_${validProjectId}`);
@@ -506,13 +516,18 @@ export const useProjectManagement = (
     setSelectedSceneId(sceneId);
   };
 
+  // シーンの並び替え
+  const handleReorderScenes = (newOrder: Scene[]) => {
+    setProject(prev => ({ ...prev, scenes: newOrder }));
+  };
+
   return {
     project,
     setProject,
     projectId,
     setProjectId,
     projectList,
-    setProjectList,
+    setProjectList: updateProjectList,
     selectedSceneId,
     setSelectedSceneId,
     undoStack,
@@ -526,6 +541,7 @@ export const useProjectManagement = (
     handleRenameScene,
     handleDeleteScene,
     handleSelectScene,
+    handleReorderScenes,
     isUndoRedoOperation,
     projects: [project] // 現在のプロジェクトのみを含む配列
   };

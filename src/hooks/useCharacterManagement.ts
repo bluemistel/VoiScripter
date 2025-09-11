@@ -15,13 +15,17 @@ export interface CharacterManagementHook {
   handleReorderCharacters: (newOrder: Character[]) => void;
   handleReorderGroups: (newOrder: string[]) => void;
   handleImportCharacterCSV: (file: File) => Promise<void>;
+  // プロジェクトごとのキャラクター状態管理
+  getCharacterProjectStates: (currentProjectId: string, projectList?: string[]) => {[characterId: string]: boolean};
+  saveCharacterProjectStates: (currentProjectId: string, characterStates: {[characterId: string]: boolean}, projectList?: string[]) => void;
 }
 
 export const useCharacterManagement = (
   dataManagement: DataManagementHook,
   onNotification: (message: string, type: 'success' | 'error' | 'info') => void,
   onProjectUpdate: (project: any) => void,
-  selectedSceneId: string | null
+  selectedSceneId: string | null,
+  projectList: string[]
 ): CharacterManagementHook => {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [groups, setGroups] = useState<string[]>([]);
@@ -268,12 +272,14 @@ export const useCharacterManagement = (
           const iconUrl = row[2]?.trim() || '';
           const characterGroup = row[3]?.trim() || 'なし';
           const backgroundColor = row[4]?.trim() || '#e5e7eb';
+          const disabledProjectsStr = row[5]?.trim() || '';
 
           if (characterName) {
             const existingCharacter = characters.find(c => c.name === characterName);
             
             if (existingCharacter) {
-              if (existingCharacter.group !== characterGroup || existingCharacter.emotions.normal.iconUrl !== iconUrl || existingCharacter.backgroundColor !== backgroundColor || existingCharacter.id !== characterId) {
+              const disabledProjects = disabledProjectsStr ? disabledProjectsStr.split(';').filter(p => p.trim() !== '') : [];
+              if (existingCharacter.group !== characterGroup || existingCharacter.emotions.normal.iconUrl !== iconUrl || existingCharacter.backgroundColor !== backgroundColor || existingCharacter.id !== characterId || JSON.stringify(existingCharacter.disabledProjects || []) !== JSON.stringify(disabledProjects)) {
                 setCharacters(prev => prev.map(char => 
                   char.name === characterName 
                     ? { 
@@ -281,7 +287,8 @@ export const useCharacterManagement = (
                         id: characterId,
                         group: characterGroup, 
                         emotions: { ...char.emotions, normal: { iconUrl } },
-                        backgroundColor 
+                        backgroundColor,
+                        disabledProjects: disabledProjects
                       }
                     : char
                 ));
@@ -296,12 +303,15 @@ export const useCharacterManagement = (
                 normal: { iconUrl }
               };
 
+              const disabledProjects = disabledProjectsStr ? disabledProjectsStr.split(';').filter(p => p.trim() !== '') : [];
+
               newCharacters.push({
                 id: characterId || Date.now().toString() + Math.random().toString(36).substr(2, 9),
                 name: characterName,
                 group: characterGroup,
                 emotions,
-                backgroundColor
+                backgroundColor,
+                disabledProjects: disabledProjects
               });
             }
           }
@@ -338,6 +348,80 @@ export const useCharacterManagement = (
     }
   };
 
+  // プロジェクトごとのキャラクター状態を取得
+  const getCharacterProjectStates = (currentProjectId: string, projectListParam?: string[]) => {
+    const initialState: {[characterId: string]: boolean} = {};
+    
+    // 引数のprojectListParamがundefinedの場合は、フックの引数projectListを使用
+    const safeProjectList = projectListParam || projectList;
+    
+    // projectListがundefinedの場合はデフォルトで全キャラクターを有効にする
+    if (!safeProjectList) {
+      characters.forEach(char => {
+        initialState[char.id] = true;
+      });
+      return initialState;
+    }
+    
+    // 新規プロジェクトかどうかを判定
+    const isNewProject = safeProjectList.length === 0 || !safeProjectList.includes(currentProjectId);
+    
+    characters.forEach(char => {
+      if (isNewProject) {
+        // 新規プロジェクトの場合はすべてON
+        initialState[char.id] = true;
+      } else {
+        // 既存プロジェクトの場合はdisabledProjectsの設定に従う
+        // disabledProjectsが空配列またはundefinedの場合は全プロジェクトで有効
+        const isEnabled = !char.disabledProjects || char.disabledProjects.length === 0 || !char.disabledProjects.includes(currentProjectId);
+        initialState[char.id] = isEnabled;
+      }
+    });
+    
+    return initialState;
+  };
+
+  // プロジェクトごとのキャラクター状態を保存
+  const saveCharacterProjectStates = (currentProjectId: string, characterStates: {[characterId: string]: boolean}, projectListParam?: string[]) => {
+    // 引数のprojectListParamがundefinedの場合は、フックの引数projectListを使用
+    const safeProjectList = projectListParam || projectList;
+    
+    // projectListがundefinedの場合は処理をスキップ
+    if (!safeProjectList) {
+      //console.log('saveCharacterProjectStates - projectList is undefined, skipping...');
+      return;
+    }
+    
+    // 新規プロジェクトかどうかを判定
+    const isNewProject = safeProjectList.length === 0 || !safeProjectList.includes(currentProjectId);
+
+    characters.forEach(char => {
+      const isEnabled = characterStates[char.id];
+      const disabledProjects = char.disabledProjects || [];
+      
+      if (isEnabled) {
+        // 有効にする場合、disabledProjectsから現在のプロジェクトIDを削除
+        if (disabledProjects.includes(currentProjectId)) {
+          const updatedChar = {
+            ...char,
+            disabledProjects: disabledProjects.filter(id => id !== currentProjectId)
+          };
+          handleUpdateCharacter(updatedChar);
+        }
+      } else {
+        // 無効にする場合、disabledProjectsに現在のプロジェクトIDを追加
+        if (!disabledProjects.includes(currentProjectId)) {
+          const updatedChar = {
+            ...char,
+            disabledProjects: [...disabledProjects, currentProjectId]
+          };
+          handleUpdateCharacter(updatedChar);
+        }
+      }
+    });
+  };
+
+
   return {
     characters,
     setCharacters,
@@ -350,6 +434,8 @@ export const useCharacterManagement = (
     handleDeleteGroup,
     handleReorderCharacters,
     handleReorderGroups,
-    handleImportCharacterCSV
+    handleImportCharacterCSV,
+    getCharacterProjectStates,
+    saveCharacterProjectStates
   };
 };

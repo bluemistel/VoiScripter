@@ -4,6 +4,9 @@ const fs = require('fs');
 const http = require('http');
 const isDev = process.env.NODE_ENV === 'development';
 
+// アプリケーションのデータディレクトリを設定
+app.setPath('userData', path.join(app.getPath('userData'), 'VoiScripter'));
+
 let mainWindow;
 let splashWindow;
 
@@ -205,7 +208,8 @@ function createWindow() {
       sandbox: false,
       experimentalFeatures: false,
       backgroundThrottling: false,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      partition: 'persist:main'
     },
     icon: path.join(__dirname, '../public/icon.png'),
     show: false,
@@ -553,6 +557,14 @@ app.whenReady().then(() => {
   } else if (!isDev) {
     // 本番環境ではメニューを完全に無効化
     Menu.setApplicationMenu(null);
+  }
+});
+
+// アプリケーション終了前の処理
+app.on('before-quit', (event) => {
+  // メインウィンドウが存在する場合、データを保存
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('app-before-quit');
   }
 });
 

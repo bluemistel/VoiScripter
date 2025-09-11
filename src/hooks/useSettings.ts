@@ -6,10 +6,25 @@ export interface SettingsHook {
   setSaveDirectory: (directory: string) => void;
   handleSaveDirectoryChange: (directory: string) => Promise<void>;
   moveDataBetweenStorage: (fromStorage: 'localStorage' | 'file', toStorage: 'localStorage' | 'file') => Promise<void>;
+  enterOnlyBlockAdd: boolean;
+  setEnterOnlyBlockAdd: (enabled: boolean) => void;
+  handleEnterOnlyBlockAddChange: (enabled: boolean) => void;
 }
 
 export const useSettings = (dataManagement: DataManagementHook): SettingsHook => {
   const [saveDirectory, setSaveDirectory] = useState<string>('');
+  const [enterOnlyBlockAdd, setEnterOnlyBlockAdd] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('voiscripter_enterOnlyBlockAdd') === 'true';
+    }
+    return false;
+  });
+
+  // Enter入力のみでブロック追加の設定変更
+  const handleEnterOnlyBlockAddChange = (enabled: boolean) => {
+    setEnterOnlyBlockAdd(enabled);
+    localStorage.setItem('voiscripter_enterOnlyBlockAdd', enabled.toString());
+  };
 
   // データ保存先変更
   const handleSaveDirectoryChange = async (directory: string) => {
@@ -80,6 +95,9 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
     saveDirectory,
     setSaveDirectory,
     handleSaveDirectoryChange,
-    moveDataBetweenStorage
+    moveDataBetweenStorage,
+    enterOnlyBlockAdd,
+    setEnterOnlyBlockAdd,
+    handleEnterOnlyBlockAddChange
   };
 };

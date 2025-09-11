@@ -11,6 +11,7 @@ export interface Character {
     };
   };
   backgroundColor?: string; // アイコン背景色
+  disabledProjects?: string[]; // 無効なプロジェクトIDの配列（未設定の場合は全プロジェクトで有効）
 }
 
 export interface ScriptBlock {

@@ -8,13 +8,17 @@ interface SettingsProps {
   onClose: () => void;
   saveDirectory: string;
   onSaveDirectoryChange: (directory: string) => void;
+  enterOnlyBlockAdd?: boolean;
+  onEnterOnlyBlockAddChange?: (enabled: boolean) => void;
 }
 
 export default function Settings({
   isOpen,
   onClose,
   saveDirectory,
-  onSaveDirectoryChange
+  onSaveDirectoryChange,
+  enterOnlyBlockAdd = false,
+  onEnterOnlyBlockAddChange
 }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<'settings' | 'help' | 'license' | 'changelog'>('settings');
   const [isSelectingDirectory, setIsSelectingDirectory] = useState(false);
@@ -175,6 +179,30 @@ export default function Settings({
                       <p>• ディレクトリを選択すると、データがファイルとして保存されます</p>
                       <p>• 保存先を変更すると、既存のデータが自動的に移動されます</p>
                       <p>• 未設定の場合はlocalStorageに保存されます</p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* 詳細設定セクション */}
+                <div>
+                  <h3 className="text-lg font-medium text-foreground mb-4">詳細設定</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id="enterOnlyBlockAdd"
+                        checked={enterOnlyBlockAdd}
+                        onChange={(e) => onEnterOnlyBlockAddChange?.(e.target.checked)}
+                        className="w-4 h-4 text-primary bg-background border-gray-300 rounded focus:ring-primary focus:ring-2"
+                      />
+                      <label htmlFor="enterOnlyBlockAdd" className="text-sm font-medium text-foreground">
+                        Enter入力のみでブロックを追加
+                      </label>
+                    </div>
+                    <div className="text-sm text-muted-foreground ml-7">
+                      <p>• チェックをONにすると、セリフ入力エリアでEnterキーを押すだけでテキストブロックが追加されます</p>
+                      <p>• 改行の入力はShift+EnterまたはCtrl+Enterに変更されます</p>
+                      <p>• チェックをOFFにすると、従来通りCtrl+Enterでブロック追加、Enterで改行になります</p>
                     </div>
                   </div>
                 </div>

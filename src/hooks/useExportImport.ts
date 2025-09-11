@@ -31,12 +31,14 @@ export const useExportImport = (
   project: Project,
   characters: Character[],
   selectedBlockIds: string[],
+  selectedSceneId: string | null,
   dataManagement: DataManagementHook,
   onNotification: (message: string, type: 'success' | 'error' | 'info') => void,
   onProjectUpdate: (project: Project) => void,
   onProjectIdUpdate: (id: string) => void,
-  onProjectListUpdate: (list: string[]) => void,
-  onSelectedSceneIdUpdate: (id: string | null) => void
+  onProjectListUpdate: (list: string[] | ((prev: string[]) => string[])) => void,
+  onSelectedSceneIdUpdate: (id: string | null) => void,
+  onCharactersUpdate: (characters: Character[]) => void
 ): ExportImportHook => {
 
   // CSVエンコード関数
@@ -209,13 +211,14 @@ export const useExportImport = (
   // キャラクター設定のCSVエクスポート
   const handleExportCharacterCSV = () => {
     const rows = [
-      ['ID', '名前', 'アイコン', 'グループ', '背景色'],
+      ['ID', '名前', 'アイコン', 'グループ', '背景色', '無効プロジェクト'],
       ...characters.map(char => [
         char.id,
         char.name,
         char.emotions.normal.iconUrl,
         char.group,
-        char.backgroundColor || '#e5e7eb'
+        char.backgroundColor || '#e5e7eb',
+        char.disabledProjects ? char.disabledProjects.join(';') : ''
       ])
     ];
     
@@ -361,18 +364,57 @@ export const useExportImport = (
         };
         
         dataManagement.saveData(`voiscripter_project_${options.projectName}`, JSON.stringify(newProject));
-        // TODO: 型エラーを修正する必要があります
-        // onProjectListUpdate((prev: string[]) => {
-        //   const name = options.projectName as string;
-        //   return prev.includes(name) ? prev : [...prev, name];
-        // });
+        
+        // プロジェクトリストを更新
+        onProjectListUpdate((prev: string[]) => {
+          const name = options.projectName as string;
+          return prev.includes(name) ? prev : [...prev, name];
+        });
+        
         onProjectUpdate(newProject);
         onProjectIdUpdate(options.projectName);
         onSelectedSceneIdUpdate(newSceneId);
         onNotification(`${newBlocks.length}個のブロックを新規プロジェクト「${options.projectName}」にインポートしました。`, 'success');
       } else {
-        // TODO: 既存プロジェクトへの追加機能は後で修正
-        onNotification('既存プロジェクトへの追加機能は現在修正中です。', 'info');
+        // 既存プロジェクトへの追加
+        if (!project || !selectedSceneId) {
+          onNotification('プロジェクトまたはシーンが選択されていません。', 'error');
+          return;
+        }
+        
+        const currentScene = project.scenes.find(s => s.id === selectedSceneId);
+        if (!currentScene) {
+          onNotification('選択されたシーンが見つかりません。', 'error');
+          return;
+        }
+        
+        const currentScript = currentScene.scripts[0];
+        if (!currentScript) {
+          onNotification('選択されたシーンのスクリプトが見つかりません。', 'error');
+          return;
+        }
+        
+        // 既存のブロックに新しいブロックを追加
+        const updatedScript = {
+          ...currentScript,
+          blocks: [...currentScript.blocks, ...newBlocks]
+        };
+        
+        const updatedScene = {
+          ...currentScene,
+          scripts: [updatedScript]
+        };
+        
+        const updatedProject = {
+          ...project,
+          scenes: project.scenes.map(s => s.id === selectedSceneId ? updatedScene : s)
+        };
+        
+        // プロジェクトを保存
+        dataManagement.saveData(`voiscripter_project_${project.id}`, JSON.stringify(updatedProject));
+        
+        onProjectUpdate(updatedProject);
+        onNotification(`${newBlocks.length}個のブロックを既存プロジェクト「${project.name}」に追加しました。`, 'success');
       }
     } catch (error) {
       console.error('CSVインポートエラー:', error);
@@ -421,8 +463,28 @@ export const useExportImport = (
         dataRows = rows.slice(1);
       }
 
-      // キャラクターインポート処理は親コンポーネントで実装
-      onNotification('キャラクター設定のインポート機能は親コンポーネントで実装されています。', 'info');
+      // キャラクター設定をインポート
+      const importedCharacters: Character[] = dataRows
+        .filter(row => row.length >= 2 && row[0] && row[1])
+        .map(([id, name, iconUrl, group, color, disabledProjectsStr]) => ({
+          id: id || Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          name: name || '',
+          group: group || 'default',
+          emotions: {
+            normal: {
+              iconUrl: iconUrl || ''
+            }
+          },
+          backgroundColor: color || '#3B82F6',
+          disabledProjects: disabledProjectsStr ? disabledProjectsStr.split(';').filter(p => p.trim() !== '') : []
+        }));
+
+      if (importedCharacters.length > 0) {
+        onCharactersUpdate(importedCharacters);
+        onNotification(`${importedCharacters.length}個のキャラクター設定をインポートしました。`, 'success');
+      } else {
+        onNotification('有効なキャラクター設定が見つかりませんでした。', 'info');
+      }
     } catch (error) {
       console.error('キャラクター設定のCSVインポートエラー:', error);
       onNotification('キャラクター設定のCSVファイルのインポートに失敗しました。', 'error');
@@ -447,8 +509,15 @@ export const useExportImport = (
           blocks: script.blocks.map((block: any) => {
             let newCharId = '';
             
+            // まずIDでマッピングを試行
             if (block.characterId && characters.some(c => c.id === block.characterId)) {
               newCharId = block.characterId;
+            } else if (block.characterId) {
+              // IDでマッピングできない場合、キャラクター名でマッピングを試行
+              const character = characters.find(c => c.name === block.characterId);
+              if (character) {
+                newCharId = character.id;
+              }
             }
             
             return {
@@ -464,6 +533,14 @@ export const useExportImport = (
         name: data.name,
         scenes: mappedScenes
       };
+      
+      // プロジェクトデータを保存
+      dataManagement.saveData(`voiscripter_project_${data.id}`, JSON.stringify(importedProject));
+      
+      // プロジェクトリストを更新
+      onProjectListUpdate((prev: string[]) => {
+        return prev.includes(data.id) ? prev : [...prev, data.id];
+      });
       
       onProjectUpdate(importedProject);
       onSelectedSceneIdUpdate(mappedScenes[0]?.id || null);
