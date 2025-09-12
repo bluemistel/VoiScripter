@@ -951,11 +951,10 @@ export default function ScriptEditor({
       <div className="script-editor-container min-h-auto">
         {script.blocks.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
-            <p className="text-lg mb-4">1.左上の新規作成から新しいプロジェクトを作成してください。</p>
-            <p className="text-lg mb-4">2.キャラクターのアイコンからキャラクターを追加します。</p>
-            <p className="text-lg mb-4">3.「+ブロックを追加」からテキストブロックを追加し、キャラクターを選択するとセリフを入力できます。</p>
-            <p className="text-lg mb-4">4.右上のエクスポートから台本をCSV形式で出力できます。グループ設定ごとにCSVファイルを分割出力することができます。</p>
-            <p className="text-lg mb-4">5.ショートカットやより詳しい操作方法は設定＞ヘルプをご覧ください。</p>
+            <p className="text-lg mb-4">1.右上のキャラクターのアイコンから登場キャラクターを追加します。</p>
+            <p className="text-lg mb-4">2.「+ブロックを追加」からテキストブロックを追加し、キャラクターを選択するとセリフを入力できます。</p>
+            <p className="text-lg mb-4">3.右上のエクスポートから台本をCSV形式で出力できます。グループ設定ごとにCSVファイルを分割出力することができます。</p>
+            <p className="text-lg mb-4">4.より詳しい操作方法は設定＞ヘルプをご覧ください。</p>
           </div>
         ) : (
           <div className="bg-card rounded-lg shadow p-4 relative h-full flex flex-col justify-between">

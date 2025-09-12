@@ -510,11 +510,51 @@ export default function Home() {
             currentProjectId={projectId}
           />
         ) : (
+          // 現在開いているプロジェクトが存在しない、かつ、シーンがひとつもない場合
           <div className="text-center py-12">
-            <h2 className="text-2xl font-bold mb-4">プロジェクトまたはシーンが選択されていません</h2>
-            <p className="text-gray-600 dark:text-gray-400">
-              プロジェクトを作成し、シーンを選択してください。
-            </p>
+            {projectList.length === 1 && projectList[0] === 'default' ? (
+              // プロジェクトリストにdefaultのみしか存在しない場合（初回起動時、または、プロジェクトをすべて削除した場合）
+              <div>
+                <h2 className="text-foreground text-2xl font-bold mb-4">VoiScripter.へようこそ！</h2>
+                <p className="text-muted-foreground mb-8">
+                  ここから台本を作りましょう。<br />新しいプロジェクトを作成するか、登場キャラクターの設定を行ってください。
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <button
+                    onClick={() => setIsProjectDialogOpen(true)}
+                    className="px-6 py-3 bg-primary hover:bg-primary/80 text-primary-foreground font-medium rounded-lg transition-colors duration-200"
+                  >
+                    新しいプロジェクトを作成
+                  </button>
+                  <button
+                    onClick={() => uiState.setIsCharacterManagerOpen(true)}
+                    className="px-6 py-3 bg-secondary hover:bg-secondary/80 text-secondary-foreground font-medium rounded-lg transition-colors duration-200"
+                  >
+                    キャラクター設定を開く
+                  </button>
+                </div>
+                <p className="text-muted-foreground mt-4 mb-4">
+                  詳しい使い方は設定からヘルプをご覧ください。
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <button
+                    onClick={() => uiState.setIsSettingsOpen(true)}
+                    className="px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground font-medium rounded-lg transition-colors duration-200"
+                  >
+                    アプリ設定・ヘルプを開く
+                  </button>
+                </div>
+
+              </div>
+            ) : (
+              // その他の場合
+              <div>
+                <h2 className="text-2xl font-bold mb-4">現在開いているプロジェクトはありません。</h2>
+                <p className="text-gray-600 dark:text-gray-400">
+                  新しいプロジェクトを作成するか、リストからプロジェクトを読み込んでください。
+                </p>
+              </div>
+            )}
           </div>
         )}
       </main>
