@@ -36,7 +36,7 @@ import { Character, Project, Scene } from '@/types';
 
 // ロゴパスを取得するカスタムフック
 const useLogoPath = () => {
-  const [logoPath, setLogoPath] = useState('/rogo.png');
+  const [logoPath, setLogoPath] = useState('./rogo.png');
 
   useEffect(() => {
     // Electron環境でロゴパスを取得

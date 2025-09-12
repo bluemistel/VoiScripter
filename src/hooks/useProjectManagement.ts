@@ -55,14 +55,20 @@ export const useProjectManagement = (
   // 初回マウント時にデータを読み込み
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (isInitialized.current) return; // 既に初期化済みの場合はスキップ
     
     const loadInitialData = async () => {
+      if (isInitialized.current) return; // 既に初期化済みの場合はスキップ
+      
+      console.log('🚀 プロジェクト管理の初期化開始 - 保存先:', dataManagement.saveDirectory);
+      
+      // 初回はlocalStorageから開始し、後で設定が読み込まれたら切り替える
+      console.log('🚀 初期化: localStorageから開始（設定読み込み完了後に切り替え）');
       //console.log('useProjectManagement - Starting initialization');
       isInitialized.current = true;
       // プロジェクトリストを先に取得（存在チェック用）
       let availableProjects: string[] = [];
       if (dataManagement.saveDirectory === '') {
+        console.log('📦 初期化: localStorageからプロジェクトリストを取得');
         const keys = Object.keys(localStorage)
           .filter(k => k.startsWith('voiscripter_project_') &&
             !k.endsWith('_lastScene') &&
@@ -72,9 +78,13 @@ export const useProjectManagement = (
             !k.endsWith('_groups') &&
             !k.endsWith('_lastSaved'));
         availableProjects = keys.map(k => k.replace('voiscripter_project_', ''));
+        console.log('📦 初期化: localStorageのキー:', keys);
+        console.log('📦 初期化: 利用可能なプロジェクト:', availableProjects);
       } else if (window.electronAPI) {
         try {
+          console.log('📁 初期化: ディレクトリからプロジェクトリストを取得');
           const keys = await dataManagement.listDataKeys();
+          console.log('📁 初期化: ディレクトリ内の全キー:', keys);
           availableProjects = keys.filter(k => k.startsWith('voiscripter_project_') &&
             !k.endsWith('_lastScene') &&
             !k.endsWith('_undo') &&
@@ -83,39 +93,70 @@ export const useProjectManagement = (
             !k.endsWith('_groups') &&
             !k.endsWith('_lastSaved'));
           availableProjects = availableProjects.map(k => k.replace('voiscripter_project_', ''));
+          console.log('📁 初期化: プロジェクトキー:', keys.filter(k => k.startsWith('voiscripter_project_')));
+          console.log('📁 初期化: 利用可能なプロジェクト:', availableProjects);
         } catch (error) {
           console.error('プロジェクトリスト取得エラー:', error);
           availableProjects = [];
         }
       }
       
+      console.log('✅ 初期化: プロジェクトリストを設定 - 利用可能なプロジェクト:', availableProjects);
       setProjectList(availableProjects);
-      //console.log('useProjectManagement - setProjectList called with:', availableProjects);
+      
+      // デバッグ用: プロジェクトリストの状態を確認
+      setTimeout(() => {
+        console.log('🔍 デバッグ: プロジェクトリスト状態確認 - availableProjects:', availableProjects);
+      }, 100);
       
       // 最後に開いていたプロジェクトを読み込み
       const lastProject = await dataManagement.loadData('voiscripter_lastProject');
-      //console.log('useProjectManagement - Last project from localStorage:', lastProject);
+      console.log('🔍 初期化: 最後のプロジェクト:', lastProject);
+      console.log('🔍 初期化: 利用可能なプロジェクト一覧:', availableProjects);
+      
       let validProjectId = 'default';
       if (lastProject && lastProject !== 'lastProject' && lastProject.trim() !== '') {
         if (availableProjects.includes(lastProject)) {
           validProjectId = lastProject;
-          //console.log('useProjectManagement - Using last project:', validProjectId);
+          console.log('✅ 初期化: 最後のプロジェクトを使用:', validProjectId);
         } else {
-          //console.log('useProjectManagement - Last project not found in available projects, using default');
+          console.log('⚠️ 初期化: 最後のプロジェクトが見つからない、利用可能なプロジェクトから選択');
+          // 利用可能なプロジェクトがある場合は、最初のプロジェクトを使用
+          if (availableProjects.length > 0) {
+            validProjectId = availableProjects[0];
+            console.log('✅ 初期化: 最初の利用可能なプロジェクトを使用:', validProjectId);
+          } else {
+            console.log('⚠️ 初期化: 利用可能なプロジェクトがない、defaultを使用');
+          }
         }
       } else {
-        //console.log('useProjectManagement - No valid last project, using default');
+        console.log('⚠️ 初期化: 有効な最後のプロジェクトがない');
+        // 利用可能なプロジェクトがある場合は、最初のプロジェクトを使用
+        if (availableProjects.length > 0) {
+          validProjectId = availableProjects[0];
+          console.log('✅ 初期化: 最初の利用可能なプロジェクトを使用:', validProjectId);
+        } else {
+          console.log('⚠️ 初期化: 利用可能なプロジェクトがない、defaultを使用');
+        }
       }
       
+      console.log('🎯 初期化: 最終的なプロジェクトID:', validProjectId);
       setProjectId(validProjectId);
-      //console.log('useProjectManagement - Set projectId to:', validProjectId);
+      
+      // 最後に開いたプロジェクトを保存
+      dataManagement.saveData('voiscripter_lastProject', validProjectId);
+      console.log('💾 初期化: 最後のプロジェクトを保存:', validProjectId);
       
       // 選択されたプロジェクトのデータを読み込み
+      console.log(`🔍 初期化: プロジェクトデータを読み込み - key: voiscripter_project_${validProjectId}`);
       const selectedProjectData = await dataManagement.loadData(`voiscripter_project_${validProjectId}`);
+      console.log(`📁 初期化: プロジェクトデータ読み込み結果 - ${selectedProjectData ? '成功' : 'null'}`);
+      
       if (selectedProjectData) {
         try {
           const parsed = JSON.parse(selectedProjectData);
           if (parsed && Array.isArray(parsed.scenes)) {
+            console.log(`✅ 初期化: プロジェクトデータを設定 - scenes: ${parsed.scenes.length}個`);
             setProject(parsed);
             
             // シーンID復元
@@ -162,7 +203,151 @@ export const useProjectManagement = (
     };
     
     loadInitialData();
-  }, []); // 依存配列を空にして初回のみ実行
+  }, []); // 初回のみ実行
+  
+  // 保存先が変更された時にプロジェクトリストを更新
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!isInitialized.current) return; // 初期化前はスキップ
+    
+    const updateProjectList = async () => {
+      console.log('🔄 プロジェクトリスト更新開始 - 保存先:', dataManagement.saveDirectory);
+      let availableProjects: string[] = [];
+      if (dataManagement.saveDirectory === '') {
+        console.log('📦 localStorageからプロジェクトリストを取得');
+        const keys = Object.keys(localStorage)
+          .filter(k => k.startsWith('voiscripter_project_') &&
+            !k.endsWith('_lastScene') &&
+            !k.endsWith('_undo') &&
+            !k.endsWith('_redo') &&
+            !k.endsWith('_characters') &&
+            !k.endsWith('_groups') &&
+            !k.endsWith('_lastSaved'));
+        availableProjects = keys.map(k => k.replace('voiscripter_project_', ''));
+        console.log('📦 localStorageのキー:', keys);
+        console.log('📦 利用可能なプロジェクト:', availableProjects);
+      } else if (window.electronAPI) {
+        try {
+          console.log('📁 ディレクトリからプロジェクトリストを取得');
+          const keys = await dataManagement.listDataKeys();
+          console.log('📁 ディレクトリ内の全キー:', keys);
+          availableProjects = keys.filter(k => k.startsWith('voiscripter_project_') &&
+            !k.endsWith('_lastScene') &&
+            !k.endsWith('_undo') &&
+            !k.endsWith('_redo') &&
+            !k.endsWith('_characters') &&
+            !k.endsWith('_groups') &&
+            !k.endsWith('_lastSaved'));
+          availableProjects = availableProjects.map(k => k.replace('voiscripter_project_', ''));
+          console.log('📁 プロジェクトキー:', keys.filter(k => k.startsWith('voiscripter_project_')));
+          console.log('📁 利用可能なプロジェクト:', availableProjects);
+        } catch (error) {
+          console.error('プロジェクトリスト取得エラー:', error);
+          availableProjects = [];
+        }
+      }
+      
+      console.log('✅ 最終的なプロジェクトリスト:', availableProjects);
+      setProjectList(availableProjects);
+      
+      // 保存先変更時にも最後のプロジェクトを読み込んで選択
+      const lastProject = await dataManagement.loadData('voiscripter_lastProject');
+      console.log('🔄 保存先変更: 最後のプロジェクト:', lastProject);
+      
+      let validProjectId = project.id; // 現在のプロジェクトIDを保持
+      
+      if (lastProject && lastProject !== 'lastProject' && lastProject.trim() !== '') {
+        if (availableProjects.includes(lastProject)) {
+          validProjectId = lastProject;
+          console.log('✅ 保存先変更: 最後のプロジェクトを使用:', validProjectId);
+        } else {
+          console.log('⚠️ 保存先変更: 最後のプロジェクトが見つからない、現在のプロジェクトを維持');
+        }
+      } else {
+        console.log('⚠️ 保存先変更: 有効な最後のプロジェクトがない、現在のプロジェクトを維持');
+      }
+      
+      // 現在のプロジェクトが利用可能なプロジェクトに含まれていない場合、最初のプロジェクトを選択
+      if (!availableProjects.includes(validProjectId) && availableProjects.length > 0) {
+        validProjectId = availableProjects[0];
+        console.log('⚠️ 保存先変更: 現在のプロジェクトが見つからない、最初のプロジェクトを使用:', validProjectId);
+      }
+      
+      // プロジェクトIDが変更された場合のみ更新
+      if (validProjectId !== project.id) {
+        console.log('🔄 保存先変更: プロジェクトIDを変更:', project.id, '→', validProjectId);
+        setProjectId(validProjectId);
+        
+        // 最後に開いたプロジェクトを保存
+        dataManagement.saveData('voiscripter_lastProject', validProjectId);
+        console.log('💾 保存先変更: 最後のプロジェクトを保存:', validProjectId);
+        
+        // 新しいプロジェクトのデータを読み込み
+        const selectedProjectData = await dataManagement.loadData(`voiscripter_project_${validProjectId}`);
+        if (selectedProjectData) {
+          try {
+            const parsed = JSON.parse(selectedProjectData);
+            if (parsed && Array.isArray(parsed.scenes)) {
+              console.log(`✅ 保存先変更: プロジェクトデータを設定 - scenes: ${parsed.scenes.length}個`);
+              setProject(parsed);
+              
+              // シーンID復元
+              const lastSceneId = await dataManagement.loadData(`voiscripter_project_${validProjectId}_lastScene`);
+              if (lastSceneId && parsed.scenes.some((s: any) => s.id === lastSceneId)) {
+                setSelectedSceneId(lastSceneId);
+                console.log('✅ 保存先変更: 最後のシーンを復元:', lastSceneId);
+              } else if (parsed.scenes.length > 0) {
+                setSelectedSceneId(parsed.scenes[0].id);
+                console.log('✅ 保存先変更: 最初のシーンを選択:', parsed.scenes[0].id);
+              }
+            }
+          } catch (error) {
+            console.error('保存先変更: プロジェクトデータの解析エラー:', error);
+          }
+        }
+      }
+    };
+    
+    updateProjectList();
+  }, [dataManagement.saveDirectory]);
+
+  // プロジェクトIDが変更された時にプロジェクトデータを読み込み
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!isInitialized.current) return; // 初期化前はスキップ
+    
+    const loadProjectData = async () => {
+      console.log(`🔄 プロジェクトID変更: ${projectId} のデータを読み込み`);
+      
+      // プロジェクトデータを読み込み
+      const selectedProjectData = await dataManagement.loadData(`voiscripter_project_${projectId}`);
+      if (selectedProjectData) {
+        try {
+          const parsed = JSON.parse(selectedProjectData);
+          if (parsed && Array.isArray(parsed.scenes)) {
+            console.log(`✅ プロジェクトID変更: プロジェクトデータを設定 - scenes: ${parsed.scenes.length}個`);
+            setProject(parsed);
+            
+            // シーンID復元
+            const lastSceneId = await dataManagement.loadData(`voiscripter_project_${projectId}_lastScene`);
+            if (lastSceneId && parsed.scenes.some((s: any) => s.id === lastSceneId)) {
+              setSelectedSceneId(lastSceneId);
+              console.log('✅ プロジェクトID変更: 最後のシーンを復元:', lastSceneId);
+            } else if (parsed.scenes.length > 0) {
+              setSelectedSceneId(parsed.scenes[0].id);
+              console.log('✅ プロジェクトID変更: 最初のシーンを選択:', parsed.scenes[0].id);
+            }
+          }
+        } catch (error) {
+          console.error('プロジェクトID変更: プロジェクトデータの解析エラー:', error);
+        }
+      } else {
+        console.log(`⚠️ プロジェクトID変更: プロジェクトデータが見つからない - ${projectId}`);
+      }
+    };
+    
+    loadProjectData();
+  }, [projectId, dataManagement.saveDirectory]);
 
   // Undo/Redoスタックの保存（遅延実行）
   useEffect(() => {

@@ -227,60 +227,50 @@ function createWindow() {
       }
       mainWindow.loadURL(startUrl);
     } else {
-      // 本番環境では、app.asar内のoutディレクトリを参照
-      // パッケージ化されたアプリでは、outディレクトリがapp.asar内に含まれる
+      // 本番環境では、app.asar.unpacked内のoutディレクトリを参照
+      // asarUnpackでoutディレクトリをアンパックしているため
       const indexPath = path.join(__dirname, '../out/index.html');
-      if (isDev) {
-        console.log(`Loading app from: ${indexPath}`);
+      
+      // 本番環境でのファイルパス検出
+      console.log('=== Production Build Debug Info ===');
+      console.log('process.resourcesPath:', process.resourcesPath);
+      console.log('__dirname:', __dirname);
+      console.log('app.getAppPath():', app.getAppPath());
+      
+      const possiblePaths = [
+        path.join(process.resourcesPath, 'out/index.html'),  // extraResourcesで配置されたパス
+        path.join(__dirname, '../out/index.html'),
+        path.join(__dirname, 'out/index.html'),
+        path.join(process.resourcesPath, 'app.asar.unpacked/out/index.html'),
+        path.join(app.getAppPath(), 'out/index.html')
+      ];
+      
+      console.log('Checking possible paths:');
+      possiblePaths.forEach((testPath, index) => {
+        const exists = fs.existsSync(testPath);
+        console.log(`${index + 1}. ${testPath} - exists: ${exists}`);
+        if (exists) {
+          console.log(`   File size: ${fs.statSync(testPath).size} bytes`);
+        }
+      });
+      
+      let foundPath = null;
+      for (const testPath of possiblePaths) {
+        if (fs.existsSync(testPath)) {
+          foundPath = testPath;
+          break;
+        }
       }
       
-      // ファイルの存在確認
-      if (fs.existsSync(indexPath)) {
-        // セキュリティを考慮したfile://プロトコルの使用
-        const fileUrl = `file://${indexPath}`;
-        if (isDev) {
-          console.log(`Loading file URL: ${fileUrl}`);
-        }
+      if (foundPath) {
+        const fileUrl = `file://${foundPath}`;
+        console.log('✅ Production build - Loading from:', fileUrl);
         mainWindow.loadURL(fileUrl);
       } else {
-        // パッケージ化されたアプリでは、app.asar内のパスを試す
-        const asarIndexPath = path.join(__dirname, 'out/index.html');
-        if (isDev) {
-          console.log(`Trying asar path: ${asarIndexPath}`);
-        }
-        
-        if (fs.existsSync(asarIndexPath)) {
-          const fileUrl = `file://${asarIndexPath}`;
-          if (isDev) {
-            console.log(`Loading asar file URL: ${fileUrl}`);
-          }
-          mainWindow.loadURL(fileUrl);
-        } else {
-          // さらに別のパスを試す（パッケージ化されたアプリ用）
-          const appAsarPath = path.join(__dirname, '../out/index.html');
-          if (isDev) {
-            console.log(`Trying app asar path: ${appAsarPath}`);
-          }
-          
-          if (fs.existsSync(appAsarPath)) {
-            const fileUrl = `file://${appAsarPath}`;
-            if (isDev) {
-              console.log(`Loading app asar file URL: ${fileUrl}`);
-            }
-            mainWindow.loadURL(fileUrl);
-          } else {
-            if (isDev) {
-              console.error(`Index file not found in all locations: ${indexPath}, ${asarIndexPath}, ${appAsarPath}`);
-            }
-            // フォールバック: 開発サーバーに接続（セキュリティ警告あり）
-            const port = await findDevServerPort();
-            const startUrl = `http://localhost:${port}`;
-            if (isDev) {
-              console.log(`Falling back to dev server: ${startUrl}`);
-            }
-            mainWindow.loadURL(startUrl);
-          }
-        }
+        console.error('❌ Index file not found in any location');
+        console.error('Checked paths:', possiblePaths);
+        // エラー表示
+        mainWindow.loadURL(`data:text/html,<h1>エラー: アプリケーションファイルが見つかりません</h1><p>Checked paths:</p><ul>${possiblePaths.map(p => `<li>${p}</li>`).join('')}</ul>`);
       }
     }
   };
@@ -422,12 +412,22 @@ function createWindow() {
     });
   }
 
-  // セキュリティ監査: 外部リソースの読み込みを監視（開発環境のみ）
-  if (isDev) {
-    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-      console.warn(`Security: Failed to load resource: ${validatedURL} (${errorDescription})`);
-    });
-  }
+  // セキュリティ監査: 外部リソースの読み込みを監視
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error(`❌ Failed to load resource: ${validatedURL}`);
+    console.error(`   Error Code: ${errorCode}`);
+    console.error(`   Error Description: ${errorDescription}`);
+  });
+
+  // ページ読み込み完了時の処理
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('✅ Page loaded successfully');
+  });
+
+  // ページ読み込み開始時の処理
+  mainWindow.webContents.on('did-start-loading', () => {
+    console.log('🔄 Starting to load page...');
+  });
 
   // セキュリティ監査: 新しいウィンドウの作成を監視
   mainWindow.webContents.on('new-window', (event, navigationUrl) => {
@@ -641,19 +641,26 @@ ipcMain.handle('loadData', async (event, key) => {
       saveDirectory = settings.saveDirectory || '';
     }
     
+    console.log(`🔍 [Main] loadData called - key: ${key}, saveDirectory: ${saveDirectory}`);
+    
     if (!saveDirectory) {
+      console.log(`❌ [Main] No saveDirectory set for key: ${key}`);
       return null;
     }
     
     const filePath = path.join(saveDirectory, `${key}.json`);
+    console.log(`📁 [Main] Looking for file: ${filePath}`);
+    
     if (fs.existsSync(filePath)) {
-      return fs.readFileSync(filePath, 'utf8');
+      const content = fs.readFileSync(filePath, 'utf8');
+      console.log(`✅ [Main] File found and read - key: ${key}, size: ${content.length} bytes`);
+      return content;
+    } else {
+      console.log(`❌ [Main] File not found - key: ${key}, path: ${filePath}`);
     }
     return null;
   } catch (error) {
-    if (isDev) {
-      console.error('データ読み込みエラー:', error);
-    }
+    console.error('データ読み込みエラー:', error);
     return null;
   }
 });
@@ -669,18 +676,24 @@ ipcMain.handle('listDataKeys', async () => {
       saveDirectory = settings.saveDirectory || '';
     }
     
+    console.log(`🔍 [Main] listDataKeys called - saveDirectory: ${saveDirectory}`);
+    
     if (!saveDirectory) {
+      console.log(`❌ [Main] No saveDirectory set for listDataKeys`);
       return [];
     }
     
     const files = fs.readdirSync(saveDirectory);
-    return files
+    const jsonFiles = files
       .filter(file => file.endsWith('.json'))
       .map(file => file.replace('.json', ''));
+    
+    console.log(`📁 [Main] Directory contents: ${files.join(', ')}`);
+    console.log(`📁 [Main] JSON files: ${jsonFiles.join(', ')}`);
+    
+    return jsonFiles;
   } catch (error) {
-    if (isDev) {
-      console.error('データキー一覧取得エラー:', error);
-    }
+    console.error('データキー一覧取得エラー:', error);
     return [];
   }
 });
@@ -737,14 +750,18 @@ ipcMain.handle('saveSettings', async (event, settings) => {
 ipcMain.handle('loadSettings', async () => {
   try {
     const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+    console.log(`🔧 [Main] loadSettings called - path: ${settingsPath}`);
+    
     if (fs.existsSync(settingsPath)) {
-      return JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      console.log(`🔧 [Main] Settings loaded:`, settings);
+      return settings;
+    } else {
+      console.log(`🔧 [Main] Settings file not found, returning default`);
     }
     return { saveDirectory: '' };
   } catch (error) {
-    if (isDev) {
-      console.error('設定読み込みエラー:', error);
-    }
+    console.error('設定読み込みエラー:', error);
     return { saveDirectory: '' };
   }
 });

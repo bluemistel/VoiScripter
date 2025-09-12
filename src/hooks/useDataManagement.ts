@@ -80,21 +80,27 @@ export const useDataManagement = (): DataManagementHook => {
       // ファイルに保存
       window.electronAPI?.saveData(key, data);
     }
-  }, []);
+  }, [saveDirectory]);
 
   // データ読み込み関数
   const loadData = useCallback(async (key: string): Promise<string | null> => {
     if (typeof window === 'undefined') return null;
     
+    console.log(`🔍 データ読み込み - key: ${key}, 保存先: ${saveDirectory}`);
+    
     if (saveDirectory === '') {
       // localStorageから読み込み
-      return localStorage.getItem(key);
+      const result = localStorage.getItem(key);
+      console.log(`📦 localStorageから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
+      return result;
     } else if (window.electronAPI) {
       // ファイルから読み込み
-      return await window.electronAPI?.loadData(key) || null;
+      const result = await window.electronAPI?.loadData(key) || null;
+      console.log(`📁 ファイルから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
+      return result;
     }
     return null;
-  }, []);
+  }, [saveDirectory]);
 
   // データ削除関数
   const deleteData = useCallback((key: string) => {
@@ -105,7 +111,7 @@ export const useDataManagement = (): DataManagementHook => {
     } else if (window.electronAPI) {
       window.electronAPI?.deleteData(key);
     }
-  }, []);
+  }, [saveDirectory]);
 
   // データキー一覧取得関数
   const listDataKeys = useCallback(async (): Promise<string[]> => {
@@ -117,7 +123,7 @@ export const useDataManagement = (): DataManagementHook => {
       return await window.electronAPI?.listDataKeys() || [];
     }
     return [];
-  }, []);
+  }, [saveDirectory]);
 
   // 初回マウント時に保存先設定を読み込み
   useEffect(() => {
@@ -130,14 +136,20 @@ export const useDataManagement = (): DataManagementHook => {
           const settings = await window.electronAPI.loadSettings();
           savedDirectory = settings.saveDirectory || '';
           setSaveDirectory(savedDirectory);
-          //console.log('設定から読み込んだ保存先:', savedDirectory);
+          console.log('🔧 設定から読み込んだ保存先:', savedDirectory);
+          
+          // 保存先が設定されている場合、データキー一覧を確認
+          if (savedDirectory) {
+            const keys = await window.electronAPI.listDataKeys();
+            console.log('📁 ディレクトリ内のデータキー:', keys);
+          }
         } catch (error) {
           console.error('設定読み込みエラー:', error);
         }
       } else {
         savedDirectory = localStorage.getItem('voiscripter_saveDirectory') || '';
         setSaveDirectory(savedDirectory);
-        //console.log('localStorageから読み込んだ保存先:', savedDirectory);
+        console.log('🔧 localStorageから読み込んだ保存先:', savedDirectory);
       }
     };
     

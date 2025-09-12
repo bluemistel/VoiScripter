@@ -58,7 +58,7 @@
   },
   "build": {
     "appId": "com.voiscripter.app",
-    "productName": "VoiScripter.",
+    "productName": "VoiScripter",
     "directories": {
       "output": "dist"
     },
@@ -83,6 +83,12 @@
       {
         "from": "node_modules/electron/dist/ffmpeg.dll",
         "to": "ffmpeg.dll"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "out",
+        "to": "out"
       }
     ],
     "mac": {

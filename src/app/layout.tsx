@@ -88,9 +88,9 @@ export default function RootLayout({
         <title>VoiScripter</title>
         <meta name="description" content="VoiScripter - 音声合成用台本作成ツール" />
         <meta httpEquiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://localhost:* https://localhost:*; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self';" />
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/apple-icon.png" />
-        <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" href="./favicon.ico" />
+        <link rel="apple-touch-icon" href="./apple-icon.png" />
+        <link rel="manifest" href="./manifest.json" />
       </head>
       <body className="font-mplus">{children}</body>
     </html>

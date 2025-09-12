@@ -67,8 +67,6 @@ declare global {
       saveSettings: (settings: any) => Promise<void>;
       loadSettings: () => Promise<{ saveDirectory: string }>;
       
-      // デフォルトプロジェクト初期化
-      initializeDefaultProject: () => Promise<void>;
       
       // メニューイベントの受信
       onNewProject: (callback: () => void) => void;

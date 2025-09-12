@@ -435,6 +435,9 @@ export default function Home() {
         projectList={projectManagement.projectList}
         onProjectChange={(projectId) => {
           setProjectId(projectId);
+          // 最後に開いたプロジェクトを保存
+          dataManagement.saveData('voiscripter_lastProject', projectId);
+          console.log('💾 プロジェクト変更: 最後のプロジェクトを保存:', projectId);
           // プロジェクトを読み込む処理は既存のuseEffectで実行される
         }}
         onDeleteProject={() => {
@@ -516,7 +519,7 @@ export default function Home() {
             <div>
               <h2 className="text-foreground text-2xl font-bold mb-4">VoiScripter.へようこそ！</h2>
               <p className="text-muted-foreground mb-8">
-                ここから台本を作りましょう。<br />新しいプロジェクトを作成するか、登場キャラクターの設定を行ってください。
+                ここから台本を作りましょう。<br />新しいプロジェクトを作成するか、登場キャラクターの設定を行ってください。<br />すでに作った台本は上部のリストから読み込めます。
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <button

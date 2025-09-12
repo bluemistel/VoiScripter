@@ -12,7 +12,8 @@ export interface SettingsHook {
 }
 
 export const useSettings = (dataManagement: DataManagementHook): SettingsHook => {
-  const [saveDirectory, setSaveDirectory] = useState<string>('');
+  // saveDirectoryはdataManagementから取得
+  const { saveDirectory, setSaveDirectory } = dataManagement;
   const [enterOnlyBlockAdd, setEnterOnlyBlockAdd] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('voiscripter_enterOnlyBlockAdd') === 'true';

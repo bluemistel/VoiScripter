@@ -52,8 +52,7 @@ contextBridge.exposeInMainWorld('getLogoPath', () => {
   if (isDev) {
     return '/rogo.png';
   } else {
-    // 本番環境では、app.asar内のパスを使用
-    // 相対パスで指定することで、Electronが自動的に正しいパスを解決
+    // 本番環境では相対パスを使用
     return './rogo.png';
   }
 }); 
