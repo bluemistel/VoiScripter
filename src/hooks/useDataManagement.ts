@@ -39,12 +39,12 @@ export const useDataManagement = (): DataManagementHook => {
           }
           
           // その他の大きなデータもスキップ
-          //console.log(`Skipping large data for key: ${key}`);
+          ////console.log(`Skipping large data for key: ${key}`);
           return;
         }
         
         localStorage.setItem(key, data);
-        //console.log(`Successfully saved to localStorage: ${key} (${dataSize} bytes)`);
+        ////console.log(`Successfully saved to localStorage: ${key} (${dataSize} bytes)`);
       } catch (error) {
         console.error('localStorage save error:', error);
         console.error('Error details:', {
@@ -86,17 +86,17 @@ export const useDataManagement = (): DataManagementHook => {
   const loadData = useCallback(async (key: string): Promise<string | null> => {
     if (typeof window === 'undefined') return null;
     
-    console.log(`🔍 データ読み込み - key: ${key}, 保存先: ${saveDirectory}`);
+    //console.log(`🔍 データ読み込み - key: ${key}, 保存先: ${saveDirectory}`);
     
     if (saveDirectory === '') {
       // localStorageから読み込み
       const result = localStorage.getItem(key);
-      console.log(`📦 localStorageから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
+      //console.log(`📦 localStorageから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
       return result;
     } else if (window.electronAPI) {
       // ファイルから読み込み
       const result = await window.electronAPI?.loadData(key) || null;
-      console.log(`📁 ファイルから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
+      //console.log(`📁 ファイルから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
       return result;
     }
     return null;

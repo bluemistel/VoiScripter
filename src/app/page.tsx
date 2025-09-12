@@ -90,6 +90,7 @@ export default function Home() {
   const exportImport = useExportImport(
     project,
     characters,
+    groups,
     selectedBlockIds,
     selectedSceneId,
     dataManagement,
@@ -98,7 +99,8 @@ export default function Home() {
     setProjectId,
     projectManagement.setProjectList,
     setSelectedSceneId,
-    setCharacters
+    setCharacters,
+    setGroups
   );
 
   // Undo/Redoフック

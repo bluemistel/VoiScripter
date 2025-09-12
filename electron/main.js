@@ -223,7 +223,7 @@ function createWindow() {
       const port = await findDevServerPort();
       const startUrl = `http://localhost:${port}`;
       if (isDev) {
-        console.log(`Loading app from: ${startUrl}`);
+        //console.log(`Loading app from: ${startUrl}`);
       }
       mainWindow.loadURL(startUrl);
     } else {
@@ -232,10 +232,10 @@ function createWindow() {
       const indexPath = path.join(__dirname, '../out/index.html');
       
       // 本番環境でのファイルパス検出
-      console.log('=== Production Build Debug Info ===');
-      console.log('process.resourcesPath:', process.resourcesPath);
-      console.log('__dirname:', __dirname);
-      console.log('app.getAppPath():', app.getAppPath());
+      //console.log('=== Production Build Debug Info ===');
+      //console.log('process.resourcesPath:', process.resourcesPath);
+      //console.log('__dirname:', __dirname);
+      //console.log('app.getAppPath():', app.getAppPath());
       
       const possiblePaths = [
         path.join(process.resourcesPath, 'out/index.html'),  // extraResourcesで配置されたパス
@@ -245,12 +245,12 @@ function createWindow() {
         path.join(app.getAppPath(), 'out/index.html')
       ];
       
-      console.log('Checking possible paths:');
+      //console.log('Checking possible paths:');
       possiblePaths.forEach((testPath, index) => {
         const exists = fs.existsSync(testPath);
-        console.log(`${index + 1}. ${testPath} - exists: ${exists}`);
+        //console.log(`${index + 1}. ${testPath} - exists: ${exists}`);
         if (exists) {
-          console.log(`   File size: ${fs.statSync(testPath).size} bytes`);
+          //console.log(`   File size: ${fs.statSync(testPath).size} bytes`);
         }
       });
       
@@ -264,7 +264,7 @@ function createWindow() {
       
       if (foundPath) {
         const fileUrl = `file://${foundPath}`;
-        console.log('✅ Production build - Loading from:', fileUrl);
+        //console.log('✅ Production build - Loading from:', fileUrl);
         mainWindow.loadURL(fileUrl);
       } else {
         console.error('❌ Index file not found in any location');
@@ -330,7 +330,7 @@ function createWindow() {
       lastSavedBounds = bounds;
       
       if (isDev) {
-        console.log('ウィンドウサイズ保存:', bounds);
+        //console.log('ウィンドウサイズ保存:', bounds);
       }
     } catch (error) {
       if (isDev) {
@@ -399,16 +399,16 @@ function createWindow() {
   // セキュリティ監査: 危険なAPIの使用を監視（開発環境のみ）
   if (isDev) {
     mainWindow.webContents.on('did-finish-load', () => {
-      console.log('Security: Application loaded with secure settings');
+      //console.log('Security: Application loaded with secure settings');
       
       // セキュリティ監査レポート
-      console.log('Security Audit Report:');
-      console.log('- CSP: Enabled with strict directives');
-      console.log('- Web Security: Enabled');
-      console.log('- Context Isolation: Enabled');
-      console.log('- Node Integration: Disabled');
-      console.log('- Sandbox: Disabled (preload script required)');
-      console.log('- Insecure Content: Blocked');
+      //console.log('Security Audit Report:');
+      //console.log('- CSP: Enabled with strict directives');
+      //console.log('- Web Security: Enabled');
+      //console.log('- Context Isolation: Enabled');
+      //console.log('- Node Integration: Disabled');
+      //console.log('- Sandbox: Disabled (preload script required)');
+      //console.log('- Insecure Content: Blocked');
     });
   }
 
@@ -421,12 +421,12 @@ function createWindow() {
 
   // ページ読み込み完了時の処理
   mainWindow.webContents.on('did-finish-load', () => {
-    console.log('✅ Page loaded successfully');
+    //console.log('✅ Page loaded successfully');
   });
 
   // ページ読み込み開始時の処理
   mainWindow.webContents.on('did-start-loading', () => {
-    console.log('🔄 Starting to load page...');
+    //console.log('🔄 Starting to load page...');
   });
 
   // セキュリティ監査: 新しいウィンドウの作成を監視
@@ -641,22 +641,22 @@ ipcMain.handle('loadData', async (event, key) => {
       saveDirectory = settings.saveDirectory || '';
     }
     
-    console.log(`🔍 [Main] loadData called - key: ${key}, saveDirectory: ${saveDirectory}`);
+    //console.log(`🔍 [Main] loadData called - key: ${key}, saveDirectory: ${saveDirectory}`);
     
     if (!saveDirectory) {
-      console.log(`❌ [Main] No saveDirectory set for key: ${key}`);
+      //console.log(`❌ [Main] No saveDirectory set for key: ${key}`);
       return null;
     }
     
     const filePath = path.join(saveDirectory, `${key}.json`);
-    console.log(`📁 [Main] Looking for file: ${filePath}`);
+    //console.log(`📁 [Main] Looking for file: ${filePath}`);
     
     if (fs.existsSync(filePath)) {
       const content = fs.readFileSync(filePath, 'utf8');
-      console.log(`✅ [Main] File found and read - key: ${key}, size: ${content.length} bytes`);
+      //console.log(`✅ [Main] File found and read - key: ${key}, size: ${content.length} bytes`);
       return content;
     } else {
-      console.log(`❌ [Main] File not found - key: ${key}, path: ${filePath}`);
+      //console.log(`❌ [Main] File not found - key: ${key}, path: ${filePath}`);
     }
     return null;
   } catch (error) {
@@ -676,10 +676,10 @@ ipcMain.handle('listDataKeys', async () => {
       saveDirectory = settings.saveDirectory || '';
     }
     
-    console.log(`🔍 [Main] listDataKeys called - saveDirectory: ${saveDirectory}`);
+    //console.log(`🔍 [Main] listDataKeys called - saveDirectory: ${saveDirectory}`);
     
     if (!saveDirectory) {
-      console.log(`❌ [Main] No saveDirectory set for listDataKeys`);
+      //console.log(`❌ [Main] No saveDirectory set for listDataKeys`);
       return [];
     }
     
@@ -688,8 +688,8 @@ ipcMain.handle('listDataKeys', async () => {
       .filter(file => file.endsWith('.json'))
       .map(file => file.replace('.json', ''));
     
-    console.log(`📁 [Main] Directory contents: ${files.join(', ')}`);
-    console.log(`📁 [Main] JSON files: ${jsonFiles.join(', ')}`);
+    //console.log(`📁 [Main] Directory contents: ${files.join(', ')}`);
+    //console.log(`📁 [Main] JSON files: ${jsonFiles.join(', ')}`);
     
     return jsonFiles;
   } catch (error) {
@@ -718,11 +718,11 @@ ipcMain.handle('deleteData', async (event, key) => {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
       if (isDev) {
-        console.log(`ファイル削除成功: ${filePath}`);
+        //console.log(`ファイル削除成功: ${filePath}`);
       }
     } else {
       if (isDev) {
-        console.log(`ファイルが存在しません: ${filePath}`);
+        //console.log(`ファイルが存在しません: ${filePath}`);
       }
     }
   } catch (error) {
@@ -750,14 +750,14 @@ ipcMain.handle('saveSettings', async (event, settings) => {
 ipcMain.handle('loadSettings', async () => {
   try {
     const settingsPath = path.join(app.getPath('userData'), 'settings.json');
-    console.log(`🔧 [Main] loadSettings called - path: ${settingsPath}`);
+    //console.log(`🔧 [Main] loadSettings called - path: ${settingsPath}`);
     
     if (fs.existsSync(settingsPath)) {
       const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-      console.log(`🔧 [Main] Settings loaded:`, settings);
+      //console.log(`🔧 [Main] Settings loaded:`, settings);
       return settings;
     } else {
-      console.log(`🔧 [Main] Settings file not found, returning default`);
+      //console.log(`🔧 [Main] Settings file not found, returning default`);
     }
     return { saveDirectory: '' };
   } catch (error) {
@@ -812,7 +812,7 @@ ipcMain.handle('set-window-bounds', (event, bounds) => {
 ipcMain.handle('moveDataBetweenDirectories', async (event, fromDirectory, toDirectory) => {
   try {
     if (isDev) {
-      console.log(`ディレクトリ間データ移動: ${fromDirectory} → ${toDirectory}`);
+      //console.log(`ディレクトリ間データ移動: ${fromDirectory} → ${toDirectory}`);
     }
     
     const movedData = {};
@@ -823,8 +823,8 @@ ipcMain.handle('moveDataBetweenDirectories', async (event, fromDirectory, toDire
       const jsonFiles = files.filter(file => file.endsWith('.json'));
       
       if (isDev) {
-        console.log(`前のディレクトリのファイル数: ${jsonFiles.length}`);
-        console.log('移動対象ファイル:', jsonFiles);
+        //console.log(`前のディレクトリのファイル数: ${jsonFiles.length}`);
+        //console.log('移動対象ファイル:', jsonFiles);
       }
       
       for (const file of jsonFiles) {
@@ -833,12 +833,12 @@ ipcMain.handle('moveDataBetweenDirectories', async (event, fromDirectory, toDire
         const data = fs.readFileSync(filePath, 'utf8');
         movedData[key] = data;
         if (isDev) {
-          console.log(`データ読み込み成功: ${key} (${data.length} bytes)`);
+          //console.log(`データ読み込み成功: ${key} (${data.length} bytes)`);
         }
       }
     } else {
       if (isDev) {
-        console.log(`前のディレクトリが存在しません: ${fromDirectory}`);
+        //console.log(`前のディレクトリが存在しません: ${fromDirectory}`);
       }
     }
     
@@ -846,7 +846,7 @@ ipcMain.handle('moveDataBetweenDirectories', async (event, fromDirectory, toDire
     if (!fs.existsSync(toDirectory)) {
       fs.mkdirSync(toDirectory, { recursive: true });
       if (isDev) {
-        console.log(`新しいディレクトリを作成: ${toDirectory}`);
+        //console.log(`新しいディレクトリを作成: ${toDirectory}`);
       }
     }
     
@@ -854,12 +854,12 @@ ipcMain.handle('moveDataBetweenDirectories', async (event, fromDirectory, toDire
       const filePath = path.join(toDirectory, `${key}.json`);
       fs.writeFileSync(filePath, data, 'utf8');
       if (isDev) {
-        console.log(`データ移動成功: ${key} → ${filePath}`);
+        //console.log(`データ移動成功: ${key} → ${filePath}`);
       }
     }
     
     if (isDev) {
-      console.log(`移動完了: ${Object.keys(movedData).length}個のファイル`);
+      //console.log(`移動完了: ${Object.keys(movedData).length}個のファイル`);
     }
     
     return { success: true, movedCount: Object.keys(movedData).length };

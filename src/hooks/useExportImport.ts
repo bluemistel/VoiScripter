@@ -30,6 +30,7 @@ export interface ExportImportHook {
 export const useExportImport = (
   project: Project,
   characters: Character[],
+  groups: string[],
   selectedBlockIds: string[],
   selectedSceneId: string | null,
   dataManagement: DataManagementHook,
@@ -38,7 +39,8 @@ export const useExportImport = (
   onProjectIdUpdate: (id: string) => void,
   onProjectListUpdate: (list: string[] | ((prev: string[]) => string[])) => void,
   onSelectedSceneIdUpdate: (id: string | null) => void,
-  onCharactersUpdate: (characters: Character[]) => void
+  onCharactersUpdate: (characters: Character[]) => void,
+  onGroupsUpdate: (groups: string[]) => void
 ): ExportImportHook => {
 
   // CSVエンコード関数
@@ -463,27 +465,80 @@ export const useExportImport = (
         dataRows = rows.slice(1);
       }
 
-      // キャラクター設定をインポート
-      const importedCharacters: Character[] = dataRows
-        .filter(row => row.length >= 2 && row[0] && row[1])
-        .map(([id, name, iconUrl, group, color, disabledProjectsStr]) => ({
-          id: id || Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          name: name || '',
-          group: group || 'default',
-          emotions: {
-            normal: {
-              iconUrl: iconUrl || ''
-            }
-          },
-          backgroundColor: color || '#3B82F6',
-          disabledProjects: disabledProjectsStr ? disabledProjectsStr.split(';').filter(p => p.trim() !== '') : []
-        }));
+      const newCharacters: Character[] = [];
+      const newGroups: string[] = [];
 
-      if (importedCharacters.length > 0) {
-        onCharactersUpdate(importedCharacters);
-        onNotification(`${importedCharacters.length}個のキャラクター設定をインポートしました。`, 'success');
+      dataRows.forEach((row, index) => {
+        if (row.length >= 4) {
+          const characterId = row[0]?.trim() || '';
+          const characterName = row[1]?.trim() || '';
+          const iconUrl = row[2]?.trim() || '';
+          const characterGroup = row[3]?.trim() || 'なし';
+          const backgroundColor = row[4]?.trim() || '#e5e7eb';
+          const disabledProjectsStr = row[5]?.trim() || '';
+
+          if (characterName) {
+            const existingCharacter = characters.find(c => c.name === characterName);
+            
+            if (existingCharacter) {
+              const disabledProjects = disabledProjectsStr ? disabledProjectsStr.split(';').filter(p => p.trim() !== '') : [];
+              if (existingCharacter.group !== characterGroup || existingCharacter.emotions.normal.iconUrl !== iconUrl || existingCharacter.backgroundColor !== backgroundColor || existingCharacter.id !== characterId || JSON.stringify(existingCharacter.disabledProjects || []) !== JSON.stringify(disabledProjects)) {
+                const updatedCharacter = { 
+                  ...existingCharacter, 
+                  id: characterId,
+                  group: characterGroup, 
+                  emotions: { ...existingCharacter.emotions, normal: { iconUrl } },
+                  backgroundColor,
+                  disabledProjects: disabledProjects
+                };
+                onCharactersUpdate(characters.map(char => 
+                  char.name === characterName ? updatedCharacter : char
+                ));
+                //console.log(`「${characterName}」の設定を更新しました（characterId: ${existingCharacter.id}）`);
+              }
+            } else {
+              if (characterGroup && characterGroup !== 'なし' && !newGroups.includes(characterGroup)) {
+                newGroups.push(characterGroup);
+              }
+
+              const emotions = {
+                normal: { iconUrl }
+              };
+
+              const disabledProjects = disabledProjectsStr ? disabledProjectsStr.split(';').filter(p => p.trim() !== '') : [];
+
+              newCharacters.push({
+                id: characterId || Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                name: characterName,
+                group: characterGroup,
+                emotions,
+                backgroundColor,
+                disabledProjects: disabledProjects
+              });
+            }
+          }
+        }
+      });
+
+      // 新しいグループを追加（重複を除去）
+      let actuallyAddedGroups: string[] = [];
+      if (newGroups.length > 0) {
+        const uniqueNewGroups = newGroups.filter((group, index) => newGroups.indexOf(group) === index);
+        const groupsToAdd = uniqueNewGroups.filter(group => !groups.includes(group));
+        actuallyAddedGroups = groupsToAdd;
+        if (groupsToAdd.length > 0) {
+          onGroupsUpdate([...groups, ...groupsToAdd]);
+          // グループデータを保存
+          dataManagement.saveData('voiscripter_groups', JSON.stringify([...groups, ...groupsToAdd]));
+        }
+      }
+
+      // 新しいキャラクターを追加
+      if (newCharacters.length > 0) {
+        onCharactersUpdate([...characters, ...newCharacters]);
+        onNotification(`${newCharacters.length}個のキャラクターをインポートしました。${actuallyAddedGroups.length > 0 ? `\n新しいグループ「${actuallyAddedGroups.join(', ')}」が追加されました。` : ''}`, 'success');
       } else {
-        onNotification('有効なキャラクター設定が見つかりませんでした。', 'info');
+        onNotification('キャラクター設定のインポートが完了しました。', 'success');
       }
     } catch (error) {
       console.error('キャラクター設定のCSVインポートエラー:', error);
