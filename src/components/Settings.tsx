@@ -22,6 +22,7 @@ export default function Settings({
 }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<'settings' | 'help' | 'license' | 'changelog' | 'bugreport'>('settings');
   const [isSelectingDirectory, setIsSelectingDirectory] = useState(false);
+  const [showResetDialog, setShowResetDialog] = useState(false);
   const [fontFamily, setFontFamily] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('fontFamily') || 'mplus';
@@ -58,6 +59,45 @@ export default function Settings({
 
   const handleClearDirectory = () => {
     onSaveDirectoryChange('');
+  };
+
+  const handleResetApp = async () => {
+    try {
+      // localStorageのデータを削除
+      if (typeof window !== 'undefined') {
+        const keys = Object.keys(localStorage);
+        keys.forEach(key => {
+          if (key.startsWith('voiscripter_')) {
+            localStorage.removeItem(key);
+          }
+        });
+      }
+
+      // Electronアプリの場合、ファイルシステムのデータも削除
+      if (typeof window !== 'undefined' && window.electronAPI) {
+        try {
+          // 保存ディレクトリが設定されている場合、そのディレクトリ内のVoiScripterデータを削除
+          if (saveDirectory) {
+            const keys = await window.electronAPI.listDataKeys();
+            const voiscripterKeys = keys.filter(key => key.startsWith('voiscripter_'));
+            for (const key of voiscripterKeys) {
+              await window.electronAPI.deleteData(key);
+            }
+          }
+        } catch (error) {
+          console.error('ファイルシステムデータの削除エラー:', error);
+        }
+      }
+
+      // アプリを再読み込み
+      if (typeof window !== 'undefined') {
+        // ブラウザ版・Electron版共通でページを再読み込み
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('アプリ初期化エラー:', error);
+      alert('初期化中にエラーが発生しました。手動でページを再読み込みしてください。');
+    }
   };
 
   if (!isOpen) return null;
@@ -216,6 +256,27 @@ export default function Settings({
                     </div>
                   </div>
                 </div>
+
+                {/* アプリ初期化セクション */}
+                <div>
+                  <h3 className="text-lg font-medium text-foreground mb-4">アプリ初期化</h3>
+                  <div className="space-y-4">
+                    <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                      <p className="text-sm text-destructive font-medium mb-2">
+                        注意: この操作は元に戻せません
+                      </p>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        プロジェクト、キャラクター設定、アプリの設定など、すべてのデータが削除され、初回起動時の状態に戻ります。
+                      </p>
+                      <button
+                        onClick={() => setShowResetDialog(true)}
+                        className="px-4 py-2 bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 transition-colors"
+                      >
+                        アプリを初期化する
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
             
@@ -285,6 +346,8 @@ export default function Settings({
                       <li>• シーンタブの入れ替え機能を追加</li>
                       <li>• プロジェクトごとにキャラクターの有効無効を切り替えられる機能を追加</li>
                       <li>• キャラクター設定のエクスポートにプロジェクトごとの無効化設定を追加</li>
+                      <li>• スタート画面を追加。初回起動時に表示されます。新規プロジェクトの作成やキャラクター設定をここから行えます</li>
+                      <li>• 設定からアプリ初期化機能を追加。バックアップの上で動作が不安定になった場合にご利用ください</li>
                       <li>• ヘルプメニューにCosenseの<a href="https://scrapbox.io/VoiScripter/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-sm">
                         詳しい使い方
                       </a>を追加</li>
@@ -479,6 +542,47 @@ export default function Settings({
           </div>
         </div>
       </div>
+
+      {/* 初期化確認ダイアログ */}
+      {showResetDialog && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
+          <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-foreground mb-4">アプリを初期化しますか？</h3>
+              <div className="space-y-4">
+                <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                  <p className="text-sm text-destructive font-medium mb-2">
+                    削除されるデータ:
+                  </p>
+                  <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                    <li>• すべてのプロジェクト</li>
+                    <li>• キャラクター設定</li>
+                    <li>• アプリの設定</li>
+                    <li>• その他の保存データ</li>
+                  </ul>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  この操作は元に戻せません。本当に初期化を実行しますか？
+                </p>
+              </div>
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setShowResetDialog(false)}
+                  className="px-4 py-2 bg-muted text-muted-foreground rounded hover:bg-muted/80 transition-colors"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={handleResetApp}
+                  className="px-4 py-2 bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 transition-colors"
+                >
+                  初期化を実行
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
