@@ -109,25 +109,35 @@ function SortableSceneTab({
     <div
       ref={setNodeRef}
       style={{ ...style, minWidth: 100, maxWidth: 120 }}
-      className={`relative px-4 py-1 rounded text-foreground text-sm font-medium mr-1 whitespace-nowrap flex-shrink-0 cursor-pointer group ${isSelected ? 'bg-secondary text-secondary-foreground' : 'bg-muted hover:bg-accent'}`}
-      {...attributes}
-      {...listeners}
-      onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
-      onDragStart={handleDragStart}
-      onDoubleClick={onRename}
+      className={`relative rounded text-foreground text-sm font-medium mr-1 whitespace-nowrap flex-shrink-0 group ${isSelected ? 'bg-secondary text-secondary-foreground' : 'bg-muted hover:bg-accent'}`}
     >
-      <span className="overflow-hidden text-ellipsis whitespace-nowrap block max-w-[80px]" title={scene.name}>
-        {scene.name}
-      </span>
-      {/* ×ボタン（ホバー時のみ表示） */}
-      <button
-        onClick={e => { e.stopPropagation(); onDelete(); }}
-        className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-destructive/20 text-destructive hidden group-hover:inline-block"
-        title="シーンを削除"
+      {/* ドラッグ可能なメイン領域 */}
+      <div
+        className="px-4 py-1 cursor-pointer flex items-center"
+        {...attributes}
+        {...listeners}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onDragStart={handleDragStart}
+        onDoubleClick={onRename}
       >
-        ×
-      </button>
+        <span className="overflow-hidden text-ellipsis whitespace-nowrap block max-w-[80px]" title={scene.name}>
+          {scene.name}
+        </span>
+      </div>
+      
+      {/* ×ボタン領域（ドラッグイベントを無効化） */}
+      <div className="absolute right-0 top-0 bottom-0 w-6 flex items-center justify-center">
+        <button
+          onClick={e => { e.stopPropagation(); onDelete(); }}
+          onMouseDown={e => { e.stopPropagation(); }}
+          onMouseUp={e => { e.stopPropagation(); }}
+          className="p-1 rounded hover:bg-destructive/20 text-destructive hidden group-hover:inline-block"
+          title="シーンを削除"
+        >
+          ×
+        </button>
+      </div>
       {children}
     </div>
   );
