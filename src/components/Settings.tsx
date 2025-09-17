@@ -104,7 +104,7 @@ export default function Settings({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-background border rounded-lg shadow-lg w-full max-w-3xl mx-4 h-[750px] overflow-hidden flex flex-col">
+      <div className="bg-background border rounded-lg shadow-lg w-full max-w-xs sm:max-w-md md:max-w-2xl lg:max-w-3xl mx-2 sm:mx-4 h-[90vh] sm:h-[750px] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center p-4 border-b flex-shrink-0">
           <h2 className="text-lg font-semibold text-foreground">設定</h2>
           <button
@@ -117,7 +117,7 @@ export default function Settings({
         
         <div className="flex flex-1 overflow-hidden">
           {/* サイドバー */}
-          <div className="w-48 border-r bg-muted/30 flex-shrink-0">
+          <div className="w-32 sm:w-40 md:w-48 border-r bg-muted/30 flex-shrink-0">
             <button
               onClick={() => setActiveTab('settings')}
               className={`w-full p-3 text-left flex items-center space-x-2 transition-colors ${

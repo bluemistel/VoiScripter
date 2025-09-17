@@ -308,6 +308,7 @@ export default function Header(props: HeaderProps) {
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
   const [isCSVExportDialogOpen, setIsCSVExportDialogOpen] = useState(false);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isImportChoiceDialogOpen, setIsImportChoiceDialogOpen] = useState(false);
   const [pendingImportFile, setPendingImportFile] = useState<File|null>(null);
@@ -315,6 +316,7 @@ export default function Header(props: HeaderProps) {
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   
   const importMenuRef = useRef<HTMLDivElement>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   // シーンのドラッグ&ドロップ用センサー
   const sceneSensors = useSensors(useSensor(PointerSensor));
@@ -345,6 +347,9 @@ export default function Header(props: HeaderProps) {
     const handleClickOutside = (event: MouseEvent) => {
       if (importMenuRef.current && !importMenuRef.current.contains(event.target as Node)) {
         setIsImportMenuOpen(false);
+      }
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+        setIsMobileMenuOpen(false);
       }
     };
 
@@ -551,7 +556,8 @@ export default function Header(props: HeaderProps) {
             </button>
           </div>
         </h1>
-        <div className="flex items-center space-x-2">
+        {/* Desktop menu - hidden on mobile */}
+        <div className="hidden md:flex items-center space-x-2">
           <button
             onClick={() => setIsCSVExportDialogOpen(true)}
             className="p-1 text-primary hover:bg-accent rounded-lg transition"
@@ -624,6 +630,127 @@ export default function Header(props: HeaderProps) {
           >
             <Cog6ToothIcon className="w-7 h-7" />
           </button>
+        </div>
+
+        {/* Mobile hamburger menu - visible on mobile only */}
+        <div className="md:hidden relative" ref={mobileMenuRef}>
+          <button
+            onClick={() => setIsMobileMenuOpen(v => !v)}
+            className="p-1 text-primary hover:bg-accent rounded-lg transition"
+            title="メニュー"
+          >
+            <Bars3Icon className="w-7 h-7" />
+          </button>
+          
+          {isMobileMenuOpen && (
+            <div className="absolute right-0 mt-2 w-56 bg-popover border rounded-lg shadow-lg z-50">
+              <button
+                onClick={() => {
+                  setIsCSVExportDialogOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground"
+              >
+                <div className="flex items-center space-x-3">
+                  <ArrowUpTrayIcon className="w-5 h-5" />
+                  <span>エクスポート</span>
+                </div>
+              </button>
+              
+              <div className="border-t">
+                <label className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground cursor-pointer">
+                  <div className="flex items-center space-x-3">
+                    <ArrowDownTrayIcon className="w-5 h-5" />
+                    <span>CSVインポート（話者,セリフ）</span>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    className="hidden"
+                    onChange={(e) => {
+                      handleFileImport(e, 'script');
+                      setIsMobileMenuOpen(false);
+                    }}
+                  />
+                </label>
+                <label className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground cursor-pointer">
+                  <div className="flex items-center space-x-3">
+                    <ArrowDownTrayIcon className="w-5 h-5" />
+                    <span>キャラクター設定のインポート</span>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    className="hidden"
+                    onChange={(e) => {
+                      handleFileImport(e, 'character');
+                      setIsMobileMenuOpen(false);
+                    }}
+                  />
+                </label>
+                <label className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground cursor-pointer">
+                  <div className="flex items-center space-x-3">
+                    <ArrowDownTrayIcon className="w-5 h-5" />
+                    <span>プロジェクトのインポート（json）</span>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".json"
+                    className="hidden"
+                    onChange={(e) => {
+                      handleJsonImport(e);
+                      setIsMobileMenuOpen(false);
+                    }}
+                  />
+                </label>
+              </div>
+              
+              <div className="border-t">
+                <button
+                  onClick={() => {
+                    setIsCharacterModalOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground"
+                >
+                  <div className="flex items-center space-x-3">
+                    <UsersIcon className="w-5 h-5" />
+                    <span>キャラクター設定</span>
+                  </div>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    toggleTheme();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground"
+                >
+                  <div className="flex items-center space-x-3">
+                    {isDarkMode ? (
+                      <SunIcon className="w-5 h-5" />
+                    ) : (
+                      <MoonIcon className="w-5 h-5" />
+                    )}
+                    <span>ダークモード切替</span>
+                  </div>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    onOpenSettings();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground"
+                >
+                  <div className="flex items-center space-x-3">
+                    <Cog6ToothIcon className="w-5 h-5" />
+                    <span>設定</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       {/* 下部ヘッダー（シーンタブ、固定表示） */}

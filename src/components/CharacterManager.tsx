@@ -375,7 +375,7 @@ export default function CharacterManager({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-background border rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-background border rounded-lg shadow-lg w-full max-w-sm sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex-shrink-0 p-6 pb-4 border-b">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold text-foreground">キャラクター管理</h3>

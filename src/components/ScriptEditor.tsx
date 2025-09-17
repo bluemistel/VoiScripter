@@ -123,7 +123,7 @@ function SortableBlock({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-start space-x-2 p-2 border rounded-lg shadow mb-2 transition-colors ${isSelected && !isTextareaFocused ? 'ring-2 ring-primary ring-opacity-50' : ''}`}
+      className={`flex items-start space-x-1 sm:space-x-2 p-1 sm:p-2 border rounded-lg shadow mb-2 transition-colors ${isSelected && !isTextareaFocused ? 'ring-2 ring-primary ring-opacity-50' : ''}`}
       onClick={onClick}
       data-block-index={script.blocks.findIndex(b => b.id === block.id)}
     >
@@ -176,7 +176,7 @@ function SortableBlock({
               <select
                 value={block.characterId}
                 onChange={e => onUpdate({ characterId: e.target.value })}
-                className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-36 mb-1"
+                className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-24 sm:w-28 md:w-32 lg:w-36 mb-1"
                 style={{ height: '2.5rem' }}
               >
                 <option value="">ト書きを入力</option>
@@ -193,38 +193,38 @@ function SortableBlock({
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
               </select>
-              <div className="flex flex-row space-x-1.5 mt-0">
+              <div className="flex flex-row space-x-1 sm:space-x-1.5 mt-0">
                 <button
                   onClick={onMoveUp}
                   className="p-1 rounded hover:bg-accent"
                   title="Ctrl+↑:ブロックを上に移動"
-                  style={{ height: '2rem', width: '2rem' }}
+                  style={{ height: '1.75rem', width: '1.75rem' }}
                 >
-                  <ArrowUpIcon className="w-6 h-6 text-foreground" />
+                  <ArrowUpIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
                 </button>
                 <button
                   onClick={onMoveDown}
                   className="p-1 rounded hover:bg-accent"
                   title="Ctrl+↓:ブロックを下に移動"
-                  style={{ height: '2rem', width: '2rem' }}
+                  style={{ height: '1.75rem', width: '1.75rem' }}
                 >
-                  <ArrowDownIcon className="w-6 h-6 text-foreground" />
+                  <ArrowDownIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
                 </button>
                 <button
                   onClick={onDuplicate}
                   className="p-1 rounded hover:bg-accent"
                   title="Ctrl+B:ブロックを複製"
-                  style={{ height: '2rem', width: '2rem' }}
+                  style={{ height: '1.75rem', width: '1.75rem' }}
                 >
-                  <DocumentDuplicateIcon className="w-6 h-6 text-foreground" />
+                  <DocumentDuplicateIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
                 </button>
                 <button
                   onClick={onDelete}
                   className="p-1 text-destructive hover:bg-destructive/10 rounded"
                   title="Alt+B:ブロックを削除"
-                  style={{ height: '2rem', width: '2rem' }}
+                  style={{ height: '1.75rem', width: '1.75rem' }}
                 >
-                  <TrashIcon className="w-6 h-6" />
+                  <TrashIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
                 </button>
               </div>
             </div>
@@ -237,15 +237,15 @@ function SortableBlock({
                 <img
                   src={character.emotions[block.emotion]?.iconUrl}
                   alt={character.name}
-                  className={`w-16 h-16 rounded-full object-cover mt-0 mr-2 transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
+                  className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full object-cover mt-0 mr-2 transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
                 />
               ) : (
                 <div 
-                  className={`w-16 h-16 rounded-full flex items-center justify-center text-center mt-0 mr-2 overflow-hidden transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
+                  className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center text-center mt-0 mr-2 overflow-hidden transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
                   style={{ backgroundColor: character.backgroundColor || '#e5e7eb' }}
                 >
                   <span 
-                    className={`text-xs font-bold text-foreground px-1 max-w-[80px] whitespace-no-wrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}
+                    className={`text-xs sm:text-xs md:text-xs font-bold text-foreground px-1 max-w-[60px] sm:max-w-[70px] md:max-w-[80px] whitespace-no-wrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}
                     style={{
                       textShadow: `
                         -1px -1px 0 var(--color-background),  
@@ -304,7 +304,7 @@ function SortableBlock({
               <select
                 value={block.characterId}
                 onChange={e => onUpdate({ characterId: e.target.value })}
-                className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-36 mb-1"
+                className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-24 sm:w-28 md:w-32 lg:w-36 mb-1"
                 style={{ height: '2.5rem' }}
               >
                 <option value="">ト書きを入力</option>
@@ -321,38 +321,38 @@ function SortableBlock({
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
               </select>
-              <div className="flex flex-row space-x-1.5 mt-0">
+              <div className="flex flex-row space-x-1 sm:space-x-1.5 mt-0">
                 <button
                   onClick={onMoveUp}
                   className="p-1 rounded hover:bg-accent"
                   title="Ctrl+↑:ブロックを上に移動"
-                  style={{ height: '2rem', width: '2rem' }}
+                  style={{ height: '1.75rem', width: '1.75rem' }}
                 >
-                  <ArrowUpIcon className="w-6 h-6 text-foreground" />
+                  <ArrowUpIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
                 </button>
                 <button
                   onClick={onMoveDown}
                   className="p-1 rounded hover:bg-accent"
                   title="Ctrl+↓:ブロックを下に移動"
-                  style={{ height: '2rem', width: '2rem' }}
+                  style={{ height: '1.75rem', width: '1.75rem' }}
                 >
-                  <ArrowDownIcon className="w-6 h-6 text-foreground" />
+                  <ArrowDownIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
                 </button>
                 <button
                   onClick={onDuplicate}
                   className="p-1 rounded hover:bg-accent"
                   title="Ctrl+B:ブロックを複製"
-                  style={{ height: '2rem', width: '2rem' }}
+                  style={{ height: '1.75rem', width: '1.75rem' }}
                 >
-                  <DocumentDuplicateIcon className="w-6 h-6 text-foreground" />
+                  <DocumentDuplicateIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
                 </button>
                 <button
                   onClick={onDelete}
                   className="p-1 text-destructive hover:bg-destructive/10 rounded"
                   title="Alt+B:ブロックを削除"
-                  style={{ height: '2rem', width: '2rem' }}
+                  style={{ height: '1.75rem', width: '1.75rem' }}
                 >
-                  <TrashIcon className="w-6 h-6" />
+                  <TrashIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
                 </button>
               </div>
             </div>
@@ -950,14 +950,14 @@ export default function ScriptEditor({
     <>
       <div className="script-editor-container min-h-auto">
         {script.blocks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
-            <p className="text-lg mb-4">1.右上のキャラクターのアイコンから登場キャラクターを追加します。</p>
-            <p className="text-lg mb-4">2.「+ブロックを追加」からテキストブロックを追加し、キャラクターを選択するとセリフを入力できます。</p>
-            <p className="text-lg mb-4">3.右上のエクスポートから台本をCSV形式で出力できます。グループ設定ごとにCSVファイルを分割出力することができます。</p>
-            <p className="text-lg mb-4">4.より詳しい操作方法は設定＞ヘルプをご覧ください。</p>
+          <div className="flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 text-center text-muted-foreground">
+            <p className="text-sm sm:text-base md:text-lg mb-4">1.右上のキャラクターのアイコンから登場キャラクターを追加します。</p>
+            <p className="text-sm sm:text-base md:text-lg mb-4">2.「+ブロックを追加」からテキストブロックを追加し、キャラクターを選択するとセリフを入力できます。</p>
+            <p className="text-sm sm:text-base md:text-lg mb-4">3.右上のエクスポートから台本をCSV形式で出力できます。グループ設定ごとにCSVファイルを分割出力することができます。</p>
+            <p className="text-sm sm:text-base md:text-lg mb-4">4.より詳しい操作方法は設定＞ヘルプをご覧ください。</p>
           </div>
         ) : (
-          <div className="bg-card rounded-lg shadow p-4 relative h-full flex flex-col justify-between">
+          <div className="bg-card rounded-lg shadow p-2 sm:p-3 md:p-4 relative h-full flex flex-col justify-between">
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}

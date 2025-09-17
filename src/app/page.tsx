@@ -450,7 +450,7 @@ export default function Home() {
         saveCharacterProjectStates={characterManagement.saveCharacterProjectStates}
       />
       
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6 md:py-8">
         {project && selectedSceneId ? (
           <ScriptEditor
             script={project.scenes.find(s => s.id === selectedSceneId)?.scripts[0] || { id: '', title: '', blocks: [], characters: [] }}
