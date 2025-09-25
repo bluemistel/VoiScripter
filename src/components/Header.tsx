@@ -18,6 +18,7 @@ import {
   DndContext,
   closestCenter,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragStartEvent,
@@ -83,16 +84,16 @@ function SortableSceneTab({
   const [isDragStarted, setIsDragStarted] = useState(false);
   const [mouseDownTime, setMouseDownTime] = useState<number | null>(null);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
     setMouseDownTime(Date.now());
     setIsDragStarted(false);
   };
 
-  const handleMouseUp = (e: React.MouseEvent) => {
+  const handleMouseUp = (e: React.MouseEvent | React.TouchEvent) => {
     const currentTime = Date.now();
     const timeDiff = mouseDownTime ? currentTime - mouseDownTime : 0;
     
-    // ドラッグが開始されていない、かつ短時間のクリックの場合のみシーン切り替え
+    // ドラッグが開始されていない、かつ短時間のクリック/タップの場合のみシーン切り替え
     if (!isDragStarted && timeDiff < 200) {
       onSelect();
     }
@@ -118,6 +119,8 @@ function SortableSceneTab({
         {...listeners}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
+        onTouchStart={handleMouseDown}
+        onTouchEnd={handleMouseUp}
         onDragStart={handleDragStart}
         onDoubleClick={onRename}
       >
@@ -132,7 +135,9 @@ function SortableSceneTab({
           onClick={e => { e.stopPropagation(); onDelete(); }}
           onMouseDown={e => { e.stopPropagation(); }}
           onMouseUp={e => { e.stopPropagation(); }}
-          className="p-1 rounded hover:bg-destructive/20 text-destructive hidden group-hover:inline-block"
+          onTouchStart={e => { e.stopPropagation(); }}
+          onTouchEnd={e => { e.stopPropagation(); }}
+          className="p-1 rounded hover:bg-destructive/20 text-destructive sm:hidden sm:group-hover:inline-block md:hidden md:group-hover:inline-block inline-block"
           title="シーンを削除"
         >
           ×
@@ -318,8 +323,20 @@ export default function Header(props: HeaderProps) {
   const importMenuRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
-  // シーンのドラッグ&ドロップ用センサー
-  const sceneSensors = useSensors(useSensor(PointerSensor));
+  // シーンのドラッグ&ドロップ用センサー（タッチデバイス対応）
+  const sceneSensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 100,
+        tolerance: 5,
+      },
+    })
+  );
   
   // シーンの並び替えハンドラー
   const handleSceneDragStart = (event: DragStartEvent) => {
@@ -517,12 +534,13 @@ export default function Header(props: HeaderProps) {
       {/* 上部ヘッダー（スクロールで非表示） */}
       <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-16">
         <h1 className="text-2xl font-bold text-primary tracking-tight flex items-center">
-          <img src={logoPath} alt="VoiScripter" className="h-8 mr-2" />
+          <img src={logoPath} alt="VoiScripter" className="hidden sm:block h-8 mr-2" />
           <div className="ml-2 text-lg font-normal text-foreground align-middle group relative">
             <select
               value={projectName}
               onChange={(e) => onProjectChange(e.target.value)}
-              className="bg-background border-none text-foreground cursor-pointer hover:bg-accent rounded px-2 py-1 focus:bg-background focus:outline-none"
+              className="bg-background border-none text-foreground cursor-pointer hover:bg-accent rounded px-2 py-1 focus:bg-background focus:outline-none max-w-[200px] truncate"
+              title={projectName}
             >
               {projectList.filter(projectId => projectId !== 'default').map(projectId => (
                 <option key={projectId} value={projectId}>
@@ -768,8 +786,7 @@ export default function Header(props: HeaderProps) {
             >
               <div
                 ref={sceneTabContainerRef}
-                className="flex overflow-x-auto no-scrollbar max-w-full"
-                style={{ maxWidth: `calc(${maxVisibleTabs} * 120px)` }}
+                className="flex overflow-x-auto no-scrollbar"
               >
                 {scenes.map((scene, idx) => (
                   <SortableSceneTab
@@ -820,37 +837,19 @@ export default function Header(props: HeaderProps) {
         </div>
       )}
       {isCharacterModalOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300 p-4">
-          <div className="bg-card border rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-xl transition-opacity duration-300">
-            <div className="flex-shrink-0 p-6 pb-4">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-card-foreground">キャラクター管理</h2>
-                <button
-                  onClick={() => setIsCharacterModalOpen(false)}
-                  className="text-muted-foreground hover:text-foreground text-2xl"
-                  title="閉じる"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto px-6 pb-6">
-              <CharacterManager
-                isOpen={true}
-                onClose={() => setIsCharacterModalOpen(false)}
-                characters={characters}
-                onAddCharacter={onAddCharacter}
-                onUpdateCharacter={onUpdateCharacter}
-                onDeleteCharacter={onDeleteCharacter}
-                groups={groups}
-                onAddGroup={onAddGroup}
-                onDeleteGroup={onDeleteGroup}
-                onReorderCharacters={onReorderCharacters}
-                onReorderGroups={onReorderGroups}
-                currentProjectId={project.id} projectList={projectList} getCharacterProjectStates={getCharacterProjectStates} saveCharacterProjectStates={saveCharacterProjectStates}              />
-            </div>
-          </div>
-        </div>
+        <CharacterManager
+          isOpen={true}
+          onClose={() => setIsCharacterModalOpen(false)}
+          characters={characters}
+          onAddCharacter={onAddCharacter}
+          onUpdateCharacter={onUpdateCharacter}
+          onDeleteCharacter={onDeleteCharacter}
+          groups={groups}
+          onAddGroup={onAddGroup}
+          onDeleteGroup={onDeleteGroup}
+          onReorderCharacters={onReorderCharacters}
+          onReorderGroups={onReorderGroups}
+          currentProjectId={project.id} projectList={projectList} getCharacterProjectStates={getCharacterProjectStates} saveCharacterProjectStates={saveCharacterProjectStates}              />
       )}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300">

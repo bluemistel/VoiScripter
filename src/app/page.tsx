@@ -195,6 +195,7 @@ export default function Home() {
     project.scenes.find(s => s.id === selectedSceneId)?.scripts[0]?.blocks || [],
     characters,
     undefined,
+    projectId,
     textareaRefs,
     (target) => {
       // ScriptEditorのmanualFocusTargetを設定

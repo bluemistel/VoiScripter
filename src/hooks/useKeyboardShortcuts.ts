@@ -32,6 +32,7 @@ export const useKeyboardShortcuts = (
   scriptBlocks?: ScriptBlock[],
   characters?: any[],
   activeBlockIndex?: number,
+  currentProjectId?: string,
   textareaRefs?: React.MutableRefObject<(HTMLTextAreaElement | null)[]>,
   setManualFocusTarget?: (target: { index: number; id: string } | null) => void,
   setIsCtrlEnterBlock?: (isCtrlEnter: boolean) => void
@@ -233,29 +234,45 @@ export const useKeyboardShortcuts = (
         }
       }
 
-      // Alt+↑: 上のキャラクターを選択（ト書き以外）
+      // Alt+↑: 上のキャラクターを選択（ト書き以外、現在のプロジェクトで有効なキャラクターのみ）
       if (!event.ctrlKey && event.altKey && event.key === 'ArrowUp') {
         if (activeIdx >= 0 && activeIdx < scriptBlocks.length) {
           const block = scriptBlocks[activeIdx];
           if (block && block.characterId) {
-            const charIdx = characters.findIndex(c => c.id === block.characterId);
+            // 現在のプロジェクトで有効なキャラクターのみをフィルタリング
+            const validCharacters = characters.filter(c => 
+              c.id === '' || 
+              !currentProjectId || 
+              !c.disabledProjects || 
+              !c.disabledProjects.includes(currentProjectId)
+            );
+            
+            const charIdx = validCharacters.findIndex(c => c.id === block.characterId);
             if (charIdx > 0) {
               event.preventDefault();
-              onUpdateBlock(block.id, { characterId: characters[charIdx - 1].id });
+              onUpdateBlock(block.id, { characterId: validCharacters[charIdx - 1].id });
             }
           }
         }
       }
 
-      // Alt+↓: 下のキャラクターを選択（ト書き以外）
+      // Alt+↓: 下のキャラクターを選択（ト書き以外、現在のプロジェクトで有効なキャラクターのみ）
       if (!event.ctrlKey && event.altKey && event.key === 'ArrowDown') {
         if (activeIdx >= 0 && activeIdx < scriptBlocks.length) {
           const block = scriptBlocks[activeIdx];
           if (block && block.characterId) {
-            const charIdx = characters.findIndex(c => c.id === block.characterId);
-            if (charIdx >= 0 && charIdx < characters.length - 1) {
+            // 現在のプロジェクトで有効なキャラクターのみをフィルタリング
+            const validCharacters = characters.filter(c => 
+              c.id === '' || 
+              !currentProjectId || 
+              !c.disabledProjects || 
+              !c.disabledProjects.includes(currentProjectId)
+            );
+            
+            const charIdx = validCharacters.findIndex(c => c.id === block.characterId);
+            if (charIdx >= 0 && charIdx < validCharacters.length - 1) {
               event.preventDefault();
-              onUpdateBlock(block.id, { characterId: characters[charIdx + 1].id });
+              onUpdateBlock(block.id, { characterId: validCharacters[charIdx + 1].id });
             }
           }
         }

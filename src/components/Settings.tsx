@@ -40,7 +40,7 @@ export default function Settings({
 
   const handleDirectorySelect = async () => {
     if (typeof window === 'undefined' || !window.electronAPI) {
-      alert('この機能はデスクトップアプリ版でのみ利用できます(開発中)');
+      alert('この機能はデスクトップアプリ版でのみ利用できます');
       return;
     }
 
@@ -337,6 +337,17 @@ export default function Settings({
               <div className="flex flex-col max-h-[60vh] pr-2">
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
+                <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.2.1</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• 段階的にレスポンシブ対応を実施</li>
+                      <li>• [レスポンシブ対応]ウィンドウサイズでメニュー折りたたみ、UI構成の調整</li>
+                      <li>• 最下部のブロック編集がしづらいため画面下部に余白領域を設定</li>
+                      <li>• Alt+↑/↓によるキャラクター選択がプロジェクトの有効無効を考慮するように修正</li>
+                      <li>• その他軽微な不具合修正</li>
+                    </ul>
+                  </div>
+                  
                   <div>
                     <h4 className="font-medium text-foreground mb-2">v0.2.0</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">

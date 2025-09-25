@@ -6,6 +6,7 @@ import {
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragEndEvent
@@ -130,9 +131,9 @@ function SortableBlock({
       <div
         {...attributes}
         {...listeners}
-        className="cursor-grab flex items-center justify-center w-8 h-6 rounded hover:bg-accent transition"
+        className="cursor-grab flex items-center justify-center w-0 h-0 sm:w-5 sm:h-4.5 md:w-8 md:h-6 rounded hover:bg-accent transition"
       >
-        <Bars3Icon className="w-8 h-8 text-primary" />
+        <Bars3Icon className="w-0 h-0 sm:w-5 sm:h-4.5 md:w-8 md:h-6 text-primary" />
       </div>
       <div className="flex-1">
         {isTogaki ? (
@@ -172,7 +173,7 @@ function SortableBlock({
             />
 
             {/* キャラ選択リストとアイコン群を横並びに */}
-            <div className="flex flex-col justify-between items-center h-16 mr-2 mt-0">
+            <div className="flex flex-col justify-between items-center h-16 mr-0.5 sm:mr-1 md:mr-2 mt-0">
               <select
                 value={block.characterId}
                 onChange={e => onUpdate({ characterId: e.target.value })}
@@ -193,12 +194,12 @@ function SortableBlock({
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
               </select>
-              <div className="flex flex-row space-x-1 sm:space-x-1.5 mt-0">
+              <div className="flex flex-row justify-items-center space-x-0.5 sm:space-x-1.5 md:space-x-3.5 mt-0">
                 <button
                   onClick={onMoveUp}
                   className="p-1 rounded hover:bg-accent"
                   title="Ctrl+↑:ブロックを上に移動"
-                  style={{ height: '1.75rem', width: '1.75rem' }}
+                  style={{ height: '1.75rem', width: '1.5rem' }}
                 >
                   <ArrowUpIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
                 </button>
@@ -206,7 +207,7 @@ function SortableBlock({
                   onClick={onMoveDown}
                   className="p-1 rounded hover:bg-accent"
                   title="Ctrl+↓:ブロックを下に移動"
-                  style={{ height: '1.75rem', width: '1.75rem' }}
+                  style={{ height: '1.75rem', width: '1.5rem' }}
                 >
                   <ArrowDownIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
                 </button>
@@ -214,7 +215,7 @@ function SortableBlock({
                   onClick={onDuplicate}
                   className="p-1 rounded hover:bg-accent"
                   title="Ctrl+B:ブロックを複製"
-                  style={{ height: '1.75rem', width: '1.75rem' }}
+                  style={{ height: '1.75rem', width: '1.5rem' }}
                 >
                   <DocumentDuplicateIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
                 </button>
@@ -222,7 +223,7 @@ function SortableBlock({
                   onClick={onDelete}
                   className="p-1 text-destructive hover:bg-destructive/10 rounded"
                   title="Alt+B:ブロックを削除"
-                  style={{ height: '1.75rem', width: '1.75rem' }}
+                  style={{ height: '1.75rem', width: '1.5rem' }}
                 >
                   <TrashIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
                 </button>
@@ -300,7 +301,7 @@ function SortableBlock({
               <div className="absolute left-[-4px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-400"></div>
             </div>
             {/* キャラ選択リストとアイコン群を横並びに */}
-            <div className="flex flex-col justify-between items-center h-16 mr-2 mt-0">
+            <div className="flex flex-col justify-between items-center h-16 mr-0.5 sm:mr-1 md:mr-2 mt-0">
               <select
                 value={block.characterId}
                 onChange={e => onUpdate({ characterId: e.target.value })}
@@ -321,12 +322,12 @@ function SortableBlock({
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
               </select>
-              <div className="flex flex-row space-x-1 sm:space-x-1.5 mt-0">
+              <div className="flex flex-row justify-items-center space-x-0.5 sm:space-x-1.5 md:space-x-3.5 mt-0">
                 <button
                   onClick={onMoveUp}
                   className="p-1 rounded hover:bg-accent"
                   title="Ctrl+↑:ブロックを上に移動"
-                  style={{ height: '1.75rem', width: '1.75rem' }}
+                  style={{ height: '1.75rem', width: '1.5rem' }}
                 >
                   <ArrowUpIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
                 </button>
@@ -334,7 +335,7 @@ function SortableBlock({
                   onClick={onMoveDown}
                   className="p-1 rounded hover:bg-accent"
                   title="Ctrl+↓:ブロックを下に移動"
-                  style={{ height: '1.75rem', width: '1.75rem' }}
+                  style={{ height: '1.75rem', width: '1.5rem' }}
                 >
                   <ArrowDownIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
                 </button>
@@ -342,7 +343,7 @@ function SortableBlock({
                   onClick={onDuplicate}
                   className="p-1 rounded hover:bg-accent"
                   title="Ctrl+B:ブロックを複製"
-                  style={{ height: '1.75rem', width: '1.75rem' }}
+                  style={{ height: '1.75rem', width: '1.5rem' }}
                 >
                   <DocumentDuplicateIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
                 </button>
@@ -350,7 +351,7 @@ function SortableBlock({
                   onClick={onDelete}
                   className="p-1 text-destructive hover:bg-destructive/10 rounded"
                   title="Alt+B:ブロックを削除"
-                  style={{ height: '1.75rem', width: '1.75rem' }}
+                  style={{ height: '1.75rem', width: '1.5rem' }}
                 >
                   <TrashIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
                 </button>
@@ -386,7 +387,17 @@ export default function ScriptEditor({
   currentProjectId
 }: ScriptEditorProps) {
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 100,
+        tolerance: 5,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates
     })
@@ -957,7 +968,7 @@ export default function ScriptEditor({
             <p className="text-sm sm:text-base md:text-lg mb-4">4.より詳しい操作方法は設定＞ヘルプをご覧ください。</p>
           </div>
         ) : (
-          <div className="bg-card rounded-lg shadow p-2 sm:p-3 md:p-4 relative h-full flex flex-col justify-between">
+          <div className="bg-card rounded-lg shadow p-2 sm:p-3 md:p-4 mb-24 relative h-full flex flex-col justify-between">
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -1073,13 +1084,14 @@ export default function ScriptEditor({
         >
           <ArrowDownIcon className="w-6 h-6" />
         </button>
-        <button
-          onClick={onAddBlock}
-          className={`px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full shadow-lg transition-all text-lg`}
-          title="Ctrl+B:新規ブロックを追加"
-        >
-          <PlusIcon className="w-6 h-6 inline-block mr-0.5 mb-0.5" />ブロックを追加
-        </button>
+          <button
+            onClick={onAddBlock}
+            className={`px-3 py-2 sm:px-4 sm:py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full shadow-lg transition-all text-lg`}
+            title="Ctrl+B:新規ブロックを追加"
+          >
+            <PlusIcon className="w-6 h-6 inline-block sm:mr-0.5 sm:mb-0.5" />
+            <span className="hidden sm:inline">ブロックを追加</span>
+          </button>
       </div>
     </>
   );
