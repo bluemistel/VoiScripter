@@ -140,42 +140,108 @@ export const useExportImport = (
     sceneIds?: string[],
     fileFormat?: 'csv' | 'txt'
   ) => {
-    let targetScenes;
+    // 特定のシーンのみCSVを出力がONの場合はシーンごとに処理
     if (Array.isArray(sceneIds) && sceneIds.length > 0) {
-      targetScenes = project.scenes.filter(s => sceneIds.includes(s.id));
+      const targetScenes = project.scenes.filter(s => sceneIds.includes(s.id));
+      
+      for (const scene of targetScenes) {
+        const script = scene.scripts[0];
+        for (const group of selectedGroups) {
+          const groupCharacterIds = characters
+            .filter(char => char.group === group)
+            .map(char => char.id);
+          
+          let groupBlocks = script.blocks.filter(block =>
+            (block.characterId && groupCharacterIds.includes(block.characterId))
+          );
+          
+          if (includeTogaki) {
+            groupBlocks = [
+              ...groupBlocks,
+              ...script.blocks.filter(block => !block.characterId)
+            ];
+          }
+          
+          if (selectedOnly && selectedBlockIds.length > 0) {
+            groupBlocks = groupBlocks.filter(block => selectedBlockIds.includes(block.id));
+          }
+          
+          if (groupBlocks.length === 0) continue;
+          
+          let rows: string[][];
+          let filename: string;
+          
+          if (exportType === 'full') {
+            rows = groupBlocks.map(block => {
+              if (!block.characterId) {
+                return ['ト書き', block.text.replace(/\n/g, '\\n')];
+              }
+              const char = characters.find(c => c.id === block.characterId);
+              return [char ? char.name : '', block.text.replace(/\n/g, '\\n')];
+            });
+          } else {
+            rows = groupBlocks.map(block => [block.text.replace(/\n/g, '\\n')]);
+          }
+          
+          const extension = fileFormat === 'txt' ? 'txt' : 'csv';
+          filename = `${project.name || 'project'}_${scene.name}_${group}.${extension}`;
+          const csv = encodeCSV(rows);
+          
+          if (window.electronAPI) {
+            try {
+              await window.electronAPI.saveCSVFile(filename, csv);
+            } catch (error) {
+              onNotification(`グループ「${group}」のファイルの保存に失敗しました。`, 'error');
+            }
+          } else {
+            const mimeType = fileFormat === 'txt' ? 'text/plain;charset=utf-8;' : 'text/csv;charset=utf-8;';
+            const blob = new Blob([csv], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+          }
+        }
+      }
     } else {
-      targetScenes = project.scenes;
-    }
-
-    for (const scene of targetScenes) {
-      const script = scene.scripts[0];
+      // 特定のシーンのみCSVを出力がOFFの場合は全シーンを結合して処理
       for (const group of selectedGroups) {
         const groupCharacterIds = characters
           .filter(char => char.group === group)
           .map(char => char.id);
         
-        let groupBlocks = script.blocks.filter(block =>
-          (block.characterId && groupCharacterIds.includes(block.characterId))
-        );
+        // 全シーンのブロックを結合
+        let allGroupBlocks = project.scenes.flatMap(scene => {
+          const script = scene.scripts[0];
+          if (!script) return [];
+          
+          return script.blocks.filter(block =>
+            (block.characterId && groupCharacterIds.includes(block.characterId))
+          );
+        });
         
         if (includeTogaki) {
-          groupBlocks = [
-            ...groupBlocks,
-            ...script.blocks.filter(block => !block.characterId)
-          ];
+          const allTogakiBlocks = project.scenes.flatMap(scene => {
+            const script = scene.scripts[0];
+            if (!script) return [];
+            return script.blocks.filter(block => !block.characterId);
+          });
+          allGroupBlocks = [...allGroupBlocks, ...allTogakiBlocks];
         }
         
         if (selectedOnly && selectedBlockIds.length > 0) {
-          groupBlocks = groupBlocks.filter(block => selectedBlockIds.includes(block.id));
+          allGroupBlocks = allGroupBlocks.filter(block => selectedBlockIds.includes(block.id));
         }
         
-        if (groupBlocks.length === 0) continue;
+        if (allGroupBlocks.length === 0) continue;
         
         let rows: string[][];
         let filename: string;
         
         if (exportType === 'full') {
-          rows = groupBlocks.map(block => {
+          rows = allGroupBlocks.map(block => {
             if (!block.characterId) {
               return ['ト書き', block.text.replace(/\n/g, '\\n')];
             }
@@ -183,11 +249,11 @@ export const useExportImport = (
             return [char ? char.name : '', block.text.replace(/\n/g, '\\n')];
           });
         } else {
-          rows = groupBlocks.map(block => [block.text.replace(/\n/g, '\\n')]);
+          rows = allGroupBlocks.map(block => [block.text.replace(/\n/g, '\\n')]);
         }
         
         const extension = fileFormat === 'txt' ? 'txt' : 'csv';
-        filename = `${project.name || 'project'}_${scene.name}_${group}.${extension}`;
+        filename = `${project.name || 'project'}_all_scenes_${group}.${extension}`;
         const csv = encodeCSV(rows);
         
         if (window.electronAPI) {

@@ -196,13 +196,42 @@ export const useKeyboardShortcuts = (
           text: ''
         };
         onInsertBlock(newBlock, idx);
-        return;
+          // Ctrl+Enterで追加されたブロックであることをマーク
+          if (setIsCtrlEnterBlock) {
+            setIsCtrlEnterBlock(true);
+          }
+          
+          // 追加されたブロックに直接フォーカスとスクロール補正を適用
+          setTimeout(() => {
+            const newBlockRef = textareaRefs?.current?.[activeIdx + 1];
+            if (newBlockRef) {
+              // フォーカスを当てる
+              newBlockRef.focus();
+              
+              // スクロール補正を適用
+              ensureBlockVisible(newBlockRef, activeIdx + 1);
+            }
+          }, 100);
+          return;
       }
 
       // Ctrl+B: 新規ブロック（最下段に追加）
       if (event.ctrlKey && !event.altKey && event.key === 'b') {
         event.preventDefault();
         onAddBlock();
+        
+        // 追加されたブロックに直接フォーカスとスクロール補正を適用
+        setTimeout(() => {
+          const lastIndex = scriptBlocks.length; // 新しく追加されたブロックのインデックス
+          const newBlockRef = textareaRefs?.current?.[lastIndex];
+          if (newBlockRef) {
+            // フォーカスを当てる
+            newBlockRef.focus();
+            
+            // スクロール補正を適用
+            ensureBlockVisible(newBlockRef, lastIndex);
+          }
+        }, 100);
         return;
       }
 

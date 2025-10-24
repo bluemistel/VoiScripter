@@ -338,6 +338,15 @@ export default function Settings({
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
                 <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.2.2</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• シーン機能を使用するとエクスポートしたファイルが必ずシーンごとに分割されて出力される不具合を修正(シーンごとに分割する場合は「特定のシーンのみCSVを出力」をお使いください)</li>
+                      <li>• Ctrl+Alt+Bのト書きブロックの追加、Ctrl+B/新規ブロックを追加ボタンでのブロック追加時、追加したテキストブロックが選択されない不具合を修正</li>
+                      <li>• ト書きの入力時にブロックの輪郭線とセリフの輪郭線が同時に表示されていた不具合を修正</li>
+                    </ul>
+                  </div>
+                  
+                <div>
                     <h4 className="font-medium text-foreground mb-2">v0.2.1</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                       <li>• 段階的にレスポンシブ対応を実施</li>

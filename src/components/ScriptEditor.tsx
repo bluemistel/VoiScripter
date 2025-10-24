@@ -146,6 +146,8 @@ function SortableBlock({
               className="w-full p-2 pt-2 border rounded min-h-[40px] bg-muted text-foreground focus:ring-1 focus:ring-ring text-sm italic focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400 resize-none overflow-hidden"
               rows={1}
               style={{ height: 'auto', borderRadius: '20px 20px 20px 0' }}
+              onFocus={() => setIsTextareaFocused(true)}
+              onBlur={() => setIsTextareaFocused(false)}
               onKeyDown={e => {
                 // チェックボックスの状態に応じてEnter操作のみで切り替え
                 const shouldAddBlock = enterOnlyBlockAdd 
