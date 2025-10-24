@@ -139,24 +139,13 @@ export const useCharacterManagement = (
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    if (dataManagement.saveDirectory !== '') {
-      if (characters.length > 0) {
-        dataManagement.saveData('voiscripter_characters', JSON.stringify(characters));
-        //console.log('saveDirectory変更後、キャラクター設定を保存:', characters.length, '個');
-      }
-      if (groups.length > 0) {
-        dataManagement.saveData('voiscripter_groups', JSON.stringify(groups));
-        //console.log('saveDirectory変更後、グループ設定を保存:', groups.length, '個');
-      }
-    } else {
-      if (characters.length > 0) {
-        localStorage.setItem('voiscripter_characters', JSON.stringify(characters));
-        //console.log('localStorage変更後、キャラクター設定を保存:', characters.length, '個');
-      }
-      if (groups.length > 0) {
-        localStorage.setItem('voiscripter_groups', JSON.stringify(groups));
-        //console.log('localStorage変更後、グループ設定を保存:', groups.length, '個');
-      }
+    if (characters.length > 0) {
+      dataManagement.saveData('voiscripter_characters', JSON.stringify(characters));
+      //console.log('saveDirectory変更後、キャラクター設定を保存:', characters.length, '個');
+    }
+    if (groups.length > 0) {
+      dataManagement.saveData('voiscripter_groups', JSON.stringify(groups));
+      //console.log('saveDirectory変更後、グループ設定を保存:', groups.length, '個');
     }
   }, [dataManagement.saveDirectory, characters, groups]);
 

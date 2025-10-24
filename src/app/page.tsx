@@ -326,7 +326,7 @@ export default function Home() {
   // プロジェクト変更時のプロジェクトID保存
   useEffect(() => {
     if (projectId) {
-      localStorage.setItem('voiscripter_lastProject', projectId);
+      dataManagement.saveData('voiscripter_lastProject', projectId);
     }
   }, [projectId]);
 

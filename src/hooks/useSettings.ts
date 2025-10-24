@@ -14,17 +14,25 @@ export interface SettingsHook {
 export const useSettings = (dataManagement: DataManagementHook): SettingsHook => {
   // saveDirectoryはdataManagementから取得
   const { saveDirectory, setSaveDirectory } = dataManagement;
-  const [enterOnlyBlockAdd, setEnterOnlyBlockAdd] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('voiscripter_enterOnlyBlockAdd') === 'true';
-    }
-    return false;
-  });
+  const [enterOnlyBlockAdd, setEnterOnlyBlockAdd] = useState<boolean>(false);
+
+  // 初回マウント時に設定を読み込み
+  useEffect(() => {
+    const loadSettings = async () => {
+      if (typeof window !== 'undefined') {
+        const savedValue = await dataManagement.loadData('voiscripter_enterOnlyBlockAdd');
+        if (savedValue !== null) {
+          setEnterOnlyBlockAdd(savedValue === 'true');
+        }
+      }
+    };
+    loadSettings();
+  }, [dataManagement]);
 
   // Enter入力のみでブロック追加の設定変更
   const handleEnterOnlyBlockAddChange = (enabled: boolean) => {
     setEnterOnlyBlockAdd(enabled);
-    localStorage.setItem('voiscripter_enterOnlyBlockAdd', enabled.toString());
+    dataManagement.saveData('voiscripter_enterOnlyBlockAdd', enabled.toString());
   };
 
   // データ保存先変更
@@ -40,7 +48,7 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
         console.error('設定保存エラー:', error);
       }
     } else {
-      localStorage.setItem('voiscripter_saveDirectory', directory);
+      dataManagement.saveData('voiscripter_saveDirectory', directory);
     }
     
     // 保存先が変更された場合、既存データを移動
