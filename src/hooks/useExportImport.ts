@@ -1,4 +1,5 @@
 import { Project, ScriptBlock, Character } from '@/types';
+import { buildEmptyScript } from '@/utils/scriptDefaults';
 import { DataManagementHook } from './useDataManagement';
 
 export interface ExportImportHook {
@@ -412,6 +413,7 @@ export const useExportImport = (
         
         const newSceneId = Date.now().toString();
         const newScriptId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+        const baseScript = buildEmptyScript({ id: newScriptId, title: options.projectName });
         const newProject = {
           id: options.projectName,
           name: options.projectName,
@@ -421,10 +423,8 @@ export const useExportImport = (
               name: options.projectName,
               scripts: [
                 {
-                  id: newScriptId,
-                  title: options.projectName,
-                  blocks: newBlocks,
-                  characters: []
+                  ...baseScript,
+                  blocks: newBlocks
                 }
               ]
             }

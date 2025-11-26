@@ -21,11 +21,25 @@ export interface ScriptBlock {
   text: string;
 }
 
+export interface StorySeparatorImage {
+  id: string;
+  name: string;
+  dataUrl: string;
+}
+
+export interface StorySeparatorSegment {
+  id: string;
+  anchorBlockId: string | null; // null は冒頭を指す
+  images?: StorySeparatorImage[];
+}
+
 export interface Script {
   id: string;
   title: string;
   blocks: ScriptBlock[];
   characters: Character[];
+  storySegments?: StorySeparatorSegment[];
+  storyPanelWidth?: number;
 }
 
 // シーン（サブプロジェクト）

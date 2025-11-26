@@ -1,4 +1,5 @@
 import { Project, Script } from '@/types';
+import { buildEmptyScript } from '@/utils/scriptDefaults';
 
 export interface ScriptManagementHook {
   handleUpdateScript: (project: Project, selectedSceneId: string | null, updates: Partial<Script>) => Project;
@@ -19,7 +20,7 @@ export const useScriptManagement = (): ScriptManagementHook => {
               ...scene,
               scripts: scene.scripts.length > 0 
                 ? [{ ...scene.scripts[0], ...updates }] 
-                : [{ ...updates, id: Date.now().toString(), title: scene.name, blocks: [], characters: [] }]
+                : [{ ...buildEmptyScript({ title: scene.name }), ...updates }]
             }
           : scene
       )

@@ -8,6 +8,7 @@ import ProjectDialog from '@/components/ProjectDialog';
 import CSVExportDialog from '@/components/CSVExportDialog';
 import CharacterManager from '@/components/CharacterManager';
 import { Project, Character, ScriptBlock } from '@/types';
+import { buildEmptyScript } from '@/utils/scriptDefaults';
 
 // カスタムフックのインポート
 import { useDataManagement } from '@/hooks/useDataManagement';
@@ -454,7 +455,7 @@ export default function Home() {
       <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6 md:py-8">
         {project && selectedSceneId ? (
           <ScriptEditor
-            script={project.scenes.find(s => s.id === selectedSceneId)?.scripts[0] || { id: '', title: '', blocks: [], characters: [] }}
+            script={project.scenes.find(s => s.id === selectedSceneId)?.scripts[0] || buildEmptyScript({ id: 'placeholder', title: 'placeholder' })}
             onUpdateBlock={handleBlockUpdate}
             onAddBlock={() => {
               if (project && selectedSceneId) {
@@ -514,6 +515,7 @@ export default function Home() {
             }}
             enterOnlyBlockAdd={settings.enterOnlyBlockAdd}
             currentProjectId={projectId}
+            onUpdateScript={handleScriptUpdate}
           />
         ) : (
           // 現在開いているプロジェクトが存在しない、かつ、シーンがひとつもない場合

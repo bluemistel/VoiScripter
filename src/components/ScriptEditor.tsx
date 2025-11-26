@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, ChangeEvent, MouseEvent as ReactMouseEvent } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -18,14 +18,18 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Script, ScriptBlock, Character, Emotion } from '@/types';
+import { Script, ScriptBlock, Character, Emotion, StorySeparatorSegment, StorySeparatorImage } from '@/types';
 import {
   ArrowUpIcon,
   ArrowDownIcon,
   TrashIcon,
   DocumentDuplicateIcon,
   Bars3Icon,
-  PlusIcon
+  PlusIcon,
+  ScissorsIcon,
+  PhotoIcon,
+  ChevronDoubleLeftIcon,
+  ChevronDoubleRightIcon
 } from '@heroicons/react/24/outline';
 
 interface ScriptEditorProps {
@@ -49,6 +53,7 @@ interface ScriptEditorProps {
   setIsUndoRedoOperation?: (setIsUndoRedoOperationFn: (isUndoRedo: boolean) => void) => void;
   enterOnlyBlockAdd?: boolean;
   currentProjectId?: string;
+  onUpdateScript?: (updates: Partial<Script>) => void;
 }
 
 interface SortableBlockProps {
@@ -366,6 +371,10 @@ function SortableBlock({
   );
 }
 
+const generateSegmentId = () => `segment_${Date.now().toString()}_${Math.random().toString(36).slice(2, 6)}`;
+const MIN_PANEL_WIDTH = 240;
+const MAX_PANEL_WIDTH = 520;
+
 export default function ScriptEditor({
   script,
   onUpdateBlock,
@@ -386,7 +395,8 @@ export default function ScriptEditor({
   setIsCtrlEnterBlock: externalSetIsCtrlEnterBlock,
   setIsUndoRedoOperation: externalSetIsUndoRedoOperation,
   enterOnlyBlockAdd = false,
-  currentProjectId
+  currentProjectId,
+  onUpdateScript
 }: ScriptEditorProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -410,7 +420,434 @@ export default function ScriptEditor({
   const textareaRefs = externalTextareaRefs || internalTextareaRefs;
   const [isButtonFixed, setIsButtonFixed] = useState(false);
   const [manualFocusTarget, setManualFocusTarget] = useState<{ index: number; id: string } | null>(null);
+  const [isStoryPanelOpen, setIsStoryPanelOpen] = useState(false);
+  const [panelWidth, setPanelWidth] = useState<number>(script.storyPanelWidth || 320);
+  const panelWidthRef = useRef(panelWidth);
+  const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const [isResizingPanel, setIsResizingPanel] = useState(false);
+  const [segmentHeights, setSegmentHeights] = useState<Record<string, number>>({});
+  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  const [lineDragState, setLineDragState] = useState<{ mode: 'new' | 'move'; segmentId?: string } | null>(null);
+  const [lineIndicatorY, setLineIndicatorY] = useState<number | null>(null);
+  const [segmentToDelete, setSegmentToDelete] = useState<StorySeparatorSegment | null>(null);
+  const [lineDeleteTarget, setLineDeleteTarget] = useState<string | null>(null);
+  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
+  const imageActionRef = useRef<{ type: 'add' | 'replace'; segmentId: string; imageId?: string } | null>(null);
+  const [imageToDelete, setImageToDelete] = useState<{ segmentId: string; imageId: string } | null>(null);
   
+  useEffect(() => {
+    setPanelWidth(script.storyPanelWidth || 320);
+  }, [script.storyPanelWidth]);
+
+  useEffect(() => {
+    if (!lineDeleteTarget) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!(event.target as HTMLElement).closest('.story-panel-line-control')) {
+        setLineDeleteTarget(null);
+      }
+    };
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, [lineDeleteTarget]);
+
+  useEffect(() => {
+    if (!isStoryPanelOpen) {
+      setLineDeleteTarget(null);
+    }
+  }, [isStoryPanelOpen]);
+
+  useEffect(() => {
+    panelWidthRef.current = panelWidth;
+  }, [panelWidth]);
+
+  useEffect(() => {
+    if (!onUpdateScript) return;
+    if (!script.storySegments || script.storySegments.length === 0) {
+      onUpdateScript({
+        storySegments: [
+          {
+            id: generateSegmentId(),
+            anchorBlockId: null
+          }
+        ]
+      });
+    }
+  }, [script.storySegments, onUpdateScript]);
+
+  const storySegments = useMemo<StorySeparatorSegment[]>(() => {
+    if (script.storySegments && script.storySegments.length > 0) {
+      return script.storySegments;
+    }
+    return [
+      {
+        id: 'segment_default',
+        anchorBlockId: null
+      }
+    ];
+  }, [script.storySegments]);
+
+  const getAnchorIndex = useCallback(
+    (anchorId: string | null | undefined) => {
+      if (!anchorId) return 0;
+      const index = script.blocks.findIndex(block => block.id === anchorId);
+      return index === -1 ? script.blocks.length : index;
+    },
+    [script.blocks]
+  );
+
+  const orderedSegments = useMemo(() => {
+    const segmentsCopy = [...storySegments];
+    segmentsCopy.sort((a, b) => getAnchorIndex(a.anchorBlockId) - getAnchorIndex(b.anchorBlockId));
+    return segmentsCopy;
+  }, [storySegments, getAnchorIndex]);
+
+  const updateStorySegments = useCallback(
+    (updater: (current: StorySeparatorSegment[]) => StorySeparatorSegment[]) => {
+      if (!onUpdateScript) return;
+      const current = script.storySegments && script.storySegments.length > 0 ? script.storySegments : storySegments;
+      onUpdateScript({ storySegments: updater(current) });
+    },
+    [onUpdateScript, script.storySegments, storySegments]
+  );
+
+  const ensureImagesArray = (segment: StorySeparatorSegment) => segment.images ?? [];
+
+  const handleAddSegmentImage = useCallback(
+    (segmentId: string, image: StorySeparatorImage) => {
+      updateStorySegments(prev =>
+        prev.map(segment =>
+          segment.id === segmentId
+            ? { ...segment, images: [...ensureImagesArray(segment), image] }
+            : segment
+        )
+      );
+    },
+    [updateStorySegments]
+  );
+
+  const handleReplaceSegmentImage = useCallback(
+    (segmentId: string, imageId: string, image: StorySeparatorImage) => {
+      updateStorySegments(prev =>
+        prev.map(segment =>
+          segment.id === segmentId
+            ? {
+                ...segment,
+                images: ensureImagesArray(segment).map(img => (img.id === imageId ? image : img))
+              }
+            : segment
+        )
+      );
+    },
+    [updateStorySegments]
+  );
+
+  const handleRemoveSegmentImage = useCallback(
+    (segmentId: string, imageId: string) => {
+      updateStorySegments(prev =>
+        prev.map(segment =>
+          segment.id === segmentId
+            ? {
+                ...segment,
+                images: ensureImagesArray(segment).filter(img => img.id !== imageId)
+              }
+            : segment
+        )
+      );
+    },
+    [updateStorySegments]
+  );
+
+  const addSegmentAtAnchor = useCallback(
+    (anchorBlockId: string | null) => {
+      if (anchorBlockId === null) return;
+      if (storySegments.some(seg => seg.anchorBlockId === anchorBlockId)) {
+        return;
+      }
+      updateStorySegments(prev => [
+        ...prev,
+        {
+          id: generateSegmentId(),
+          anchorBlockId,
+          images: []
+        }
+      ]);
+    },
+    [storySegments, updateStorySegments]
+  );
+
+  const moveSegmentToAnchor = useCallback(
+    (segmentId: string, anchorBlockId: string | null) => {
+      if (anchorBlockId === null) return;
+      if (storySegments.some(seg => seg.anchorBlockId === anchorBlockId && seg.id !== segmentId)) {
+        return;
+      }
+      updateStorySegments(prev =>
+        prev.map(segment => (segment.id === segmentId ? { ...segment, anchorBlockId } : segment))
+      );
+    },
+    [storySegments, updateStorySegments]
+  );
+
+  const deleteSegment = useCallback(
+    (segmentId: string) => {
+      updateStorySegments(prev => {
+        const target = prev.find(segment => segment.id === segmentId);
+        if (!target || target.anchorBlockId === null) {
+          return prev;
+        }
+        const next = prev.filter(segment => segment.id !== segmentId);
+        return next.length === 0
+          ? [
+              {
+                id: generateSegmentId(),
+                anchorBlockId: null,
+                images: []
+              }
+            ]
+          : next;
+      });
+    },
+    [updateStorySegments]
+  );
+  
+  const openImagePicker = (action: { type: 'add' | 'replace'; segmentId: string; imageId?: string }) => {
+    imageActionRef.current = action;
+    imageFileInputRef.current?.click();
+  };
+
+  const handleImageFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const action = imageActionRef.current;
+    imageActionRef.current = null;
+    if (!file || !action) {
+      event.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const payload: StorySeparatorImage = {
+        id: `image_${generateSegmentId()}`,
+        name: file.name,
+        dataUrl
+      };
+      if (action.type === 'replace' && action.imageId) {
+        handleReplaceSegmentImage(action.segmentId, action.imageId, payload);
+      } else {
+        handleAddSegmentImage(action.segmentId, payload);
+      }
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+
+  const determineAnchorFromClientY = useCallback(
+    (clientY: number): string | null => {
+      if (typeof window === 'undefined') return null;
+      if (script.blocks.length === 0) return null;
+      const boundaries: { y: number; anchorBlockId: string | null }[] = [];
+      const container = document.querySelector('.script-editor-container');
+      const containerRect = container?.getBoundingClientRect();
+      boundaries.push({
+        y: (containerRect?.top ?? 0) + window.scrollY,
+        anchorBlockId: script.blocks[0]?.id ?? null
+      });
+      script.blocks.forEach((block, index) => {
+        const element = document.querySelector(`[data-block-index="${index}"]`) as HTMLElement | null;
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          boundaries.push({
+            y: rect.top + window.scrollY,
+            anchorBlockId: block.id
+          });
+        }
+      });
+      if (boundaries.length === 0) return null;
+      const absoluteY = clientY + window.scrollY;
+      let nearest = boundaries[0];
+      let minDiff = Math.abs(absoluteY - nearest.y);
+      boundaries.forEach(boundary => {
+        const diff = Math.abs(absoluteY - boundary.y);
+        if (diff < minDiff) {
+          minDiff = diff;
+          nearest = boundary;
+        }
+      });
+      return nearest.anchorBlockId;
+    },
+    [script.blocks]
+  );
+
+  useEffect(() => {
+    if (!lineDragState) return;
+    const handleMove = (event: MouseEvent) => {
+      setLineIndicatorY(event.clientY);
+    };
+    const handleUp = (event: MouseEvent) => {
+      setLineIndicatorY(event.clientY);
+      const anchorId = determineAnchorFromClientY(event.clientY);
+      if (anchorId) {
+        if (lineDragState.mode === 'new') {
+          addSegmentAtAnchor(anchorId);
+        } else if (lineDragState.segmentId) {
+          moveSegmentToAnchor(lineDragState.segmentId, anchorId);
+        }
+      }
+      setLineDragState(null);
+      setLineIndicatorY(null);
+    };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [lineDragState, determineAnchorFromClientY, addSegmentAtAnchor, moveSegmentToAnchor]);
+
+  const handleStartNewLineDrag = (event: ReactMouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!isStoryPanelOpen || script.blocks.length < 2) {
+      return;
+    }
+    setLineDeleteTarget(null);
+    setLineDragState({ mode: 'new' });
+    setLineIndicatorY(event.clientY);
+  };
+
+  const handleStartMoveLine = (segmentId: string) => (event: ReactMouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setLineDeleteTarget(null);
+    setLineDragState({ mode: 'move', segmentId });
+    setLineIndicatorY(event.clientY);
+  };
+
+  const handleResizeStart = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!isStoryPanelOpen) return;
+    setIsResizingPanel(true);
+    resizeStateRef.current = {
+      startX: event.clientX,
+      startWidth: panelWidthRef.current
+    };
+  };
+
+  useEffect(() => {
+    if (!isResizingPanel) return;
+    const handleMove = (event: MouseEvent) => {
+      if (!resizeStateRef.current) return;
+      const delta = event.clientX - resizeStateRef.current.startX;
+      let nextWidth = resizeStateRef.current.startWidth + delta;
+      nextWidth = Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, nextWidth));
+      setPanelWidth(nextWidth);
+      panelWidthRef.current = nextWidth;
+    };
+    const handleUp = () => {
+      setIsResizingPanel(false);
+      resizeStateRef.current = null;
+      if (onUpdateScript) {
+        onUpdateScript({ storyPanelWidth: panelWidthRef.current });
+      }
+    };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [isResizingPanel, onUpdateScript]);
+
+  const calculateSegmentHeights = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const container = document.querySelector('.story-main-column');
+    if (!container) return;
+    const containerRect = container.getBoundingClientRect();
+    const containerTop = containerRect.top + window.scrollY;
+    const containerBottom = containerRect.bottom + window.scrollY;
+    const blockElements = script.blocks.map((_, index) => document.querySelector(`[data-block-index="${index}"]`) as HTMLElement | null);
+    const getBoundaryY = (index: number) => {
+      if (index <= 0) {
+        return blockElements[0]?.getBoundingClientRect().top + window.scrollY ?? containerTop;
+      }
+      const target = blockElements[index];
+      if (target) {
+        return target.getBoundingClientRect().top + window.scrollY;
+      }
+      const last = blockElements[blockElements.length - 1];
+      return last ? last.getBoundingClientRect().bottom + window.scrollY : containerBottom;
+    };
+    const heights: Record<string, number> = {};
+    orderedSegments.forEach((segment, idx) => {
+      const startIndex = getAnchorIndex(segment.anchorBlockId);
+      const nextSegment = orderedSegments[idx + 1];
+      const endIndex = nextSegment ? getAnchorIndex(nextSegment.anchorBlockId) : script.blocks.length;
+      const startY = getBoundaryY(startIndex);
+      const endY =
+        endIndex >= script.blocks.length
+          ? blockElements[script.blocks.length - 1]?.getBoundingClientRect().bottom + window.scrollY ?? containerBottom
+          : getBoundaryY(endIndex);
+      const height = Math.max(endY - startY, 200);
+      heights[segment.id] = height;
+    });
+    setSegmentHeights(heights);
+  }, [orderedSegments, script.blocks, getAnchorIndex]);
+
+  useEffect(() => {
+    if (!isStoryPanelOpen) return;
+    calculateSegmentHeights();
+    const handleResize = () => calculateSegmentHeights();
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [isStoryPanelOpen, calculateSegmentHeights]);
+
+  useEffect(() => {
+    if (!isStoryPanelOpen) return;
+    const timer = setTimeout(() => calculateSegmentHeights(), 150);
+    return () => clearTimeout(timer);
+  }, [script.blocks, orderedSegments, calculateSegmentHeights, isStoryPanelOpen]);
+
+  useEffect(() => {
+    if (!isStoryPanelOpen) {
+      setActiveSegmentId(null);
+      return;
+    }
+    const handleScroll = () => {
+      if (script.blocks.length === 0) {
+        setActiveSegmentId(orderedSegments[0]?.id ?? null);
+        return;
+      }
+      const threshold = 120;
+      let currentIndex = 0;
+      script.blocks.forEach((_, index) => {
+        const element = document.querySelector(`[data-block-index="${index}"]`) as HTMLElement | null;
+        if (!element) return;
+        const rect = element.getBoundingClientRect();
+        if (rect.top - threshold <= 0) {
+          currentIndex = index;
+        }
+      });
+      const active =
+        [...orderedSegments]
+          .reverse()
+          .find(segment => getAnchorIndex(segment.anchorBlockId) <= currentIndex) ?? orderedSegments[0];
+      setActiveSegmentId(active?.id ?? null);
+    };
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isStoryPanelOpen, orderedSegments, script.blocks, getAnchorIndex]);
+
+  const handleConfirmDeleteSegment = () => {
+    if (segmentToDelete) {
+      deleteSegment(segmentToDelete.id);
+      setSegmentToDelete(null);
+    }
+  };
+
   // 外部から渡されたsetManualFocusTargetを使用、なければ内部のものを使用
   const setManualFocusTargetFn = externalSetManualFocusTarget || setManualFocusTarget;
   
@@ -961,115 +1398,352 @@ export default function ScriptEditor({
 
   return (
     <>
+      <input
+        ref={imageFileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleImageFileChange}
+      />
+      {!isStoryPanelOpen ? (
+        <button
+          type="button"
+          className="fixed left-3 top-1/2 -translate-y-1/2 z-40 bg-primary text-primary-foreground p-2 rounded-full shadow-lg"
+          onClick={() => setIsStoryPanelOpen(true)}
+          title="ストーリーセパレートを開く"
+        >
+          <ChevronDoubleLeftIcon className="w-5 h-5" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="fixed left-3 top-1/2 -translate-y-1/2 z-40 bg-muted text-foreground p-2 rounded-full shadow-lg"
+          onClick={() => setIsStoryPanelOpen(false)}
+          title="ストーリーセパレートを閉じる"
+        >
+          <ChevronDoubleRightIcon className="w-5 h-5" />
+        </button>
+      )}
       <div className="script-editor-container min-h-auto">
+        <div className="flex flex-col gap-3 mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {isStoryPanelOpen && script.blocks.length >= 2 && (
+                <button
+                  type="button"
+                  onMouseDown={handleStartNewLineDrag}
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-full border text-foreground hover:bg-accent transition"
+                  title="セパレートラインを追加"
+                >
+                  <ScissorsIcon className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            {isStoryPanelOpen && (
+              <p className="text-xs text-muted-foreground">
+                画像は幅 {Math.round(panelWidth)}px（16:9）。ラインはドラッグで移動できます。
+              </p>
+            )}
+          </div>
+        </div>
         {script.blocks.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 text-center text-muted-foreground">
             <p className="text-sm sm:text-base md:text-lg mb-4">1.右上のキャラクターのアイコンから登場キャラクターを追加します。</p>
             <p className="text-sm sm:text-base md:text-lg mb-4">2.「+ブロックを追加」からテキストブロックを追加し、キャラクターを選択するとセリフを入力できます。</p>
             <p className="text-sm sm:text-base md:text-lg mb-4">3.右上のエクスポートから台本をCSV形式で出力できます。グループ設定ごとにCSVファイルを分割出力することができます。</p>
             <p className="text-sm sm:text-base md:text-lg mb-4">4.より詳しい操作方法は設定＞ヘルプをご覧ください。</p>
+            {isStoryPanelOpen && (
+              <p className="text-xs text-muted-foreground mt-2">
+                ストーリーセパレートを使うにはテキストブロックを2つ以上作成してください。
+              </p>
+            )}
           </div>
         ) : (
-          <div className="bg-card rounded-lg shadow p-2 sm:p-3 md:p-4 mb-24 relative h-full flex flex-col justify-between">
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={script.blocks.map(block => block.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {script.blocks.map((block, index) => (
-                  <div key={block.id} className="mb-1 last:mb-0">
-                    <SortableBlock
-                      block={block}
-                      characters={characters}
-                      character={characters.find(c => c.id === block.characterId)}
-                      onUpdate={updates => onUpdateBlock(block.id, updates)}
-                      onDelete={() => {
-                        onDeleteBlock(block.id);
-                        
-                        // 削除後のフォーカス処理
-                        setTimeout(() => {
-                          // 削除されたブロックの位置を考慮してフォーカスを設定
-                          let focusIndex = index;
-                          
-                          // 最上段の場合はそのまま、それ以外は一つ上のブロックにフォーカス
-                          if (index > 0) {
-                            focusIndex = index - 1;
-                          }
-                          
-                          const focusRef = textareaRefs.current[focusIndex];
-                          if (focusRef) {
-                            focusRef.focus();
-                            onSelectedBlockIdsChange([script.blocks[focusIndex]?.id || '']);
-                          }
-                        }, 50);
-                      }}
-                      onDuplicate={() => {
-                        const newBlock: ScriptBlock = {
-                          ...block,
-                          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                          text: block.text // 元のテキストを保持
-                        };
-                        insertIdx.current = index + 1; // 複製ブロックの挿入インデックスを設定
-                        onInsertBlock(newBlock, index + 1);
-                        setTimeout(() => {
-                          setManualFocusTargetFn({ index: index + 1, id: newBlock.id });
-                        }, 10); // タイミングを調整
-                      }}
-                      onMoveUp={() => {
-                        if (index > 0) {
-                          onMoveBlock(index, index - 1);
-                          
-                          // 移動後のスクロール位置補正
-                          setTimeout(() => {
-                            const targetRef = textareaRefs.current[index - 1];
-                            if (targetRef) {
-                              ensureBlockVisible(index - 1, 50);
-                            }
-                          }, 50);
-                        }
-                      }}
-                      onMoveDown={() => {
-                        if (index < script.blocks.length - 1) {
-                          onMoveBlock(index, index + 1);
-                          
-                          // 移動後のスクロール位置補正
-                          setTimeout(() => {
-                            const targetRef = textareaRefs.current[index + 1];
-                            if (targetRef) {
-                              ensureBlockVisible(index + 1, 50);
-                            }
-                          }, 50);
-                        }
-                      }}
-                      textareaRef={el => textareaRefs.current[index] = el}
-                      isSelected={selectedBlockIds.includes(block.id)}
-                      onClick={(event) => handleBlockClick(block.id, index, event)}
-                      enterOnlyBlockAdd={enterOnlyBlockAdd}
-                      currentProjectId={currentProjectId}
-                      script={script}
-                      onInsertBlock={onInsertBlock}
-                      insertIdx={insertIdx}
-                    />
-                    {/* ブロック間のト書き追加 */}
-                    <div className="flex justify-center my-1 group">
-                      <button
-                        className="hidden group-hover:inline-block px-2 py-1 bg-primary text-primary-foreground rounded text-xs"
-                        onClick={() => handleAddTogaki(index + 1)}
-                      >
-                        ＋ト書きを追加
-                      </button>
-                    </div>
+          <div className={`flex flex-col lg:flex-row gap-4 ${isStoryPanelOpen ? 'items-start' : ''}`}>
+            {isStoryPanelOpen && (
+              <>
+                <div
+                  className="border rounded-lg bg-muted/30 flex-shrink-0 relative w-full lg:w-auto max-h-[70vh] overflow-y-auto lg:sticky lg:top-4 lg:max-h-[calc(100vh-140px)]"
+                  style={{ width: isStoryPanelOpen ? panelWidth : '100%' }}
+                >
+                  <div className="sticky top-0 z-10 flex items-center justify-between p-3 border-b bg-muted/60 backdrop-blur">
+                    <span className="text-sm font-semibold text-foreground">ストーリーセパレート</span>
+                    <span className="text-xs text-muted-foreground">幅 {Math.round(panelWidth)}px</span>
                   </div>
-                ))}
-              </SortableContext>
-            </DndContext>
+                  <div className="p-3 space-y-6">
+                    {orderedSegments.map((segment) => {
+                      const segmentImages = ensureImagesArray(segment);
+                      return (
+                        <div key={segment.id} className="relative pb-10">
+                          {segment.anchorBlockId !== null && (
+                            <div className="story-panel-line-control absolute left-1/2 -top-5 -translate-x-1/2 flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="p-1 rounded-full bg-background text-foreground shadow hover:bg-accent transition"
+                                onMouseDown={handleStartMoveLine(segment.id)}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setLineDeleteTarget(prev => (prev === segment.id ? null : segment.id));
+                                }}
+                                title="ドラッグで移動 / クリックで削除を表示"
+                              >
+                                <ScissorsIcon className="w-4 h-4" />
+                              </button>
+                              {lineDeleteTarget === segment.id && (
+                                <button
+                                  type="button"
+                                  className="p-1 rounded-full bg-destructive text-destructive-foreground shadow"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setSegmentToDelete(segment);
+                                  }}
+                                  title="ラインを削除"
+                                >
+                                  <TrashIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          <div
+                            className={`sticky top-4 border rounded-lg bg-background shadow-sm overflow-hidden transition ring-offset-2 ${
+                              activeSegmentId === segment.id ? 'ring-2 ring-primary' : ''
+                            }`}
+                            style={{
+                              minHeight: segmentHeights[segment.id] ? `${segmentHeights[segment.id]}px` : '240px'
+                            }}
+                          >
+                            <div className="space-y-3 p-3">
+                              {segmentImages.length === 0 ? (
+                                <button
+                                  type="button"
+                                  className="w-full border-2 border-dashed rounded-lg py-16 flex flex-col items-center justify-center text-sm text-muted-foreground hover:bg-muted/40 transition"
+                                  onClick={() => openImagePicker({ type: 'add', segmentId: segment.id })}
+                                >
+                                  <PhotoIcon className="w-12 h-12 mb-3 opacity-60" />
+                                  <span>クリックして画像を追加</span>
+                                </button>
+                              ) : (
+                                <>
+                                  {segmentImages.map(image => (
+                                    <div key={image.id} className="relative group rounded-lg overflow-hidden border">
+                                      <img
+                                        src={image.dataUrl}
+                                        alt={image.name}
+                                        className="w-full object-cover"
+                                        style={{ height: `${Math.max(Math.round((panelWidth - 32) * 9 / 16), 180)}px` }}
+                                      />
+                                      <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-4 text-white text-sm">
+                                        <button
+                                          type="button"
+                                          className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 transition"
+                                          onClick={() => openImagePicker({ type: 'replace', segmentId: segment.id, imageId: image.id })}
+                                        >
+                                          置き換え
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 transition"
+                                          onClick={() => setImageToDelete({ segmentId: segment.id, imageId: image.id })}
+                                        >
+                                          削除
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  <button
+                                    type="button"
+                                    className="w-full border-2 border-dashed rounded-lg py-4 text-sm text-muted-foreground hover:bg-muted/40 transition"
+                                    onClick={() => openImagePicker({ type: 'add', segmentId: segment.id })}
+                                  >
+                                    クリックして画像を追加
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {script.blocks.length < 2 && (
+                      <p className="text-xs text-muted-foreground">
+                        ブロックが2つ以上になると線を追加できます。
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div
+                  className="hidden lg:block w-1 bg-border rounded-full cursor-col-resize self-stretch"
+                  onMouseDown={handleResizeStart}
+                  role="separator"
+                  aria-label="ストーリーセパレートの幅を調整"
+                />
+              </>
+            )}
+            <div className="flex-1 story-main-column">
+              <div className="bg-card rounded-lg shadow p-2 sm:p-3 md:p-4 mb-24 relative h-full flex flex-col justify-between">
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={script.blocks.map(block => block.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {script.blocks.map((block, index) => (
+                      <div key={block.id} className="mb-1 last:mb-0">
+                        <SortableBlock
+                          block={block}
+                          characters={characters}
+                          character={characters.find(c => c.id === block.characterId)}
+                          onUpdate={updates => onUpdateBlock(block.id, updates)}
+                          onDelete={() => {
+                            onDeleteBlock(block.id);
+                            
+                            // 削除後のフォーカス処理
+                            setTimeout(() => {
+                              // 削除されたブロックの位置を考慮してフォーカスを設定
+                              let focusIndex = index;
+                              
+                              // 最上段の場合はそのまま、それ以外は一つ上のブロックにフォーカス
+                              if (index > 0) {
+                                focusIndex = index - 1;
+                              }
+                              
+                              const focusRef = textareaRefs.current[focusIndex];
+                              if (focusRef) {
+                                focusRef.focus();
+                                onSelectedBlockIdsChange([script.blocks[focusIndex]?.id || '']);
+                              }
+                            }, 50);
+                          }}
+                          onDuplicate={() => {
+                            const newBlock: ScriptBlock = {
+                              ...block,
+                              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                              text: block.text // 元のテキストを保持
+                            };
+                            insertIdx.current = index + 1; // 複製ブロックの挿入インデックスを設定
+                            onInsertBlock(newBlock, index + 1);
+                            setTimeout(() => {
+                              setManualFocusTargetFn({ index: index + 1, id: newBlock.id });
+                            }, 10); // タイミングを調整
+                          }}
+                          onMoveUp={() => {
+                            if (index > 0) {
+                              onMoveBlock(index, index - 1);
+                              
+                              // 移動後のスクロール位置補正
+                              setTimeout(() => {
+                                const targetRef = textareaRefs.current[index - 1];
+                                if (targetRef) {
+                                  ensureBlockVisible(index - 1, 50);
+                                }
+                              }, 50);
+                            }
+                          }}
+                          onMoveDown={() => {
+                            if (index < script.blocks.length - 1) {
+                              onMoveBlock(index, index + 1);
+                              
+                              // 移動後のスクロール位置補正
+                              setTimeout(() => {
+                                const targetRef = textareaRefs.current[index + 1];
+                                if (targetRef) {
+                                  ensureBlockVisible(index + 1, 50);
+                                }
+                              }, 50);
+                            }
+                          }}
+                          textareaRef={el => textareaRefs.current[index] = el}
+                          isSelected={selectedBlockIds.includes(block.id)}
+                          onClick={(event) => handleBlockClick(block.id, index, event)}
+                          enterOnlyBlockAdd={enterOnlyBlockAdd}
+                          currentProjectId={currentProjectId}
+                          script={script}
+                          onInsertBlock={onInsertBlock}
+                          insertIdx={insertIdx}
+                        />
+                        {/* ブロック間のト書き追加 */}
+                        <div className="flex justify-center my-1 group">
+                          <button
+                            className="hidden group-hover:inline-block px-2 py-1 bg-primary text-primary-foreground rounded text-xs"
+                            onClick={() => handleAddTogaki(index + 1)}
+                          >
+                            ＋ト書きを追加
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </SortableContext>
+                </DndContext>
+              </div>
+            </div>
           </div>
         )}
       </div>
+      {lineDragState && lineIndicatorY !== null && (
+        <div className="fixed inset-x-0 pointer-events-none z-40" style={{ top: lineIndicatorY }}>
+          <div className="border-t border-dashed border-primary"></div>
+        </div>
+      )}
+      {segmentToDelete && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-background rounded-lg shadow-lg p-6 w-full max-w-sm">
+            <h3 className="text-lg font-semibold text-foreground mb-3">セパレートラインを削除しますか？</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              このラインに紐付いた画像も同時に削除されます。元に戻す場合はアンドゥをご利用ください。
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSegmentToDelete(null)}
+                className="px-4 py-2 rounded-full border text-sm"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteSegment}
+                className="px-4 py-2 rounded-full bg-destructive text-destructive-foreground text-sm"
+              >
+                削除する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {imageToDelete && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-background rounded-lg shadow-lg p-6 w-full max-w-sm">
+            <h3 className="text-lg font-semibold text-foreground mb-3">画像を削除しますか？</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              この画像はストーリーセパレートから削除されます。元に戻す場合はアンドゥをご利用ください。
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setImageToDelete(null)}
+                className="px-4 py-2 rounded-full border text-sm"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleRemoveSegmentImage(imageToDelete.segmentId, imageToDelete.imageId);
+                  setImageToDelete(null);
+                }}
+                className="px-4 py-2 rounded-full bg-destructive text-destructive-foreground text-sm"
+              >
+                削除する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* 右下固定ボタン群 */}
       <div className="fixed right-6 z-40 flex flex-row items-end space-x-2 bottom-6">
         <button

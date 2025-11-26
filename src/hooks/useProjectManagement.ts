@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Project, Scene } from '@/types';
+import { buildEmptyScript } from '@/utils/scriptDefaults';
 import { DataManagementHook } from './useDataManagement';
 
 export interface ProjectManagementHook {
@@ -178,7 +179,7 @@ export const useProjectManagement = (
             scenes: [{
               id: Date.now().toString(),
               name: '新しいシーン',
-              scripts: [{ id: Date.now().toString(), title: '新しいシーン', blocks: [], characters: [] }]
+              scripts: [buildEmptyScript({ title: '新しいシーン' })]
             }]
           };
           setProject(defaultProject);
@@ -193,7 +194,7 @@ export const useProjectManagement = (
           scenes: [{
             id: Date.now().toString(),
             name: '新しいシーン',
-            scripts: [{ id: Date.now().toString(), title: '新しいシーン', blocks: [], characters: [] }]
+            scripts: [buildEmptyScript({ title: '新しいシーン' })]
           }]
         };
         setProject(defaultProject);
@@ -483,7 +484,7 @@ export const useProjectManagement = (
         const newScene = {
           id: newSceneId,
           name: projectId,
-          scripts: [{ id: Date.now().toString(), title: projectId, blocks: [], characters: [] }]
+          scripts: [buildEmptyScript({ title: projectId })]
         };
         const newProject = { id: projectId, name: projectId, scenes: [newScene] };
         setProject(newProject);
@@ -529,7 +530,7 @@ export const useProjectManagement = (
     const newScene = {
       id: newSceneId,
       name: name,
-      scripts: [{ id: Date.now().toString(), title: name, blocks: [], characters: [] }]
+      scripts: [buildEmptyScript({ title: name })]
     };
     const newProject = {
       id: name,
@@ -639,7 +640,7 @@ export const useProjectManagement = (
       scenes: [{
         id: Date.now().toString(),
         name: '新しいシーン',
-        scripts: [{ id: Date.now().toString(), title: '新しいシーン', blocks: [], characters: [] }]
+        scripts: [buildEmptyScript({ title: '新しいシーン' })]
       }]
     };
     
@@ -666,7 +667,7 @@ export const useProjectManagement = (
     const newScene = {
       id: newSceneId,
       name: name.trim(),
-      scripts: [{ id: Date.now().toString(), title: name.trim(), blocks: [], characters: [] }]
+      scripts: [buildEmptyScript({ title: name.trim() })]
     };
     
     setProject(prev => ({ ...prev, scenes: [...prev.scenes, newScene] }));
