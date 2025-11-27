@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { voiScripterDB } from '@/utils/indexedDB';
-import { performAutoMigration, shouldMigrate } from '@/utils/migration';
+import { performAutoMigration, shouldMigrate, isMigrationCompleted } from '@/utils/migration';
 
 export interface DataManagementHook {
   saveData: (key: string, data: string) => void;
@@ -9,12 +9,14 @@ export interface DataManagementHook {
   listDataKeys: () => Promise<string[]>;
   saveDirectory: string;
   setSaveDirectory: (directory: string) => void;
+  isInitialized: boolean;
 }
 
 export const useDataManagement = (): DataManagementHook => {
   const [saveDirectory, setSaveDirectory] = useState<string>('');
   const [isIndexedDBReady, setIsIndexedDBReady] = useState<boolean>(false);
   const [migrationCompleted, setMigrationCompleted] = useState<boolean>(false);
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
   // データ保存関数
   const saveData = useCallback(async (key: string, data: string) => {
@@ -94,16 +96,68 @@ export const useDataManagement = (): DataManagementHook => {
   const loadData = useCallback(async (key: string): Promise<string | null> => {
     if (typeof window === 'undefined') return null;
     
-    //console.log(`🔍 データ読み込み - key: ${key}, 保存先: ${saveDirectory}, IndexedDB: ${isIndexedDBReady && migrationCompleted}`);
-    
     if (saveDirectory === '') {
       // IndexedDBまたはlocalStorageから読み込み
       try {
-        if (isIndexedDBReady && migrationCompleted) {
+        // IndexedDBが利用可能で、移行が完了しているか動的にチェック
+        let shouldUseIndexedDB = false;
+        
+        if (window.indexedDB) {
+          // 状態が更新されている場合はそれを使用
+          if (isIndexedDBReady && migrationCompleted) {
+            shouldUseIndexedDB = true;
+            //console.log(`🔍 [loadData] 状態から判断: IndexedDB使用 (isIndexedDBReady: ${isIndexedDBReady}, migrationCompleted: ${migrationCompleted})`);
+          } else {
+            // 状態が更新されていない場合は動的にチェック（初期化状態に関係なく）
+            try {
+              const { isMigrationCompleted } = await import('@/utils/migration');
+              const completed = await isMigrationCompleted();
+              //console.log(`🔍 [loadData] 動的チェック: 移行完了状態 = ${completed}, isInitialized = ${isInitialized}, isIndexedDBReady = ${isIndexedDBReady}`);
+              
+              if (completed) {
+                // IndexedDBを開く（まだ開いていない場合）
+                if (!isIndexedDBReady) {
+                  await voiScripterDB.open();
+                  setIsIndexedDBReady(true);
+                  //console.log('✅ [loadData] IndexedDBを開きました');
+                }
+                setMigrationCompleted(true);
+                shouldUseIndexedDB = true;
+                //console.log('✅ [loadData] 動的チェック結果: IndexedDBを使用');
+              } else {
+                //console.log('⚠️ [loadData] 動的チェック結果: 移行未完了のためlocalStorageを使用');
+              }
+            } catch (error) {
+              console.error('移行状態チェックエラー:', error);
+            }
+          }
+        } else {
+          //console.log('⚠️ [loadData] IndexedDBが利用できません');
+        }
+        
+        if (shouldUseIndexedDB) {
           // IndexedDBから読み込み
-          const result = await voiScripterDB.load(key);
-          //console.log(`📦 IndexedDBから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
-          return result;
+          try {
+            const result = await voiScripterDB.load(key);
+            //console.log(`📦 IndexedDBから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
+            // IndexedDBにデータがある場合はそれを返す
+            if (result) {
+              return result;
+            }
+            // IndexedDBにデータがない場合はlocalStorageもチェック（移行途中の場合）
+            const localStorageResult = localStorage.getItem(key);
+            if (localStorageResult) {
+              //console.log(`📦 IndexedDBにデータなし、localStorageから読み込み - key: ${key}`);
+              return localStorageResult;
+            }
+            return null;
+          } catch (error) {
+            console.error('IndexedDB読み込みエラー:', error);
+            // エラー時はlocalStorageにフォールバック
+            const result = localStorage.getItem(key);
+            //console.log(`📦 フォールバック: localStorageから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
+            return result;
+          }
         } else {
           // localStorageから読み込み（移行前またはIndexedDBが利用できない場合）
           const result = localStorage.getItem(key);
@@ -129,7 +183,7 @@ export const useDataManagement = (): DataManagementHook => {
       return result;
     }
     return null;
-  }, [saveDirectory, isIndexedDBReady, migrationCompleted]);
+  }, [saveDirectory, isIndexedDBReady, migrationCompleted, isInitialized]);
 
   // データ削除関数
   const deleteData = useCallback(async (key: string) => {
@@ -169,11 +223,55 @@ export const useDataManagement = (): DataManagementHook => {
     if (saveDirectory === '') {
       // IndexedDBまたはlocalStorageからキー一覧を取得
       try {
-        if (isIndexedDBReady && migrationCompleted) {
+        // IndexedDBが利用可能で、移行が完了しているか動的にチェック
+        let shouldUseIndexedDB = false;
+        
+        if (window.indexedDB) {
+          // 状態が更新されている場合はそれを使用
+          if (isIndexedDBReady && migrationCompleted) {
+            shouldUseIndexedDB = true;
+            //console.log(`🔍 [listDataKeys] 状態から判断: IndexedDB使用`);
+          } else {
+            // 状態が更新されていない場合は動的にチェック（初期化状態に関係なく）
+            try {
+              const { isMigrationCompleted } = await import('@/utils/migration');
+              const completed = await isMigrationCompleted();
+              //console.log(`🔍 [listDataKeys] 動的チェック: 移行完了状態 = ${completed}`);
+              
+              if (completed) {
+                // IndexedDBを開く（まだ開いていない場合）
+                if (!isIndexedDBReady) {
+                  await voiScripterDB.open();
+                  setIsIndexedDBReady(true);
+                  //console.log('✅ [listDataKeys] IndexedDBを開きました');
+                }
+                setMigrationCompleted(true);
+                shouldUseIndexedDB = true;
+                //console.log('✅ [listDataKeys] 動的チェック結果: IndexedDBを使用');
+              } else {
+                //console.log('⚠️ [listDataKeys] 動的チェック結果: 移行未完了のためlocalStorageを使用');
+              }
+            } catch (error) {
+              console.error('移行状態チェックエラー:', error);
+            }
+          }
+        } else {
+          //console.log('⚠️ [listDataKeys] IndexedDBが利用できません');
+        }
+        
+        if (shouldUseIndexedDB) {
           // IndexedDBからキー一覧を取得
-          const keys = await voiScripterDB.getAllKeys();
-          //console.log(`Retrieved ${keys.length} keys from IndexedDB`);
-          return keys;
+          try {
+            const keys = await voiScripterDB.getAllKeys();
+            //console.log(`Retrieved ${keys.length} keys from IndexedDB`);
+            return keys;
+          } catch (error) {
+            console.error('IndexedDB list keys error:', error);
+            // エラー時はlocalStorageにフォールバック
+            const keys = Object.keys(localStorage);
+            //console.log(`Fallback: Retrieved ${keys.length} keys from localStorage`);
+            return keys;
+          }
         } else {
           // localStorageからキー一覧を取得（移行前またはIndexedDBが利用できない場合）
           const keys = Object.keys(localStorage);
@@ -196,7 +294,7 @@ export const useDataManagement = (): DataManagementHook => {
       return await window.electronAPI?.listDataKeys() || [];
     }
     return [];
-  }, [saveDirectory, isIndexedDBReady, migrationCompleted]);
+  }, [saveDirectory, isIndexedDBReady, migrationCompleted, isInitialized]);
 
   // 初回マウント時に保存先設定を読み込みとIndexedDB移行を実行
   useEffect(() => {
@@ -251,23 +349,38 @@ export const useDataManagement = (): DataManagementHook => {
           return;
         }
 
-        // 5. 自動移行を実行
-        //console.log('🔄 自動移行を開始...');
-        const migrationResult = await performAutoMigration();
+        // 5. 既に移行が完了しているかチェック
+        const alreadyCompleted = await isMigrationCompleted();
         
-        if (migrationResult.success) {
+        if (alreadyCompleted) {
+          // 既に移行が完了している場合
           setMigrationCompleted(true);
-          //console.log(`🎉 移行完了: ${migrationResult.migratedCount}個のデータを移行しました`);
-          
-          if (migrationResult.error) {
-            console.warn('⚠️ 移行中にエラーが発生しました:', migrationResult.error);
-          }
+          //console.log('✅ 移行は既に完了しています');
         } else {
-          console.error('❌ 移行に失敗しました:', migrationResult.error);
+          // 6. 自動移行を実行
+          //console.log('🔄 自動移行を開始...');
+          const migrationResult = await performAutoMigration();
+          
+          if (migrationResult.success) {
+            setMigrationCompleted(true);
+            //console.log(`🎉 移行完了: ${migrationResult.migratedCount}個のデータを移行しました`);
+            
+            if (migrationResult.error) {
+              console.warn('⚠️ 移行中にエラーが発生しました:', migrationResult.error);
+            }
+          } else {
+            console.error('❌ 移行に失敗しました:', migrationResult.error);
+          }
         }
+
+        // 初期化完了をマーク
+        setIsInitialized(true);
+        //console.log('✅ データ管理の初期化完了');
 
       } catch (error) {
         console.error('❌ データ管理の初期化エラー:', error);
+        // エラーが発生しても初期化完了をマーク（フォールバック動作のため）
+        setIsInitialized(true);
       }
     };
     
@@ -280,6 +393,7 @@ export const useDataManagement = (): DataManagementHook => {
     deleteData,
     listDataKeys,
     saveDirectory,
-    setSaveDirectory
+    setSaveDirectory,
+    isInitialized
   };
 };
