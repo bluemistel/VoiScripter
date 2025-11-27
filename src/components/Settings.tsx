@@ -339,6 +339,13 @@ export default function Settings({
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
                 <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.2.3</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• ブラウザ版で再読み込み時にIndexedDBからデータが正しく読み込まれない不具合を暫定修正</li>
+                    </ul>
+                  </div>
+                  
+                <div>
                     <h4 className="font-medium text-foreground mb-2">v0.2.2</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                       <li>• 台本データの保存先をlocalstrageからブラウザ内データベース(IndexedDB)に変更。ブラウザ版でも容量制限がなくなりました。</li>

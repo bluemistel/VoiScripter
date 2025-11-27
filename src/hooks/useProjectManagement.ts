@@ -68,18 +68,24 @@ export const useProjectManagement = (
       // プロジェクトリストを先に取得（存在チェック用）
       let availableProjects: string[] = [];
       if (dataManagement.saveDirectory === '') {
-        //console.log('📦 初期化: localStorageからプロジェクトリストを取得');
-        const keys = Object.keys(localStorage)
-          .filter(k => k.startsWith('voiscripter_project_') &&
-            !k.endsWith('_lastScene') &&
-            !k.endsWith('_undo') &&
-            !k.endsWith('_redo') &&
-            !k.endsWith('_characters') &&
-            !k.endsWith('_groups') &&
-            !k.endsWith('_lastSaved'));
-        availableProjects = keys.map(k => k.replace('voiscripter_project_', ''));
-        //console.log('📦 初期化: localStorageのキー:', keys);
-        //console.log('📦 初期化: 利用可能なプロジェクト:', availableProjects);
+        //console.log('📦 初期化: データストレージからプロジェクトリストを取得');
+        try {
+          const keys = await dataManagement.listDataKeys();
+          availableProjects = keys
+            .filter(k => k.startsWith('voiscripter_project_') &&
+              !k.endsWith('_lastScene') &&
+              !k.endsWith('_undo') &&
+              !k.endsWith('_redo') &&
+              !k.endsWith('_characters') &&
+              !k.endsWith('_groups') &&
+              !k.endsWith('_lastSaved'))
+            .map(k => k.replace('voiscripter_project_', ''));
+          //console.log('📦 初期化: データストレージのキー:', keys);
+          //console.log('📦 初期化: 利用可能なプロジェクト:', availableProjects);
+        } catch (error) {
+          console.error('プロジェクトリスト取得エラー:', error);
+          availableProjects = [];
+        }
       } else if (window.electronAPI) {
         try {
           //console.log('📁 初期化: ディレクトリからプロジェクトリストを取得');
@@ -93,20 +99,20 @@ export const useProjectManagement = (
             !k.endsWith('_groups') &&
             !k.endsWith('_lastSaved'));
           availableProjects = availableProjects.map(k => k.replace('voiscripter_project_', ''));
-          //console.log('📁 初期化: プロジェクトキー:', keys.filter(k => k.startsWith('voiscripter_project_')));
-          //console.log('📁 初期化: 利用可能なプロジェクト:', availableProjects);
+          console.log('📁 初期化: プロジェクトキー:', keys.filter(k => k.startsWith('voiscripter_project_')));
+          console.log('📁 初期化: 利用可能なプロジェクト:', availableProjects);
         } catch (error) {
           console.error('プロジェクトリスト取得エラー:', error);
           availableProjects = [];
         }
       }
       
-      //console.log('✅ 初期化: プロジェクトリストを設定 - 利用可能なプロジェクト:', availableProjects);
+      console.log('✅ 初期化: プロジェクトリストを設定 - 利用可能なプロジェクト:', availableProjects);
       setProjectList(availableProjects);
       
       // デバッグ用: プロジェクトリストの状態を確認
       setTimeout(() => {
-        //console.log('🔍 デバッグ: プロジェクトリスト状態確認 - availableProjects:', availableProjects);
+        console.log('🔍 デバッグ: プロジェクトリスト状態確認 - availableProjects:', availableProjects);
       }, 100);
       
       // 最後に開いていたプロジェクトを読み込み
@@ -214,18 +220,24 @@ export const useProjectManagement = (
       //console.log('🔄 プロジェクトリスト更新開始 - 保存先:', dataManagement.saveDirectory);
       let availableProjects: string[] = [];
       if (dataManagement.saveDirectory === '') {
-        //console.log('📦 localStorageからプロジェクトリストを取得');
-        const keys = Object.keys(localStorage)
-          .filter(k => k.startsWith('voiscripter_project_') &&
-            !k.endsWith('_lastScene') &&
-            !k.endsWith('_undo') &&
-            !k.endsWith('_redo') &&
-            !k.endsWith('_characters') &&
-            !k.endsWith('_groups') &&
-            !k.endsWith('_lastSaved'));
-        availableProjects = keys.map(k => k.replace('voiscripter_project_', ''));
-        //console.log('📦 localStorageのキー:', keys);
-        //console.log('📦 利用可能なプロジェクト:', availableProjects);
+        //console.log('📦 データストレージからプロジェクトリストを取得');
+        try {
+          const keys = await dataManagement.listDataKeys();
+          availableProjects = keys
+            .filter(k => k.startsWith('voiscripter_project_') &&
+              !k.endsWith('_lastScene') &&
+              !k.endsWith('_undo') &&
+              !k.endsWith('_redo') &&
+              !k.endsWith('_characters') &&
+              !k.endsWith('_groups') &&
+              !k.endsWith('_lastSaved'))
+            .map(k => k.replace('voiscripter_project_', ''));
+          //console.log('📦 データストレージのキー:', keys);
+          //console.log('📦 利用可能なプロジェクト:', availableProjects);
+        } catch (error) {
+          console.error('プロジェクトリスト取得エラー:', error);
+          availableProjects = [];
+        }
       } else if (window.electronAPI) {
         try {
           //console.log('📁 ディレクトリからプロジェクトリストを取得');
@@ -501,13 +513,22 @@ export const useProjectManagement = (
   // プロジェクトリスト再取得関数
   const refreshProjectList = async () => {
     if (dataManagement.saveDirectory === '') {
-      const keys = Object.keys(localStorage)
-        .filter(k => k.startsWith('voiscripter_project_') &&
-          !k.endsWith('_lastScene') &&
-          !k.endsWith('_undo') &&
-          !k.endsWith('_redo'));
-      const projectKeys = keys.map(k => k.replace('voiscripter_project_', ''));
-      setProjectList(projectKeys);
+      try {
+        const keys = await dataManagement.listDataKeys();
+        const projectKeys = keys
+          .filter(k => k.startsWith('voiscripter_project_') &&
+            !k.endsWith('_lastScene') &&
+            !k.endsWith('_undo') &&
+            !k.endsWith('_redo') &&
+            !k.endsWith('_characters') &&
+            !k.endsWith('_groups') &&
+            !k.endsWith('_lastSaved'))
+          .map(k => k.replace('voiscripter_project_', ''));
+        setProjectList(projectKeys);
+      } catch (error) {
+        console.error('プロジェクトリスト取得エラー:', error);
+        setProjectList([]);
+      }
     } else if (window.electronAPI) {
       try {
         const keys = await dataManagement.listDataKeys();
