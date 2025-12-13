@@ -14,22 +14,22 @@ export default function RootLayout({
     if (typeof window !== 'undefined' && window.electronAPI) {
       // メニューイベントの設定
       window.electronAPI.onNewProject(() => {
-        console.log('新規プロジェクトが要求されました');
+        //console.log('新規プロジェクトが要求されました');
         // ここで新規プロジェクトの処理を実装
       });
 
       window.electronAPI.onOpenProject(() => {
-        console.log('プロジェクトを開くが要求されました');
+        //console.log('プロジェクトを開くが要求されました');
         // ここでプロジェクトを開く処理を実装
       });
 
       window.electronAPI.onSaveProject(() => {
-        console.log('プロジェクトの保存が要求されました');
+        //console.log('プロジェクトの保存が要求されました');
         // ここでプロジェクトの保存処理を実装
       });
 
       window.electronAPI.onShowAbout(() => {
-        console.log('アプリケーションについてが要求されました');
+        //console.log('アプリケーションについてが要求されました');
         // ここでアバウトダイアログを表示
       });
 

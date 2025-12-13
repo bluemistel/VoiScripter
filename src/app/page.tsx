@@ -572,7 +572,7 @@ export default function Home() {
           setProjectId(projectId);
           // 最後に開いたプロジェクトを保存
           dataManagement.saveData('voiscripter_lastProject', projectId);
-          console.log('💾 プロジェクト変更: 最後のプロジェクトを保存:', projectId);
+          //console.log('💾 プロジェクト変更: 最後のプロジェクトを保存:', projectId);
           // プロジェクトを読み込む処理は既存のuseEffectで実行される
         }}
         onDeleteProject={() => {

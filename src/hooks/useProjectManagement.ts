@@ -99,20 +99,20 @@ export const useProjectManagement = (
             !k.endsWith('_groups') &&
             !k.endsWith('_lastSaved'));
           availableProjects = availableProjects.map(k => k.replace('voiscripter_project_', ''));
-          console.log('📁 初期化: プロジェクトキー:', keys.filter(k => k.startsWith('voiscripter_project_')));
-          console.log('📁 初期化: 利用可能なプロジェクト:', availableProjects);
+          //console.log('📁 初期化: プロジェクトキー:', keys.filter(k => k.startsWith('voiscripter_project_')));
+          //console.log('📁 初期化: 利用可能なプロジェクト:', availableProjects);
         } catch (error) {
           console.error('プロジェクトリスト取得エラー:', error);
           availableProjects = [];
         }
       }
       
-      console.log('✅ 初期化: プロジェクトリストを設定 - 利用可能なプロジェクト:', availableProjects);
+      //console.log('✅ 初期化: プロジェクトリストを設定 - 利用可能なプロジェクト:', availableProjects);
       setProjectList(availableProjects);
       
       // デバッグ用: プロジェクトリストの状態を確認
       setTimeout(() => {
-        console.log('🔍 デバッグ: プロジェクトリスト状態確認 - availableProjects:', availableProjects);
+        //console.log('🔍 デバッグ: プロジェクトリスト状態確認 - availableProjects:', availableProjects);
       }, 100);
       
       // 最後に開いていたプロジェクトを読み込み
