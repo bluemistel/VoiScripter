@@ -30,6 +30,9 @@ export default function Home() {
   const setIsUndoRedoOperationRef = useRef<((isUndoRedo: boolean) => void) | null>(null);
   const setIsCtrlEnterBlockRef = useRef<((isCtrlEnter: boolean) => void) | null>(null);
 
+  // ローディング状態
+  const [isLoading, setIsLoading] = useState(true);
+
   // カスタムフックの初期化
   const dataManagement = useDataManagement();
   const dataProcessing = useDataProcessing(dataManagement);
@@ -68,6 +71,18 @@ export default function Home() {
     setProjectList,
     handleCreateProject
   } = projectManagement;
+
+  // ローディング状態の管理：データ管理とプロジェクトの初期化が完了するまで待つ
+  useEffect(() => {
+    if (dataManagement.isInitialized && project && projectList !== null) {
+      // プロジェクトが初期化され、プロジェクトリストも取得済みの場合
+      // 少し待ってからローディングを解除（データ読み込み完了を確認）
+      const timer = setTimeout(() => {
+        setIsLoading(false);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [dataManagement.isInitialized, project, projectList]);
     
   // キャラクター管理フック
   const characterManagement = useCharacterManagement(
@@ -300,16 +315,7 @@ export default function Home() {
     }
   }, [project.id, selectedSceneId]);
 
-  // プロジェクト変更時のキャラクター保存（遅延実行）
-  useEffect(() => {
-    if (project.id) {
-      const timeoutId = setTimeout(() => {
-        dataManagement.saveData(`voiscripter_project_${project.id}_characters`, JSON.stringify(characters));
-      }, 3000); // 3秒後に保存
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [project.id, characters]);
+  // プロジェクトごとのキャラクター保存は不要（voiscripter_charactersが共通設定として使用される）
 
   // プロジェクト変更時のグループ保存（遅延実行）
   useEffect(() => {
@@ -583,8 +589,30 @@ export default function Home() {
         saveCharacterProjectStates={characterManagement.saveCharacterProjectStates}
       />
       
-      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6 md:py-8">
-        {project && selectedSceneId ? (
+      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6 md:py-8 relative">
+        {/* ローディング画面 */}
+        <div 
+          className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${
+            isLoading ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+          }`}
+        >
+          <div className="text-center">
+            <div className="flex justify-center space-x-2 mb-4">
+              <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <p className="text-muted-foreground">読み込み中...</p>
+          </div>
+        </div>
+        
+        {/* メインコンテンツ */}
+        <div 
+          className={`transition-opacity duration-1000 ${
+            isLoading ? 'opacity-0' : 'opacity-100'
+          }`}
+        >
+          {project && selectedSceneId ? (
           <ScriptEditor
             script={project.scenes.find(s => s.id === selectedSceneId)?.scripts[0] || { id: '', title: '', blocks: [], characters: [] }}
             onUpdateBlock={handleBlockUpdate}
@@ -686,6 +714,7 @@ export default function Home() {
             
           </div>
         )}
+        </div>
       </main>
 
       {/* ProjectDialog */}

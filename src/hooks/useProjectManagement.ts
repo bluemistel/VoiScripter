@@ -55,15 +55,15 @@ export const useProjectManagement = (
   // 初回マウント時にデータを読み込み
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (!dataManagement.isInitialized) return; // データ管理の初期化が完了するまで待つ
+    if (isInitialized.current) return; // 既に初期化済みの場合はスキップ
     
     const loadInitialData = async () => {
-      if (isInitialized.current) return; // 既に初期化済みの場合はスキップ
-      
       //console.log('🚀 プロジェクト管理の初期化開始 - 保存先:', dataManagement.saveDirectory);
       
       // 初回はlocalStorageから開始し、後で設定が読み込まれたら切り替える
       //console.log('🚀 初期化: localStorageから開始（設定読み込み完了後に切り替え）');
-      ////console.log('useProjectManagement - Starting initialization');
+      //console.log('useProjectManagement - Starting initialization');
       isInitialized.current = true;
       // プロジェクトリストを先に取得（存在チェック用）
       let availableProjects: string[] = [];
@@ -154,6 +154,9 @@ export const useProjectManagement = (
       //console.log('💾 初期化: 最後のプロジェクトを保存:', validProjectId);
       
       // 選択されたプロジェクトのデータを読み込み
+      // IndexedDBの準備が完了するまで少し待機（loadData内でも待機するが、念のため）
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       //console.log(`🔍 初期化: プロジェクトデータを読み込み - key: voiscripter_project_${validProjectId}`);
       const selectedProjectData = await dataManagement.loadData(`voiscripter_project_${validProjectId}`);
       //console.log(`📁 初期化: プロジェクトデータ読み込み結果 - ${selectedProjectData ? '成功' : 'null'}`);
@@ -192,24 +195,70 @@ export const useProjectManagement = (
           dataManagement.saveData(`voiscripter_project_${validProjectId}`, JSON.stringify(defaultProject));
         }
       } else {
-        // プロジェクトが存在しない場合はデフォルトプロジェクトを作成
-        const defaultProject = {
-          id: validProjectId,
-          name: validProjectId,
-          scenes: [{
-            id: Date.now().toString(),
-            name: '新しいシーン',
-            scripts: [{ id: Date.now().toString(), title: '新しいシーン', blocks: [], characters: [] }]
-          }]
-        };
-        setProject(defaultProject);
-        setSelectedSceneId(defaultProject.scenes[0].id);
-        dataManagement.saveData(`voiscripter_project_${validProjectId}`, JSON.stringify(defaultProject));
+        // プロジェクトが存在しない場合のみデフォルトプロジェクトを作成
+        // ただし、validProjectIdが'default'でない場合は、プロジェクトが存在しない可能性があるため
+        // もう一度確認する
+        if (validProjectId === 'default' || !availableProjects.includes(validProjectId)) {
+          //console.log('⚠️ 初期化: プロジェクトデータが見つからない、デフォルトプロジェクトを作成');
+          const defaultProject = {
+            id: validProjectId,
+            name: validProjectId,
+            scenes: [{
+              id: Date.now().toString(),
+              name: '新しいシーン',
+              scripts: [{ id: Date.now().toString(), title: '新しいシーン', blocks: [], characters: [] }]
+            }]
+          };
+          setProject(defaultProject);
+          setSelectedSceneId(defaultProject.scenes[0].id);
+          dataManagement.saveData(`voiscripter_project_${validProjectId}`, JSON.stringify(defaultProject));
+        } else {
+          //console.log('⚠️ 初期化: プロジェクトデータが見つからないが、プロジェクトリストには存在するため、再試行を待つ');
+          // プロジェクトリストには存在するが、データが見つからない場合は、
+          // IndexedDBの準備が完了していない可能性があるため、少し待ってから再試行
+          await new Promise(resolve => setTimeout(resolve, 500));
+          const retryData = await dataManagement.loadData(`voiscripter_project_${validProjectId}`);
+          if (retryData) {
+            try {
+              const parsed = JSON.parse(retryData);
+              if (parsed && Array.isArray(parsed.scenes)) {
+                //console.log(`✅ 初期化: 再試行でプロジェクトデータを取得 - scenes: ${parsed.scenes.length}個`);
+                setProject(parsed);
+                
+                // シーンID復元
+                const lastSceneId = await dataManagement.loadData(`voiscripter_project_${validProjectId}_lastScene`);
+                if (lastSceneId && parsed.scenes.some((s: any) => s.id === lastSceneId)) {
+                  setSelectedSceneId(lastSceneId);
+                } else if (parsed.scenes.length > 0) {
+                  setSelectedSceneId(parsed.scenes[0].id);
+                } else {
+                  setSelectedSceneId(null);
+                }
+              }
+            } catch (e) {
+              console.error('再試行時のプロジェクトデータのパースエラー', e);
+            }
+          } else {
+            //console.log('⚠️ 初期化: 再試行でもプロジェクトデータが見つからない、デフォルトプロジェクトを作成');
+            const defaultProject = {
+              id: validProjectId,
+              name: validProjectId,
+              scenes: [{
+                id: Date.now().toString(),
+                name: '新しいシーン',
+                scripts: [{ id: Date.now().toString(), title: '新しいシーン', blocks: [], characters: [] }]
+              }]
+            };
+            setProject(defaultProject);
+            setSelectedSceneId(defaultProject.scenes[0].id);
+            dataManagement.saveData(`voiscripter_project_${validProjectId}`, JSON.stringify(defaultProject));
+          }
+        }
       }
     };
     
     loadInitialData();
-  }, []); // 初回のみ実行
+  }, [dataManagement.isInitialized, dataManagement.saveDirectory]); // データ管理の初期化完了と保存先の変更を監視
   
   // 保存先が変更された時にプロジェクトリストを更新
   useEffect(() => {
