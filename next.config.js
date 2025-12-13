@@ -18,6 +18,8 @@ const nextConfig = {
     }
     return config;
   },
+  // Turbopack設定（Next.js 16でTurbopackがデフォルトのため追加）
+  turbopack: {},
 };
 
 module.exports = nextConfig; 

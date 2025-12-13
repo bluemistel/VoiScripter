@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { 
   ArrowUpTrayIcon, 
   ArrowDownTrayIcon, 
@@ -64,7 +65,7 @@ function SortableSceneTab({
   onSelect: () => void;
   onRename: () => void;
   onDelete: () => void;
-  children?: React.ReactNode;
+  children?: ReactNode;
 }) {
   const {
     attributes,

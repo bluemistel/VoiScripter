@@ -339,6 +339,16 @@ export default function Settings({
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
                 <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.2.4</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• 検索機能を追加。Ctrl+Fで検索ダイアログを開きます</li>
+                      <li>• 上下キーによるブロックの連続移動時に、画面外のブロックが選択された場合、スクロールがガタつく不具合を修正。また、連続キー入力時の入力間隔を抑制しています</li>
+                      <li>• Electron版で初期値がIndexedDBに正しく保存・読み出しされるように修正</li>
+                      <li>• Next.js 16、React 19、Electron 39へアップデート、依存関係の更新</li>
+                    </ul>
+                  </div>
+                  
+                <div>
                     <h4 className="font-medium text-foreground mb-2">v0.2.3</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                       <li>• ブラウザ版で再読み込み時にIndexedDBからデータが正しく読み込まれない不具合を暫定修正</li>

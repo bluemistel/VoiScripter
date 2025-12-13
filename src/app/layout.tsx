@@ -2,11 +2,12 @@
 
 import './globals.css';
 import { useEffect } from 'react';
+import type { ReactNode } from 'react';
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: ReactNode
 }) {
   useEffect(() => {
     // Electron APIが利用可能な場合の初期化

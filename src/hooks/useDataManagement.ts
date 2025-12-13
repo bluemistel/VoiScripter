@@ -96,93 +96,120 @@ export const useDataManagement = (): DataManagementHook => {
   const loadData = useCallback(async (key: string): Promise<string | null> => {
     if (typeof window === 'undefined') return null;
     
-    if (saveDirectory === '') {
-      // IndexedDBまたはlocalStorageから読み込み
-      try {
-        // IndexedDBが利用可能で、移行が完了しているか動的にチェック
-        let shouldUseIndexedDB = false;
-        
-        if (window.indexedDB) {
-          // 状態が更新されている場合はそれを使用
-          if (isIndexedDBReady && migrationCompleted) {
-            shouldUseIndexedDB = true;
-            //console.log(`🔍 [loadData] 状態から判断: IndexedDB使用 (isIndexedDBReady: ${isIndexedDBReady}, migrationCompleted: ${migrationCompleted})`);
-          } else {
-            // 状態が更新されていない場合は動的にチェック（初期化状態に関係なく）
-            try {
-              const { isMigrationCompleted } = await import('@/utils/migration');
-              const completed = await isMigrationCompleted();
-              //console.log(`🔍 [loadData] 動的チェック: 移行完了状態 = ${completed}, isInitialized = ${isInitialized}, isIndexedDBReady = ${isIndexedDBReady}`);
-              
-              if (completed) {
-                // IndexedDBを開く（まだ開いていない場合）
-                if (!isIndexedDBReady) {
-                  await voiScripterDB.open();
-                  setIsIndexedDBReady(true);
-                  //console.log('✅ [loadData] IndexedDBを開きました');
-                }
-                setMigrationCompleted(true);
-                shouldUseIndexedDB = true;
-                //console.log('✅ [loadData] 動的チェック結果: IndexedDBを使用');
-              } else {
-                //console.log('⚠️ [loadData] 動的チェック結果: 移行未完了のためlocalStorageを使用');
-              }
-            } catch (error) {
-              console.error('移行状態チェックエラー:', error);
-            }
-          }
-        } else {
-          //console.log('⚠️ [loadData] IndexedDBが利用できません');
-        }
-        
-        if (shouldUseIndexedDB) {
-          // IndexedDBから読み込み
-          try {
-            const result = await voiScripterDB.load(key);
-            //console.log(`📦 IndexedDBから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
-            // IndexedDBにデータがある場合はそれを返す
-            if (result) {
-              return result;
-            }
-            // IndexedDBにデータがない場合はlocalStorageもチェック（移行途中の場合）
-            const localStorageResult = localStorage.getItem(key);
-            if (localStorageResult) {
-              //console.log(`📦 IndexedDBにデータなし、localStorageから読み込み - key: ${key}`);
-              return localStorageResult;
-            }
-            return null;
-          } catch (error) {
-            console.error('IndexedDB読み込みエラー:', error);
-            // エラー時はlocalStorageにフォールバック
-            const result = localStorage.getItem(key);
-            //console.log(`📦 フォールバック: localStorageから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
-            return result;
-          }
-        } else {
-          // localStorageから読み込み（移行前またはIndexedDBが利用できない場合）
-          const result = localStorage.getItem(key);
-          //console.log(`📦 localStorageから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
-          return result;
-        }
-      } catch (error) {
-        console.error('Data load error:', error);
-        // localStorageにフォールバック
-        try {
-          const result = localStorage.getItem(key);
-          //console.log(`📦 フォールバック: localStorageから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
-          return result;
-        } catch (fallbackError) {
-          console.error('Fallback to localStorage failed:', fallbackError);
-          return null;
-        }
-      }
-    } else if (window.electronAPI) {
-      // ファイルから読み込み
+    // Electron環境でカスタムディレクトリが設定されている場合はファイルから読み込み
+    if (saveDirectory !== '' && window.electronAPI) {
       const result = await window.electronAPI?.loadData(key) || null;
       //console.log(`📁 ファイルから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
       return result;
     }
-    return null;
+    
+    // Electron環境でsaveDirectoryが空の場合、またはブラウザ環境の場合
+    // IndexedDBまたはlocalStorageから読み込み
+    try {
+      // 初期化が完了していない場合は、初期化を待つ（最大1秒）
+      if (!isInitialized) {
+        let waitCount = 0;
+        while (!isInitialized && waitCount < 20) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+          waitCount++;
+        }
+      }
+      
+      // IndexedDBが利用可能で、移行が完了しているか動的にチェック
+      let shouldUseIndexedDB = false;
+      
+      if (window.indexedDB) {
+        // 状態が更新されている場合はそれを使用
+        if (isIndexedDBReady && migrationCompleted) {
+          shouldUseIndexedDB = true;
+          //console.log(`🔍 [loadData] 状態から判断: IndexedDB使用 (isIndexedDBReady: ${isIndexedDBReady}, migrationCompleted: ${migrationCompleted})`);
+        } else {
+          // 状態が更新されていない場合は動的にチェック（初期化状態に関係なく）
+          try {
+            const { isMigrationCompleted } = await import('@/utils/migration');
+            const completed = await isMigrationCompleted();
+            //console.log(`🔍 [loadData] 動的チェック: 移行完了状態 = ${completed}, isInitialized = ${isInitialized}, isIndexedDBReady = ${isIndexedDBReady}`);
+            
+            if (completed) {
+              // IndexedDBを開く（まだ開いていない場合）
+              if (!isIndexedDBReady) {
+                await voiScripterDB.open();
+                setIsIndexedDBReady(true);
+                //console.log('✅ [loadData] IndexedDBを開きました');
+              }
+              setMigrationCompleted(true);
+              shouldUseIndexedDB = true;
+              //console.log('✅ [loadData] 動的チェック結果: IndexedDBを使用');
+            } else {
+              // Electron環境でsaveDirectoryが空の場合、まだ移行が完了していない可能性がある
+              // この場合は、IndexedDBを初期化して移行を試みる
+              if (window.electronAPI && saveDirectory === '') {
+                try {
+                  await voiScripterDB.open();
+                  setIsIndexedDBReady(true);
+                  // 移行を再チェック
+                  const { isMigrationCompleted: checkAgain } = await import('@/utils/migration');
+                  const completedAgain = await checkAgain();
+                  if (completedAgain) {
+                    setMigrationCompleted(true);
+                    shouldUseIndexedDB = true;
+                    //console.log('✅ [loadData] Electron環境でIndexedDBを初期化し、移行完了を確認');
+                  }
+                } catch (error) {
+                  console.error('IndexedDB初期化エラー:', error);
+                }
+              }
+              //console.log('⚠️ [loadData] 動的チェック結果: 移行未完了のためlocalStorageを使用');
+            }
+          } catch (error) {
+            console.error('移行状態チェックエラー:', error);
+          }
+        }
+      } else {
+        //console.log('⚠️ [loadData] IndexedDBが利用できません');
+      }
+      
+      if (shouldUseIndexedDB) {
+        // IndexedDBから読み込み
+        try {
+          const result = await voiScripterDB.load(key);
+          //console.log(`📦 IndexedDBから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
+          // IndexedDBにデータがある場合はそれを返す
+          if (result) {
+            return result;
+          }
+          // IndexedDBにデータがない場合はlocalStorageもチェック（移行途中の場合）
+          const localStorageResult = localStorage.getItem(key);
+          if (localStorageResult) {
+            //console.log(`📦 IndexedDBにデータなし、localStorageから読み込み - key: ${key}`);
+            return localStorageResult;
+          }
+          return null;
+        } catch (error) {
+          console.error('IndexedDB読み込みエラー:', error);
+          // エラー時はlocalStorageにフォールバック
+          const result = localStorage.getItem(key);
+          //console.log(`📦 フォールバック: localStorageから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
+          return result;
+        }
+      } else {
+        // localStorageから読み込み（移行前またはIndexedDBが利用できない場合）
+        const result = localStorage.getItem(key);
+        //console.log(`📦 localStorageから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
+        return result;
+      }
+    } catch (error) {
+      console.error('Data load error:', error);
+      // localStorageにフォールバック
+      try {
+        const result = localStorage.getItem(key);
+        //console.log(`📦 フォールバック: localStorageから読み込み - key: ${key}, 結果: ${result ? '成功' : 'null'}`);
+        return result;
+      } catch (fallbackError) {
+        console.error('Fallback to localStorage failed:', fallbackError);
+        return null;
+      }
+    }
   }, [saveDirectory, isIndexedDBReady, migrationCompleted, isInitialized]);
 
   // データ削除関数
@@ -330,12 +357,14 @@ export const useDataManagement = (): DataManagementHook => {
         // 2. Electronでカスタムディレクトリが設定されている場合は移行をスキップ
         if (savedDirectory && window.electronAPI) {
           //console.log('⏭️ Electron環境でカスタムディレクトリが設定されているため、移行をスキップ');
+          setIsInitialized(true);
           return;
         }
 
         // 3. IndexedDBが利用可能かチェック
         if (!window.indexedDB) {
           //console.log('⚠️ IndexedDBが利用できません。localStorageを継続使用します');
+          setIsInitialized(true);
           return;
         }
 
@@ -346,6 +375,7 @@ export const useDataManagement = (): DataManagementHook => {
           //console.log('✅ IndexedDBの初期化完了');
         } catch (error) {
           console.error('❌ IndexedDBの初期化エラー:', error);
+          setIsInitialized(true);
           return;
         }
 
@@ -358,18 +388,39 @@ export const useDataManagement = (): DataManagementHook => {
           //console.log('✅ 移行は既に完了しています');
         } else {
           // 6. 自動移行を実行
+          // Electron環境でもsaveDirectoryが空の場合は移行を実行
           //console.log('🔄 自動移行を開始...');
-          const migrationResult = await performAutoMigration();
           
-          if (migrationResult.success) {
-            setMigrationCompleted(true);
-            //console.log(`🎉 移行完了: ${migrationResult.migratedCount}個のデータを移行しました`);
+          // Electron環境でも移行を実行するため、shouldMigrate()をバイパスして直接移行を実行
+          if (window.electronAPI && savedDirectory === '') {
+          // Electron環境でsaveDirectoryが空の場合、直接移行を実行
+          try {
+            const { migrateFromLocalStorage } = await import('@/utils/migration');
+            const migrationResult = await migrateFromLocalStorage();
             
-            if (migrationResult.error) {
-              console.warn('⚠️ 移行中にエラーが発生しました:', migrationResult.error);
+            if (migrationResult.success) {
+              setMigrationCompleted(true);
+              //console.log(`🎉 移行完了: ${migrationResult.migratedCount}個のデータを移行しました`);
+            } else {
+              console.error('❌ 移行に失敗しました:', migrationResult.error);
             }
+          } catch (error) {
+            console.error('❌ 移行エラー:', error);
+          }
           } else {
-            console.error('❌ 移行に失敗しました:', migrationResult.error);
+            // ブラウザ環境では通常の自動移行を実行
+            const migrationResult = await performAutoMigration();
+            
+            if (migrationResult.success) {
+              setMigrationCompleted(true);
+              //console.log(`🎉 移行完了: ${migrationResult.migratedCount}個のデータを移行しました`);
+              
+              if (migrationResult.error) {
+                console.warn('⚠️ 移行中にエラーが発生しました:', migrationResult.error);
+              }
+            } else {
+              console.error('❌ 移行に失敗しました:', migrationResult.error);
+            }
           }
         }
 

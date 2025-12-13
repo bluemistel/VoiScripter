@@ -738,7 +738,7 @@ export default function ScriptEditor({
         }
         
         setManualFocusTargetFn(null);
-      }, 5);
+      }, 50);
     }
   }, [manualFocusTarget]);
 
@@ -826,6 +826,9 @@ export default function ScriptEditor({
   };
 
   // テキストエリア内の矢印キー処理のみ
+  const lastArrowKeyTime = useRef<number>(0);
+  const arrowKeyDelay = 80; // 0.08秒（80ミリ秒）
+  
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // フォーカス中のtextareaを特定
@@ -833,6 +836,13 @@ export default function ScriptEditor({
       
       // ↑: 上のブロック（テキストエリアの最上段のみ）
       if (!e.ctrlKey && e.key === 'ArrowUp' && !e.altKey && !e.shiftKey) {
+        // キーリピートの間隔を制御（0.08秒間隔）
+        const now = Date.now();
+        if (now - lastArrowKeyTime.current < arrowKeyDelay) {
+          return;
+        }
+        lastArrowKeyTime.current = now;
+        
         if (activeIdx > 0) {
           const textarea = textareaRefs.current[activeIdx] as HTMLTextAreaElement | null;
           if (textarea) {
@@ -846,30 +856,38 @@ export default function ScriptEditor({
               const targetIndex = activeIdx - 1;
               const targetRef = textareaRefs.current[targetIndex];
               if (targetRef) {
-                // スクロールが必要か事前に判定
-                const rect = targetRef.getBoundingClientRect();
+                // focus()の前に位置を取得
+                const rectBeforeFocus = targetRef.getBoundingClientRect();
                 const windowHeight = window.innerHeight;
                 const headerHeight = 64;
-                const needsScroll = rect.bottom > windowHeight || rect.top < headerHeight;
                 
-                // スクロールが必要な場合のみ、スクロール位置を保存
-                const scrollYBeforeFocus = needsScroll ? window.scrollY : null;
+                // ブロックが画面外にあるかどうかを判定
+                const needsScrollDown = rectBeforeFocus.bottom > windowHeight;
+                const needsScrollUp = rectBeforeFocus.top < headerHeight;
+                const needsScroll = needsScrollDown || needsScrollUp;
                 
-                targetRef.focus();
+                // ブロックが画面外にある場合のみpreventScrollをtrueにして、ブラウザの自動スクロールを防ぐ
+                targetRef.focus({ preventScroll: needsScroll });
                 
-                if (needsScroll && scrollYBeforeFocus !== null) {
-                  // スクロールが必要な場合のみ処理
+                // ブロックが画面外にある場合、適切な位置にスクロール（1回の操作で完了）
+                if (needsScroll) {
                   setTimeout(() => {
-                    // ブラウザの自動スクロールを防ぐ
-                    if (window.scrollY !== scrollYBeforeFocus) {
-                      window.scrollTo(0, scrollYBeforeFocus);
+                    if (needsScrollDown) {
+                      // ブロックの下端が画面下端に来るようにスクロール
+                      const scrollOffset = rectBeforeFocus.bottom - windowHeight + 20; // 20pxのマージン
+                      window.scrollBy({
+                        top: scrollOffset,
+                        behavior: 'smooth'
+                      });
+                    } else if (needsScrollUp) {
+                      // ブロックが画面上に隠れている場合
+                      const scrollOffset = rectBeforeFocus.top - headerHeight - 65; // ヘッダーの高さ + 65pxのマージン
+                      window.scrollBy({
+                        top: scrollOffset,
+                        behavior: 'smooth'
+                      });
                     }
-                    // 適切なスクロールを実行
-                    ensureBlockVisible(targetIndex, 20);
-                  }, 5);
-                } else {
-                  // スクロールが不要な場合は即座にスクロール処理を実行
-                  ensureBlockVisible(targetIndex, 5);
+                  }, 10);
                 }
               }
             }
@@ -878,6 +896,13 @@ export default function ScriptEditor({
       }
       // ↓: 下のブロック（テキストエリアの最下段のみ）
       else if (!e.ctrlKey && e.key === 'ArrowDown' && !e.altKey && !e.shiftKey) {
+        // キーリピートの間隔を制御（0.1秒間隔）
+        const now = Date.now();
+        if (now - lastArrowKeyTime.current < arrowKeyDelay) {
+          return;
+        }
+        lastArrowKeyTime.current = now;
+        
         if (activeIdx >= 0 && activeIdx < script.blocks.length - 1) {
           const textarea = textareaRefs.current[activeIdx] as HTMLTextAreaElement | null;
           if (textarea) {
@@ -892,30 +917,38 @@ export default function ScriptEditor({
               const targetIndex = activeIdx + 1;
               const targetRef = textareaRefs.current[targetIndex];
               if (targetRef) {
-                // スクロールが必要か事前に判定
-                const rect = targetRef.getBoundingClientRect();
+                // focus()の前に位置を取得
+                const rectBeforeFocus = targetRef.getBoundingClientRect();
                 const windowHeight = window.innerHeight;
                 const headerHeight = 64;
-                const needsScroll = rect.bottom > windowHeight || rect.top < headerHeight;
                 
-                // スクロールが必要な場合のみ、スクロール位置を保存
-                const scrollYBeforeFocus = needsScroll ? window.scrollY : null;
+                // ブロックが画面外にあるかどうかを判定
+                const needsScrollDown = rectBeforeFocus.bottom > windowHeight;
+                const needsScrollUp = rectBeforeFocus.top < headerHeight;
+                const needsScroll = needsScrollDown || needsScrollUp;
                 
-                targetRef.focus();
+                // ブロックが画面外にある場合のみpreventScrollをtrueにして、ブラウザの自動スクロールを防ぐ
+                targetRef.focus({ preventScroll: needsScroll });
                 
-                if (needsScroll && scrollYBeforeFocus !== null) {
-                  // スクロールが必要な場合のみ処理
+                // ブロックが画面外にある場合、適切な位置にスクロール（1回の操作で完了）
+                if (needsScroll) {
                   setTimeout(() => {
-                    // ブラウザの自動スクロールを防ぐ
-                    if (window.scrollY !== scrollYBeforeFocus) {
-                      window.scrollTo(0, scrollYBeforeFocus);
+                    if (needsScrollDown) {
+                      // ブロックの下端が画面下端に来るようにスクロール
+                      const scrollOffset = rectBeforeFocus.bottom - windowHeight + 20; // 20pxのマージン
+                      window.scrollBy({
+                        top: scrollOffset,
+                        behavior: 'smooth'
+                      });
+                    } else if (needsScrollUp) {
+                      // ブロックが画面上に隠れている場合
+                      const scrollOffset = rectBeforeFocus.top - headerHeight - 20; // ヘッダーの高さ + 20pxのマージン
+                      window.scrollBy({
+                        top: scrollOffset,
+                        behavior: 'smooth'
+                      });
                     }
-                    // 適切なスクロールを実行
-                    ensureBlockVisible(targetIndex, 20);
-                  }, 5);
-                } else {
-                  // スクロールが不要な場合は即座にスクロール処理を実行
-                  ensureBlockVisible(targetIndex, 5);
+                  }, 10);
                 }
               }
             }
