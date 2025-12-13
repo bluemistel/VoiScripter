@@ -12,7 +12,8 @@ import {
   Bars3Icon,
   PlusIcon,
   TrashIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  MagnifyingGlassIcon
 } from '@heroicons/react/24/outline';
 import {
   DndContext,
@@ -190,6 +191,7 @@ interface HeaderProps {
   onDeleteProject: () => void;
   getCharacterProjectStates: (currentProjectId: string, projectList?: string[]) => {[characterId: string]: boolean};
   saveCharacterProjectStates: (currentProjectId: string, characterStates: {[characterId: string]: boolean}, projectList?: string[]) => void;
+  onOpenSearch: () => void;
 }
 
 // CSVインポート時の選択ダイアログ
@@ -307,7 +309,8 @@ export default function Header(props: HeaderProps) {
     onProjectChange,
     onDeleteProject,
     getCharacterProjectStates,
-    saveCharacterProjectStates
+    saveCharacterProjectStates,
+    onOpenSearch
   } = props;
   const logoPath = useLogoPath();
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
@@ -624,6 +627,13 @@ export default function Header(props: HeaderProps) {
             )}
           </div>
           <button
+            onClick={onOpenSearch}
+            className="p-1 text-primary hover:bg-accent rounded-lg transition"
+            title="検索 (Ctrl+F)"
+          >
+            <MagnifyingGlassIcon className="w-7 h-7" />
+          </button>
+          <button
             onClick={() => setIsCharacterModalOpen(true)}
             className="p-1 text-primary hover:bg-accent rounded-lg transition"
             title="キャラクター設定"
@@ -724,6 +734,19 @@ export default function Header(props: HeaderProps) {
               </div>
               
               <div className="border-t">
+                <button
+                  onClick={() => {
+                    onOpenSearch();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground"
+                >
+                  <div className="flex items-center space-x-3">
+                    <MagnifyingGlassIcon className="w-5 h-5" />
+                    <span>検索</span>
+                  </div>
+                </button>
+                
                 <button
                   onClick={() => {
                     setIsCharacterModalOpen(true);

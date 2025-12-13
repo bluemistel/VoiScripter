@@ -28,6 +28,7 @@ export const useKeyboardShortcuts = (
   onOpenCSVExport?: () => void,
   onScrollBottom?: () => void,
   onScrollTop?: () => void,
+  onOpenSearch?: () => void,
   // ScriptEditorの状態
   scriptBlocks?: ScriptBlock[],
   characters?: any[],
@@ -69,6 +70,13 @@ export const useKeyboardShortcuts = (
 
   const handleKeyDown = (event: KeyboardEvent) => {
     // グローバルショートカット（常に動作）
+    // Ctrl+F: 検索ダイアログを開く
+    if (event.ctrlKey && event.key === 'f' && onOpenSearch) {
+      event.preventDefault();
+      onOpenSearch();
+      return;
+    }
+
     // Ctrl+M: CSVエクスポートダイアログを開く
     if (event.ctrlKey && event.key === 'm' && onOpenCSVExport) {
       event.preventDefault();
