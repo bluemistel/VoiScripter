@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoiScripter E2EE Sync PoC (Functional)</title>
+    <style>
+        :root {
+            --primary: #0070f3;
+            --bg: #f5f5f5;
+            --card-bg: #ffffff;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            background: var(--bg);
+            color: #333;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 2rem;
+            color: #111;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #555;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+        }
+
+        input:focus,
+        textarea:focus {
+            border-color: var(--primary);
+            outline: none;
+        }
+
+        textarea {
+            height: 120px;
+            font-family: "SF Mono", monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        small {
+            display: block;
+            margin-top: 0.4rem;
+            color: #888;
+            font-size: 0.8rem;
+        }
+
+        .actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        button {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        button.secondary {
+            background: #666;
+        }
+
+        button.outline {
+            background: transparent;
+            border: 1px solid #ddd;
+            color: #666;
+        }
+
+        button.outline:hover {
+            border-color: #999;
+            color: #333;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #status {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            display: none;
+        }
+
+        #status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        #status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        #status.info {
+            background: #cce5ff;
+            color: #004085;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>VoiScripter データ同期 PoC</h1>
+
+    <main>
+        <!-- Setting Section -->
+        <section class="card">
+            <div class="form-group">
+                <label>共有ID (UUID)</label>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="uuid" readonly>
+                    <button class="outline" id="btnGenUUID">New ID</button>
+                </div>
+                <small>公開情報: サーバーへの保存パスとして使用されます</small>
+            </div>
+            <div class="form-group">
+                <label>合言葉 (Password)</label>
+                <input type="password" id="password" value="voiscripter" placeholder="秘密のパスワード">
+                <small>秘密情報: 暗号化鍵の生成にのみ使用されます (サーバー送信なし)</small>
+            </div>
+        </section>
+
+        <!-- Operation Section -->
+        <section class="card">
+            <div class="form-group">
+                <label>データ (JSON)</label>
+                <textarea id="dataArea"></textarea>
+            </div>
+            <div class="actions">
+                <button id="btnSync">⬆️ 同期 (Encrypt & Upload)</button>
+                <button id="btnRestore" class="secondary">⬇️ 復元 (Download & Decrypt)</button>
+                <button id="btnClear" class="outline">Clear</button>
+            </div>
+            <div id="status"></div>
+        </section>
+    </main>
+
+    <script type="module">
+        // ============================================
+        // 🔐 Crypto Logic (Functional)
+        // ============================================
+
+        const deriveKey = async (password, salt) => {
+            const enc = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveKey"]
+            );
+            return crypto.subtle.deriveKey(
+                {
+                    name: "PBKDF2",
+                    salt: salt,
+                    iterations: 600000, // OWASP Recommendation (2023) for PBKDF2-HMAC-SHA256
+                    hash: "SHA-256"
+                },
+                keyMaterial,
+                { name: "AES-GCM", length: 256 },
+                true, ["encrypt", "decrypt"]
+            );
+        };
+
+        const encrypt = async (text, password) => {
+            const salt = crypto.getRandomValues(new Uint8Array(16));
+            const nonce = crypto.getRandomValues(new Uint8Array(12)); // GCM Nonce (96 bits)
+            const key = await deriveKey(password, salt);
+
+            const encrypted = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: nonce }, // Web Crypto API requires 'iv' property
+                key,
+                new TextEncoder().encode(text)
+            );
+
+            // Combine Salt + Nonce + Ciphertext
+            const combined = new Uint8Array(salt.length + nonce.length + encrypted.byteLength);
+            combined.set(salt, 0);
+            combined.set(nonce, salt.length);
+            combined.set(new Uint8Array(encrypted), salt.length + nonce.length);
+
+            return btoa(String.fromCharCode(...combined));
+        };
+
+        const decrypt = async (base64Str, password) => {
+            try {
+                const binaryStr = atob(base64Str);
+                const bytes = new Uint8Array(binaryStr.length);
+                for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+                const salt = bytes.slice(0, 16);
+                const nonce = bytes.slice(16, 28);
+                const cipher = bytes.slice(28);
+
+                const key = await deriveKey(password, salt);
+                const decrypted = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: nonce },
+                    key,
+                    cipher
+                );
+                return new TextDecoder().decode(decrypted);
+            } catch (e) {
+                throw new Error("復号失敗: パスワードが違うかデータが破損しています");
+            }
+        };
+
+        // ============================================
+        // UI Logic
+        // ============================================
+
+        const SERVER_URL = 'http://localhost:8787/data';
+
+        // DOM Elements
+        const ui = {
+            uuid: document.getElementById('uuid'),
+            password: document.getElementById('password'),
+            data: document.getElementById('dataArea'),
+            status: document.getElementById('status'),
+            btns: {
+                sync: document.getElementById('btnSync'),
+                restore: document.getElementById('btnRestore'),
+                clear: document.getElementById('btnClear'),
+                genUUID: document.getElementById('btnGenUUID')
+            }
+        };
+
+        // Helpers
+        const log = (msg, type) => {
+            ui.status.textContent = msg;
+            ui.status.className = type;
+            ui.status.style.display = 'block';
+        };
+
+        const setLoading = (isLoading) => {
+            Object.values(ui.btns).forEach(btn => btn.disabled = isLoading);
+        };
+
+        const generateUUID = () => {
+            ui.uuid.value = crypto.randomUUID();
+        };
+
+        // Handlers
+        const handleSync = async () => {
+            const uuid = ui.uuid.value;
+            const password = ui.password.value;
+            const data = ui.data.value;
+
+            if (!uuid || !password || !data) return log("全項目を入力してください", "error");
+
+            try {
+                setLoading(true);
+                log('暗号化中...', 'info');
+
+                const encrypted = await encrypt(data, password);
+
+                log('アップロード中...', 'info');
+                const res = await fetch(`${SERVER_URL}/${uuid}`, {
+                    method: 'PUT', body: encrypted
+                });
+
+                if (!res.ok) throw new Error(`Server Error: ${res.status}`);
+                log('同期完了 (サーバー保存済)', 'success');
+            } catch (e) {
+                log(`エラー: ${e.message}`, 'error');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        const handleRestore = async () => {
+            const uuid = ui.uuid.value;
+            const password = ui.password.value;
+
+            if (!uuid || !password) return log("UUIDとパスワードが必要です", "error");
+
+            try {
+                setLoading(true);
+                log('ダウンロード中...', 'info');
+
+                const res = await fetch(`${SERVER_URL}/${uuid}`);
+                if (!res.ok) throw new Error(res.status === 404 ? "データが見つかりません" : `Server Error: ${res.status}`);
+
+                const encrypted = await res.text();
+
+                log('復号中...', 'info');
+                const decrypted = await decrypt(encrypted, password);
+
+                ui.data.value = decrypted;
+                log('復元完了', 'success');
+            } catch (e) {
+                log(`エラー: ${e.message}`, 'error');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        // Initialization
+        const init = () => {
+            generateUUID();
+            ui.data.value = JSON.stringify({ name: "My Project", content: "Secret Data" }, null, 2);
+
+            ui.btns.sync.onclick = handleSync;
+            ui.btns.restore.onclick = handleRestore;
+            ui.btns.clear.onclick = () => ui.data.value = '';
+            ui.btns.genUUID.onclick = generateUUID;
+        };
+
+        init();
+    </script>
+</body>
+
+</html>
