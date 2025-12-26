@@ -427,13 +427,15 @@ export default function ScriptEditor({
   const [isResizingPanel, setIsResizingPanel] = useState(false);
   const [segmentHeights, setSegmentHeights] = useState<Record<string, number>>({});
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
-  const [lineDragState, setLineDragState] = useState<{ mode: 'new' | 'move'; segmentId?: string } | null>(null);
+  const [lineDragState, setLineDragState] = useState<{ mode: 'new' | 'move'; segmentId?: string; targetBlockId?: string } | null>(null);
   const [lineIndicatorY, setLineIndicatorY] = useState<number | null>(null);
   const [segmentToDelete, setSegmentToDelete] = useState<StorySeparatorSegment | null>(null);
   const [lineDeleteTarget, setLineDeleteTarget] = useState<string | null>(null);
+  const [segmentLinePositions, setSegmentLinePositions] = useState<Record<string, number>>({});
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
-  const imageActionRef = useRef<{ type: 'add' | 'replace'; segmentId: string; imageId?: string } | null>(null);
-  const [imageToDelete, setImageToDelete] = useState<{ segmentId: string; imageId: string } | null>(null);
+  const imageActionRef = useRef<{ segmentId: string } | null>(null);
+  const [imageToDelete, setImageToDelete] = useState<{ segmentId: string } | null>(null);
+  const [currentDisplayedSegmentId, setCurrentDisplayedSegmentId] = useState<string | null>(null);
   
   useEffect(() => {
     setPanelWidth(script.storyPanelWidth || 320);
@@ -510,48 +512,19 @@ export default function ScriptEditor({
     [onUpdateScript, script.storySegments, storySegments]
   );
 
-  const ensureImagesArray = (segment: StorySeparatorSegment) => segment.images ?? [];
-
-  const handleAddSegmentImage = useCallback(
-    (segmentId: string, image: StorySeparatorImage) => {
+  const handleSegmentImageChange = useCallback(
+    (segmentId: string, image?: StorySeparatorImage) => {
       updateStorySegments(prev =>
-        prev.map(segment =>
-          segment.id === segmentId
-            ? { ...segment, images: [...ensureImagesArray(segment), image] }
-            : segment
-        )
-      );
-    },
-    [updateStorySegments]
-  );
-
-  const handleReplaceSegmentImage = useCallback(
-    (segmentId: string, imageId: string, image: StorySeparatorImage) => {
-      updateStorySegments(prev =>
-        prev.map(segment =>
-          segment.id === segmentId
-            ? {
-                ...segment,
-                images: ensureImagesArray(segment).map(img => (img.id === imageId ? image : img))
-              }
-            : segment
-        )
+        prev.map(segment => (segment.id === segmentId ? { ...segment, image } : segment))
       );
     },
     [updateStorySegments]
   );
 
   const handleRemoveSegmentImage = useCallback(
-    (segmentId: string, imageId: string) => {
+    (segmentId: string) => {
       updateStorySegments(prev =>
-        prev.map(segment =>
-          segment.id === segmentId
-            ? {
-                ...segment,
-                images: ensureImagesArray(segment).filter(img => img.id !== imageId)
-              }
-            : segment
-        )
+        prev.map(segment => (segment.id === segmentId ? { ...segment, image: undefined } : segment))
       );
     },
     [updateStorySegments]
@@ -567,8 +540,7 @@ export default function ScriptEditor({
         ...prev,
         {
           id: generateSegmentId(),
-          anchorBlockId,
-          images: []
+          anchorBlockId
         }
       ]);
     },
@@ -600,8 +572,7 @@ export default function ScriptEditor({
           ? [
               {
                 id: generateSegmentId(),
-                anchorBlockId: null,
-                images: []
+                anchorBlockId: null
               }
             ]
           : next;
@@ -610,8 +581,8 @@ export default function ScriptEditor({
     [updateStorySegments]
   );
   
-  const openImagePicker = (action: { type: 'add' | 'replace'; segmentId: string; imageId?: string }) => {
-    imageActionRef.current = action;
+  const openImagePicker = (segmentId: string) => {
+    imageActionRef.current = { segmentId };
     imageFileInputRef.current?.click();
   };
 
@@ -631,11 +602,7 @@ export default function ScriptEditor({
         name: file.name,
         dataUrl
       };
-      if (action.type === 'replace' && action.imageId) {
-        handleReplaceSegmentImage(action.segmentId, action.imageId, payload);
-      } else {
-        handleAddSegmentImage(action.segmentId, payload);
-      }
+      handleSegmentImageChange(action.segmentId, payload);
     };
     reader.readAsDataURL(file);
     event.target.value = '';
@@ -685,11 +652,14 @@ export default function ScriptEditor({
     };
     const handleUp = (event: MouseEvent) => {
       setLineIndicatorY(event.clientY);
-      const anchorId = determineAnchorFromClientY(event.clientY);
-      if (anchorId) {
-        if (lineDragState.mode === 'new') {
+      if (lineDragState.mode === 'new') {
+        const anchorId = lineDragState.targetBlockId || determineAnchorFromClientY(event.clientY);
+        if (anchorId) {
           addSegmentAtAnchor(anchorId);
-        } else if (lineDragState.segmentId) {
+        }
+      } else if (lineDragState.segmentId) {
+        const anchorId = determineAnchorFromClientY(event.clientY);
+        if (anchorId) {
           moveSegmentToAnchor(lineDragState.segmentId, anchorId);
         }
       }
@@ -769,7 +739,8 @@ export default function ScriptEditor({
     const blockElements = script.blocks.map((_, index) => document.querySelector(`[data-block-index="${index}"]`) as HTMLElement | null);
     const getBoundaryY = (index: number) => {
       if (index <= 0) {
-        return blockElements[0]?.getBoundingClientRect().top + window.scrollY ?? containerTop;
+        const firstRect = blockElements[0]?.getBoundingClientRect();
+        return firstRect ? firstRect.top + window.scrollY : containerTop;
       }
       const target = blockElements[index];
       if (target) {
@@ -786,7 +757,11 @@ export default function ScriptEditor({
       const startY = getBoundaryY(startIndex);
       const endY =
         endIndex >= script.blocks.length
-          ? blockElements[script.blocks.length - 1]?.getBoundingClientRect().bottom + window.scrollY ?? containerBottom
+          ? (() => {
+              const lastIndex = script.blocks.length - 1;
+              const lastRect = blockElements[lastIndex]?.getBoundingClientRect();
+              return lastRect ? lastRect.bottom + window.scrollY : containerBottom;
+            })()
           : getBoundaryY(endIndex);
       const height = Math.max(endY - startY, 200);
       heights[segment.id] = height;
@@ -813,11 +788,38 @@ export default function ScriptEditor({
   useEffect(() => {
     if (!isStoryPanelOpen) {
       setActiveSegmentId(null);
+      setCurrentDisplayedSegmentId(null);
+      setSegmentLinePositions({});
       return;
     }
+    const updateLinePositions = () => {
+      const positions: Record<string, number> = {};
+      const container = document.querySelector('.story-main-column') as HTMLElement | null;
+      if (!container) return;
+      
+      orderedSegments.forEach((segment) => {
+        const anchorIndex = getAnchorIndex(segment.anchorBlockId);
+        const blockElement = anchorIndex < script.blocks.length 
+          ? document.querySelector(`[data-block-index="${anchorIndex}"]`) as HTMLElement | null
+          : null;
+        
+        if (blockElement) {
+          const containerRect = container.getBoundingClientRect();
+          const blockRect = blockElement.getBoundingClientRect();
+          // パネル内での相対位置を計算（パネルの高さに対する割合）
+          const relativeY = blockRect.top - containerRect.top + container.scrollTop;
+          positions[segment.id] = relativeY;
+        }
+      });
+      setSegmentLinePositions(positions);
+    };
+    
     const handleScroll = () => {
       if (script.blocks.length === 0) {
-        setActiveSegmentId(orderedSegments[0]?.id ?? null);
+        const firstSegment = orderedSegments[0];
+        setActiveSegmentId(firstSegment?.id ?? null);
+        setCurrentDisplayedSegmentId(firstSegment?.id ?? null);
+        updateLinePositions();
         return;
       }
       const threshold = 120;
@@ -835,10 +837,21 @@ export default function ScriptEditor({
           .reverse()
           .find(segment => getAnchorIndex(segment.anchorBlockId) <= currentIndex) ?? orderedSegments[0];
       setActiveSegmentId(active?.id ?? null);
+      setCurrentDisplayedSegmentId(active?.id ?? null);
+      updateLinePositions();
     };
     handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    const container = document.querySelector('.story-main-column');
+    if (container) {
+      container.addEventListener('scroll', handleScroll, { passive: true });
+    }
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (container) {
+        container.removeEventListener('scroll', handleScroll);
+      }
+    };
   }, [isStoryPanelOpen, orderedSegments, script.blocks, getAnchorIndex]);
 
   const handleConfirmDeleteSegment = () => {
@@ -1425,27 +1438,6 @@ export default function ScriptEditor({
         </button>
       )}
       <div className="script-editor-container min-h-auto">
-        <div className="flex flex-col gap-3 mb-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {isStoryPanelOpen && script.blocks.length >= 2 && (
-                <button
-                  type="button"
-                  onMouseDown={handleStartNewLineDrag}
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-full border text-foreground hover:bg-accent transition"
-                  title="セパレートラインを追加"
-                >
-                  <ScissorsIcon className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-            {isStoryPanelOpen && (
-              <p className="text-xs text-muted-foreground">
-                画像は幅 {Math.round(panelWidth)}px（16:9）。ラインはドラッグで移動できます。
-              </p>
-            )}
-          </div>
-        </div>
         {script.blocks.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 text-center text-muted-foreground">
             <p className="text-sm sm:text-base md:text-lg mb-4">1.右上のキャラクターのアイコンから登場キャラクターを追加します。</p>
@@ -1463,125 +1455,139 @@ export default function ScriptEditor({
             {isStoryPanelOpen && (
               <>
                 <div
-                  className="border rounded-lg bg-muted/30 flex-shrink-0 relative w-full lg:w-auto max-h-[70vh] overflow-y-auto lg:sticky lg:top-4 lg:max-h-[calc(100vh-140px)]"
-                  style={{ width: isStoryPanelOpen ? panelWidth : '100%' }}
+                  className="fixed left-0 z-30 border-r bg-muted/30 flex-shrink-0 overflow-y-auto"
+                  style={{ width: panelWidth, top: '64px', height: 'calc(100vh - 64px)' }}
                 >
                   <div className="sticky top-0 z-10 flex items-center justify-between p-3 border-b bg-muted/60 backdrop-blur">
                     <span className="text-sm font-semibold text-foreground">ストーリーセパレート</span>
                     <span className="text-xs text-muted-foreground">幅 {Math.round(panelWidth)}px</span>
                   </div>
-                  <div className="p-3 space-y-6">
-                    {orderedSegments.map((segment) => {
-                      const segmentImages = ensureImagesArray(segment);
+                  <div className="relative" style={{ minHeight: 'calc(100vh - 64px - 60px)' }}>
+                    {/* 区切り線と連番 */}
+                    {orderedSegments.map((segment, segIndex) => {
+                      const lineY = segmentLinePositions[segment.id];
+                      if (lineY === undefined) return null;
+                      
                       return (
-                        <div key={segment.id} className="relative pb-10">
-                          {segment.anchorBlockId !== null && (
-                            <div className="story-panel-line-control absolute left-1/2 -top-5 -translate-x-1/2 flex items-center gap-2">
-                              <button
-                                type="button"
-                                className="p-1 rounded-full bg-background text-foreground shadow hover:bg-accent transition"
-                                onMouseDown={handleStartMoveLine(segment.id)}
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setLineDeleteTarget(prev => (prev === segment.id ? null : segment.id));
+                        <div
+                          key={`line-${segment.id}`}
+                          className="absolute left-0 right-0 border-t border-dashed border-muted-foreground/20"
+                          style={{ top: `${lineY}px`, zIndex: 5 }}
+                        >
+                          <span className="absolute left-2 -top-2.5 px-1.5 py-0.5 text-xs text-muted-foreground/60 bg-muted/50 rounded border border-muted-foreground/20">
+                            {segIndex + 1}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    
+                    {/* 画像ビューア（中央配置、前後の画像を折り重ね） */}
+                    <div className="sticky" style={{ top: 'calc(50vh - 64px - 120px)' }}>
+                      {(() => {
+                        const currentIndex = orderedSegments.findIndex(seg => seg.id === currentDisplayedSegmentId);
+                        const currentSegment = orderedSegments[currentIndex] ?? orderedSegments[0];
+                        const prevSegment = currentIndex > 0 ? orderedSegments[currentIndex - 1] : null;
+                        const nextSegment = currentIndex < orderedSegments.length - 1 ? orderedSegments[currentIndex + 1] : null;
+                        
+                        if (!currentSegment) return null;
+                        
+                        const imageHeight = Math.max(Math.round((panelWidth - 32) * 9 / 16), 180);
+                        
+                        return (
+                          <div className="relative" style={{ height: `${imageHeight}px` }}>
+                            {/* 前の画像（後ろに配置、半分見える） */}
+                            {prevSegment?.image && (
+                              <div 
+                                className="absolute left-0 right-0 rounded-lg overflow-hidden border opacity-50"
+                                style={{ 
+                                  top: '-40%',
+                                  transform: 'scale(0.9)',
+                                  zIndex: 1
                                 }}
-                                title="ドラッグで移動 / クリックで削除を表示"
                               >
-                                <ScissorsIcon className="w-4 h-4" />
-                              </button>
-                              {lineDeleteTarget === segment.id && (
+                                <img
+                                  src={prevSegment.image.dataUrl}
+                                  alt={prevSegment.image.name}
+                                  className="w-full object-cover"
+                                  style={{ height: `${imageHeight}px` }}
+                                />
+                              </div>
+                            )}
+                            
+                            {/* 現在の画像（中央、前面） */}
+                            <div className="relative z-10">
+                              {currentSegment.image ? (
+                                <div className="relative group rounded-lg overflow-hidden border shadow-lg">
+                                  <img
+                                    src={currentSegment.image.dataUrl}
+                                    alt={currentSegment.image.name}
+                                    className="w-full object-cover"
+                                    style={{ height: `${imageHeight}px` }}
+                                  />
+                                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-4 text-white text-sm">
+                                    <button
+                                      type="button"
+                                      className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 transition"
+                                      onClick={() => openImagePicker(currentSegment.id)}
+                                    >
+                                      置き換え
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 transition"
+                                      onClick={() => setImageToDelete({ segmentId: currentSegment.id })}
+                                    >
+                                      削除
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
                                 <button
                                   type="button"
-                                  className="p-1 rounded-full bg-destructive text-destructive-foreground shadow"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setSegmentToDelete(segment);
-                                  }}
-                                  title="ラインを削除"
-                                >
-                                  <TrashIcon className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                          )}
-                          <div
-                            className={`sticky top-4 border rounded-lg bg-background shadow-sm overflow-hidden transition ring-offset-2 ${
-                              activeSegmentId === segment.id ? 'ring-2 ring-primary' : ''
-                            }`}
-                            style={{
-                              minHeight: segmentHeights[segment.id] ? `${segmentHeights[segment.id]}px` : '240px'
-                            }}
-                          >
-                            <div className="space-y-3 p-3">
-                              {segmentImages.length === 0 ? (
-                                <button
-                                  type="button"
-                                  className="w-full border-2 border-dashed rounded-lg py-16 flex flex-col items-center justify-center text-sm text-muted-foreground hover:bg-muted/40 transition"
-                                  onClick={() => openImagePicker({ type: 'add', segmentId: segment.id })}
+                                  className="w-full border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-sm text-muted-foreground hover:bg-muted/40 transition shadow-lg"
+                                  style={{ height: `${imageHeight}px` }}
+                                  onClick={() => openImagePicker(currentSegment.id)}
                                 >
                                   <PhotoIcon className="w-12 h-12 mb-3 opacity-60" />
                                   <span>クリックして画像を追加</span>
                                 </button>
-                              ) : (
-                                <>
-                                  {segmentImages.map(image => (
-                                    <div key={image.id} className="relative group rounded-lg overflow-hidden border">
-                                      <img
-                                        src={image.dataUrl}
-                                        alt={image.name}
-                                        className="w-full object-cover"
-                                        style={{ height: `${Math.max(Math.round((panelWidth - 32) * 9 / 16), 180)}px` }}
-                                      />
-                                      <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-4 text-white text-sm">
-                                        <button
-                                          type="button"
-                                          className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 transition"
-                                          onClick={() => openImagePicker({ type: 'replace', segmentId: segment.id, imageId: image.id })}
-                                        >
-                                          置き換え
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 transition"
-                                          onClick={() => setImageToDelete({ segmentId: segment.id, imageId: image.id })}
-                                        >
-                                          削除
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                  <button
-                                    type="button"
-                                    className="w-full border-2 border-dashed rounded-lg py-4 text-sm text-muted-foreground hover:bg-muted/40 transition"
-                                    onClick={() => openImagePicker({ type: 'add', segmentId: segment.id })}
-                                  >
-                                    クリックして画像を追加
-                                  </button>
-                                </>
                               )}
                             </div>
+                            
+                            {/* 次の画像（前に配置、半分見える） */}
+                            {nextSegment?.image && (
+                              <div 
+                                className="absolute left-0 right-0 rounded-lg overflow-hidden border opacity-50"
+                                style={{ 
+                                  top: '40%',
+                                  transform: 'scale(0.9)',
+                                  zIndex: 1
+                                }}
+                              >
+                                <img
+                                  src={nextSegment.image.dataUrl}
+                                  alt={nextSegment.image.name}
+                                  className="w-full object-cover"
+                                  style={{ height: `${imageHeight}px` }}
+                                />
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      );
-                    })}
-                    {script.blocks.length < 2 && (
-                      <p className="text-xs text-muted-foreground">
-                        ブロックが2つ以上になると線を追加できます。
-                      </p>
-                    )}
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
                 <div
-                  className="hidden lg:block w-1 bg-border rounded-full cursor-col-resize self-stretch"
+                  className="hidden lg:block fixed w-1 bg-border cursor-col-resize z-30"
+                  style={{ height: 'calc(100vh - 64px)', top: '64px', left: `${panelWidth}px` }}
                   onMouseDown={handleResizeStart}
                   role="separator"
                   aria-label="ストーリーセパレートの幅を調整"
                 />
               </>
             )}
-            <div className="flex-1 story-main-column">
+            <div className={`flex-1 story-main-column ${isStoryPanelOpen ? 'lg:ml-0' : ''}`} style={isStoryPanelOpen ? { marginLeft: `${panelWidth + 4}px` } : {}}>
               <div className="bg-card rounded-lg shadow p-2 sm:p-3 md:p-4 mb-24 relative h-full flex flex-col justify-between">
                 <DndContext
                   sensors={sensors}
@@ -1593,7 +1599,7 @@ export default function ScriptEditor({
                     strategy={verticalListSortingStrategy}
                   >
                     {script.blocks.map((block, index) => (
-                      <div key={block.id} className="mb-1 last:mb-0">
+                      <div key={block.id} className="mb-1 last:mb-0 group/block-item">
                         <SortableBlock
                           block={block}
                           characters={characters}
@@ -1666,14 +1672,91 @@ export default function ScriptEditor({
                           onInsertBlock={onInsertBlock}
                           insertIdx={insertIdx}
                         />
-                        {/* ブロック間のト書き追加 */}
-                        <div className="flex justify-center my-1 group">
-                          <button
-                            className="hidden group-hover:inline-block px-2 py-1 bg-primary text-primary-foreground rounded text-xs"
-                            onClick={() => handleAddTogaki(index + 1)}
-                          >
-                            ＋ト書きを追加
-                          </button>
+                        {/* ブロック間のブロック追加とセパレートライン追加 */}
+                        <div className="relative my-1">
+                          <div className="flex justify-center items-center gap-2 min-h-[24px] opacity-0 group-hover/block-item:opacity-100 transition-opacity">
+                            <button
+                              type="button"
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground shadow hover:bg-primary/90 transition"
+                              onClick={() => {
+                                // Ctrl+Enterと同様の機能：最後のセリフブロックからキャラクター情報を引き継ぐ
+                                const lastSerif = [...script.blocks].reverse().find(b => b.characterId);
+                                const charId = lastSerif?.characterId || characters[0]?.id || '';
+                                const emotion = lastSerif?.emotion || 'normal';
+                                
+                                const newBlock: ScriptBlock = {
+                                  id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                                  characterId: charId,
+                                  emotion,
+                                  text: ''
+                                };
+                                onInsertBlock(newBlock, index + 1);
+                              }}
+                              title="ブロックを追加"
+                            >
+                              <PlusIcon className="w-4 h-4" />
+                            </button>
+                            {isStoryPanelOpen && script.blocks.length >= 2 && index < script.blocks.length - 1 && (
+                              <>
+                                {(() => {
+                                  const nextBlockId = script.blocks[index + 1]?.id;
+                                  const existingSegment = storySegments.find(seg => seg.anchorBlockId === nextBlockId);
+                                  if (existingSegment) {
+                                    return (
+                                      <div className="flex items-center gap-2 w-full">
+                                        <div className="flex-1 border-t border-dashed border-primary"></div>
+                                        <button
+                                          type="button"
+                                          className="p-1 rounded-full bg-background text-foreground shadow hover:bg-accent transition"
+                                          onMouseDown={handleStartMoveLine(existingSegment.id)}
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setLineDeleteTarget(prev => (prev === existingSegment.id ? null : existingSegment.id));
+                                          }}
+                                          title="ドラッグで移動 / クリックで削除を表示"
+                                        >
+                                          <ScissorsIcon className="w-4 h-4" />
+                                        </button>
+                                        {lineDeleteTarget === existingSegment.id && (
+                                          <button
+                                            type="button"
+                                            className="p-1 rounded-full bg-destructive text-destructive-foreground shadow"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              setSegmentToDelete(existingSegment);
+                                            }}
+                                            title="ラインを削除"
+                                          >
+                                            <TrashIcon className="w-4 h-4" />
+                                          </button>
+                                        )}
+                                        <div className="flex-1 border-t border-dashed border-primary"></div>
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center justify-center w-8 h-8 rounded-full border text-foreground hover:bg-accent transition"
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        if (nextBlockId) {
+                                          setLineDragState({ mode: 'new', targetBlockId: nextBlockId });
+                                          setLineIndicatorY(e.clientY);
+                                        }
+                                      }}
+                                      title="セパレートラインを追加（ドラッグ）"
+                                    >
+                                      <ScissorsIcon className="w-4 h-4" />
+                                    </button>
+                                  );
+                                })()}
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1733,7 +1816,7 @@ export default function ScriptEditor({
               <button
                 type="button"
                 onClick={() => {
-                  handleRemoveSegmentImage(imageToDelete.segmentId, imageToDelete.imageId);
+                  handleRemoveSegmentImage(imageToDelete.segmentId);
                   setImageToDelete(null);
                 }}
                 className="px-4 py-2 rounded-full bg-destructive text-destructive-foreground text-sm"
