@@ -56,15 +56,15 @@ export const useProjectManagement = (
   // 初回マウント時にデータを読み込み
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (!dataManagement.isInitialized) return; // データ管理の初期化が完了するまで待つ
+    if (isInitialized.current) return; // 既に初期化済みの場合はスキップ
     
     const loadInitialData = async () => {
-      if (isInitialized.current) return; // 既に初期化済みの場合はスキップ
-      
       //console.log('🚀 プロジェクト管理の初期化開始 - 保存先:', dataManagement.saveDirectory);
       
       // 初回はlocalStorageから開始し、後で設定が読み込まれたら切り替える
       //console.log('🚀 初期化: localStorageから開始（設定読み込み完了後に切り替え）');
-      ////console.log('useProjectManagement - Starting initialization');
+      //console.log('useProjectManagement - Starting initialization');
       isInitialized.current = true;
       // プロジェクトリストを先に取得（存在チェック用）
       let availableProjects: string[] = [];
@@ -100,20 +100,20 @@ export const useProjectManagement = (
             !k.endsWith('_groups') &&
             !k.endsWith('_lastSaved'));
           availableProjects = availableProjects.map(k => k.replace('voiscripter_project_', ''));
-          console.log('📁 初期化: プロジェクトキー:', keys.filter(k => k.startsWith('voiscripter_project_')));
-          console.log('📁 初期化: 利用可能なプロジェクト:', availableProjects);
+          //console.log('📁 初期化: プロジェクトキー:', keys.filter(k => k.startsWith('voiscripter_project_')));
+          //console.log('📁 初期化: 利用可能なプロジェクト:', availableProjects);
         } catch (error) {
           console.error('プロジェクトリスト取得エラー:', error);
           availableProjects = [];
         }
       }
       
-      console.log('✅ 初期化: プロジェクトリストを設定 - 利用可能なプロジェクト:', availableProjects);
+      //console.log('✅ 初期化: プロジェクトリストを設定 - 利用可能なプロジェクト:', availableProjects);
       setProjectList(availableProjects);
       
       // デバッグ用: プロジェクトリストの状態を確認
       setTimeout(() => {
-        console.log('🔍 デバッグ: プロジェクトリスト状態確認 - availableProjects:', availableProjects);
+        //console.log('🔍 デバッグ: プロジェクトリスト状態確認 - availableProjects:', availableProjects);
       }, 100);
       
       // 最後に開いていたプロジェクトを読み込み
@@ -155,6 +155,9 @@ export const useProjectManagement = (
       //console.log('💾 初期化: 最後のプロジェクトを保存:', validProjectId);
       
       // 選択されたプロジェクトのデータを読み込み
+      // IndexedDBの準備が完了するまで少し待機（loadData内でも待機するが、念のため）
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       //console.log(`🔍 初期化: プロジェクトデータを読み込み - key: voiscripter_project_${validProjectId}`);
       const selectedProjectData = await dataManagement.loadData(`voiscripter_project_${validProjectId}`);
       //console.log(`📁 初期化: プロジェクトデータ読み込み結果 - ${selectedProjectData ? '成功' : 'null'}`);
@@ -210,7 +213,7 @@ export const useProjectManagement = (
     };
     
     loadInitialData();
-  }, []); // 初回のみ実行
+  }, [dataManagement.isInitialized, dataManagement.saveDirectory]); // データ管理の初期化完了と保存先の変更を監視
   
   // 保存先が変更された時にプロジェクトリストを更新
   useEffect(() => {
