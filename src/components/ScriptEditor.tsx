@@ -1483,7 +1483,7 @@ export default function ScriptEditor({
             {isStoryPanelOpen && (
               <>
                 <div
-                  className="fixed left-0 z-30 border-r bg-muted/30 flex-shrink-0 overflow-hidden flex flex-col"
+                  className="fixed left-0 z-30 border-r bg-muted/30 shrink-0 overflow-hidden flex flex-col"
                   style={{ width: panelWidth, top: '64px', height: 'calc(100vh - 64px)' }}
                 >
                   <div className="flex items-center justify-between p-2 px-3 border-b bg-muted/60 shrink-0">
@@ -1671,7 +1671,7 @@ export default function ScriptEditor({
                                   <div className="flex items-center">
                                     <input
                                       type="text"
-                                      className="text-xs px-2 py-1 border border-primary rounded-l bg-background text-foreground w-28 outline-none focus:ring-1 focus:ring-primary"
+                                      className="text-xs px-2 py-1 border border-primary rounded-l-lg bg-background text-foreground w-28 outline-none focus:ring-1 focus:ring-primary"
                                       value={editingLabelValue}
                                       onChange={(e) => setEditingLabelValue(e.target.value)}
                                       onKeyDown={(e) => {

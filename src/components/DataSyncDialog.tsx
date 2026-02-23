@@ -341,7 +341,7 @@ export default function DataSyncDialog({
 
                     {/* Password Field */}
                     <div>
-                        <label className="block text-sm font-semibold text-foreground mb-2 flex items-center gap-1">
+                        <label className="block text-sm font-semibold text-foreground mb-2 items-center gap-1">
                             <KeyIcon className="w-4 h-4" />
                             合言葉 (Password)
                         </label>
