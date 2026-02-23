@@ -51,3 +51,6 @@ yarn-error.log*
 
 # workspace
 *.code-workspace
+
+# Cloudflare Wrangler
+.wrangler

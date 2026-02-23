@@ -1,0 +1,15 @@
+name = "voiscripter-sync"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+workers_dev = true
+
+# KV Namespace binding
+[[kv_namespaces]]
+binding = "SYNC_KV"
+id = "8579b723057f4a56bd2b0224062e916d"
+
+# Import HTML as text module
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = false

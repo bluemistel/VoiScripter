@@ -8,6 +8,12 @@ const nextConfig = {
   images: {
     unoptimized: true
   },
+  env: {
+    NEXT_PUBLIC_SYNC_API_URL: process.env.NEXT_PUBLIC_SYNC_API_URL ||
+      (process.env.NODE_ENV === 'development'
+        ? 'http://localhost:8787/data'
+        : 'https://voiscripter-sync.bluemist02.workers.dev/data'),
+  },
   // React DevToolsのメッセージを非表示にする
   webpack: (config, { dev, isServer }) => {
     if (!dev && !isServer) {
