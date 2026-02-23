@@ -18,7 +18,7 @@ const nextConfig = {
     }
     return config;
   },
-  // Turbopack設定（空の設定でエラーを回避）
+  // Turbopack設定（Next.js 16でTurbopackがデフォルトのため追加）
   turbopack: {},
 };
 

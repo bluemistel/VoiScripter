@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Header from '@/components/Header';
 import ScriptEditor from '@/components/ScriptEditor';
 import Settings from '@/components/Settings';
 import ProjectDialog from '@/components/ProjectDialog';
 import CSVExportDialog from '@/components/CSVExportDialog';
 import CharacterManager from '@/components/CharacterManager';
+import SearchDialog, { SearchResult } from '@/components/SearchDialog';
 import { Project, Character, ScriptBlock } from '@/types';
 import { buildEmptyScript } from '@/utils/scriptDefaults';
 
@@ -30,6 +31,9 @@ export default function Home() {
   const setIsUndoRedoOperationRef = useRef<((isUndoRedo: boolean) => void) | null>(null);
   const setIsCtrlEnterBlockRef = useRef<((isCtrlEnter: boolean) => void) | null>(null);
 
+  // ローディング状態
+  const [isLoading, setIsLoading] = useState(true);
+
   // カスタムフックの初期化
   const dataManagement = useDataManagement();
   const dataProcessing = useDataProcessing(dataManagement);
@@ -44,7 +48,15 @@ export default function Home() {
     deleteConfirmation,
     setDeleteConfirmation,
     selectedBlockIds,
-    setSelectedBlockIds
+    setSelectedBlockIds,
+    isSearchDialogOpen,
+    setIsSearchDialogOpen,
+    searchResults,
+    setSearchResults,
+    currentSearchResultIndex,
+    setCurrentSearchResultIndex,
+    searchHistory,
+    setSearchHistory
   } = uiState;
   
   // プロジェクト管理フック
@@ -60,6 +72,18 @@ export default function Home() {
     setProjectList,
     handleCreateProject
   } = projectManagement;
+
+  // ローディング状態の管理：データ管理とプロジェクトの初期化が完了するまで待つ
+  useEffect(() => {
+    if (dataManagement.isInitialized && project && projectList !== null) {
+      // プロジェクトが初期化され、プロジェクトリストも取得済みの場合
+      // 少し待ってからローディングを解除（データ読み込み完了を確認）
+      const timer = setTimeout(() => {
+        setIsLoading(false);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [dataManagement.isInitialized, project, projectList]);
     
   // キャラクター管理フック
   const characterManagement = useCharacterManagement(
@@ -192,6 +216,10 @@ export default function Home() {
       // 最上段へスクロール
       window.scrollTo(0, 0);
     },
+    () => {
+      // 検索ダイアログを開く
+      uiState.setIsSearchDialogOpen(true);
+    },
     // ScriptEditorの状態
     project.scenes.find(s => s.id === selectedSceneId)?.scripts[0]?.blocks || [],
     characters,
@@ -288,16 +316,7 @@ export default function Home() {
     }
   }, [project.id, selectedSceneId]);
 
-  // プロジェクト変更時のキャラクター保存（遅延実行）
-  useEffect(() => {
-    if (project.id) {
-      const timeoutId = setTimeout(() => {
-        dataManagement.saveData(`voiscripter_project_${project.id}_characters`, JSON.stringify(characters));
-      }, 3000); // 3秒後に保存
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [project.id, characters]);
+  // プロジェクトごとのキャラクター保存は不要（voiscripter_charactersが共通設定として使用される）
 
   // プロジェクト変更時のグループ保存（遅延実行）
   useEffect(() => {
@@ -358,6 +377,124 @@ export default function Home() {
   const handleNewProject = () => {
     setIsProjectDialogOpen(true);
   };
+
+  // 検索機能
+  const handleSearch = (query: string, searchAllScenes: boolean): SearchResult[] => {
+    const results: SearchResult[] = [];
+    const lowerQuery = query.toLowerCase();
+
+    const scenesToSearch = searchAllScenes 
+      ? project.scenes 
+      : project.scenes.filter(s => s.id === selectedSceneId);
+
+    scenesToSearch.forEach(scene => {
+      const script = scene.scripts[0];
+      if (!script) return;
+
+      script.blocks.forEach((block, index) => {
+        if (block.text.toLowerCase().includes(lowerQuery)) {
+          results.push({
+            blockId: block.id,
+            sceneId: scene.id,
+            sceneName: scene.name,
+            blockIndex: index,
+            text: block.text
+          });
+        }
+      });
+    });
+
+    return results;
+  };
+
+  // 検索結果へのナビゲーション
+  const handleNavigateToResult = useCallback((result: SearchResult, shouldScroll: boolean = true) => {
+    const needsSceneChange = result.sceneId !== selectedSceneId;
+    
+    // シーンを切り替え
+    if (needsSceneChange) {
+      setSelectedSceneId(result.sceneId);
+    }
+
+    // ブロックを選択状態にする（シーン切り替えの場合は少し長めに待つ）
+    const delay = needsSceneChange ? 200 : 50;
+    setTimeout(() => {
+      setSelectedBlockIds([result.blockId]);
+      
+      // shouldScrollがtrueの場合、またはブロックが画面外にある場合はスクロール
+      setTimeout(() => {
+        // data-block-index属性でブロックを検索
+        const blockElement = document.querySelector(`[data-block-index="${result.blockIndex}"]`);
+        if (blockElement) {
+          const rect = blockElement.getBoundingClientRect();
+          const windowHeight = window.innerHeight;
+          const headerHeight = 128; // ヘッダーの高さを考慮
+          
+          // ブロックが画面外にあるかチェック
+          const isOutOfView = rect.top < headerHeight || rect.bottom > windowHeight;
+          
+          // shouldScrollがtrueの場合、またはブロックが画面外にある場合はスクロール
+          if (shouldScroll || isOutOfView) {
+            const targetY = window.scrollY + rect.top - (windowHeight / 2) + (rect.height / 2) - headerHeight;
+            
+            window.scrollTo({
+              top: Math.max(0, targetY),
+              behavior: 'smooth'
+            });
+          }
+        } else {
+          // ブロックが見つからない場合、もう一度試す
+          setTimeout(() => {
+            const retryElement = document.querySelector(`[data-block-index="${result.blockIndex}"]`);
+            if (retryElement) {
+              const rect = retryElement.getBoundingClientRect();
+              const windowHeight = window.innerHeight;
+              const headerHeight = 128;
+              const targetY = window.scrollY + rect.top - (windowHeight / 2) + (rect.height / 2) - headerHeight;
+              
+              window.scrollTo({
+                top: Math.max(0, targetY),
+                behavior: 'smooth'
+              });
+            }
+          }, 200);
+        }
+      }, needsSceneChange ? 200 : 100);
+    }, delay);
+  }, [selectedSceneId, setSelectedSceneId, setSelectedBlockIds]);
+
+  // 前の検索結果へ（スクロールなし）
+  const handleNavigatePrevious = useCallback(() => {
+    if (uiState.searchResults.length === 0) return;
+    const newIndex = uiState.currentSearchResultIndex > 0 
+      ? uiState.currentSearchResultIndex - 1 
+      : uiState.searchResults.length - 1;
+    uiState.setCurrentSearchResultIndex(newIndex);
+    handleNavigateToResult(uiState.searchResults[newIndex], false);
+  }, [uiState.searchResults, uiState.currentSearchResultIndex, uiState]);
+
+  // 次の検索結果へ（スクロールなし）
+  const handleNavigateNext = useCallback(() => {
+    if (uiState.searchResults.length === 0) return;
+    const newIndex = uiState.currentSearchResultIndex < uiState.searchResults.length - 1 
+      ? uiState.currentSearchResultIndex + 1 
+      : 0;
+    uiState.setCurrentSearchResultIndex(newIndex);
+    handleNavigateToResult(uiState.searchResults[newIndex], false);
+  }, [uiState.searchResults, uiState.currentSearchResultIndex, uiState]);
+
+  // 検索履歴に追加
+  const handleAddToSearchHistory = (query: string) => {
+    const newHistory = [query, ...uiState.searchHistory.filter(h => h !== query)].slice(0, 10);
+    uiState.setSearchHistory(newHistory);
+  };
+
+  // 検索結果が更新されたらインデックスをリセット
+  useEffect(() => {
+    if (uiState.searchResults.length > 0 && uiState.currentSearchResultIndex >= uiState.searchResults.length) {
+      uiState.setCurrentSearchResultIndex(0);
+    }
+  }, [uiState.searchResults, uiState.currentSearchResultIndex]);
 
 
 
@@ -436,12 +573,13 @@ export default function Home() {
         onNewProject={handleNewProject}
         project={project}
         onOpenSettings={() => uiState.setIsSettingsOpen(true)}
+        onOpenSearch={() => uiState.setIsSearchDialogOpen(true)}
         projectList={projectManagement.projectList}
         onProjectChange={(projectId) => {
           setProjectId(projectId);
           // 最後に開いたプロジェクトを保存
           dataManagement.saveData('voiscripter_lastProject', projectId);
-          console.log('💾 プロジェクト変更: 最後のプロジェクトを保存:', projectId);
+          //console.log('💾 プロジェクト変更: 最後のプロジェクトを保存:', projectId);
           // プロジェクトを読み込む処理は既存のuseEffectで実行される
         }}
         onDeleteProject={() => {
@@ -452,8 +590,30 @@ export default function Home() {
         saveCharacterProjectStates={characterManagement.saveCharacterProjectStates}
       />
       
-      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6 md:py-8">
-        {project && selectedSceneId ? (
+      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6 md:py-8 relative">
+        {/* ローディング画面 */}
+        <div 
+          className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${
+            isLoading ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+          }`}
+        >
+          <div className="text-center">
+            <div className="flex justify-center space-x-2 mb-4">
+              <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <p className="text-muted-foreground">読み込み中...</p>
+          </div>
+        </div>
+        
+        {/* メインコンテンツ */}
+        <div 
+          className={`transition-opacity duration-1000 ${
+            isLoading ? 'opacity-0' : 'opacity-100'
+          }`}
+        >
+          {project && selectedSceneId ? (
           <ScriptEditor
             script={project.scenes.find(s => s.id === selectedSceneId)?.scripts[0] || buildEmptyScript({ id: 'placeholder', title: 'placeholder' })}
             onUpdateBlock={handleBlockUpdate}
@@ -556,6 +716,7 @@ export default function Home() {
             
           </div>
         )}
+        </div>
       </main>
 
       {/* ProjectDialog */}
@@ -638,6 +799,39 @@ export default function Home() {
         onSaveDirectoryChange={settings.handleSaveDirectoryChange}
         enterOnlyBlockAdd={settings.enterOnlyBlockAdd}
         onEnterOnlyBlockAddChange={settings.handleEnterOnlyBlockAddChange}
+      />
+
+      {/* SearchDialog */}
+      <SearchDialog
+        isOpen={uiState.isSearchDialogOpen}
+        onClose={() => {
+          uiState.setIsSearchDialogOpen(false);
+          uiState.setSearchResults([]);
+          uiState.setCurrentSearchResultIndex(0);
+        }}
+        project={project}
+        selectedSceneId={selectedSceneId}
+        onSearch={useCallback((query: string, searchAllScenes: boolean) => {
+          const results = handleSearch(query, searchAllScenes);
+          uiState.setSearchResults(results);
+          if (results.length > 0) {
+            uiState.setCurrentSearchResultIndex(0);
+            // 最初の結果に移動（スクロールあり）
+            setTimeout(() => {
+              handleNavigateToResult(results[0], true);
+            }, 100);
+          } else {
+            uiState.setCurrentSearchResultIndex(0);
+          }
+          return results;
+        }, [handleSearch, uiState, handleNavigateToResult])}
+        onNavigateToResult={handleNavigateToResult}
+        currentResultIndex={uiState.currentSearchResultIndex}
+        totalResults={uiState.searchResults.length}
+        onNavigatePrevious={handleNavigatePrevious}
+        onNavigateNext={handleNavigateNext}
+        searchHistory={uiState.searchHistory}
+        onAddToHistory={handleAddToSearchHistory}
       />
 
       {/* 通知 */}
