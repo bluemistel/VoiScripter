@@ -6,7 +6,10 @@
 import { useState, useCallback } from 'react';
 import { encrypt, decrypt } from '@/utils/crypto';
 
-const SYNC_API_URL = process.env.NEXT_PUBLIC_SYNC_API_URL || 'http://localhost:8787/data';
+const SYNC_API_URL = process.env.NEXT_PUBLIC_SYNC_API_URL ||
+    (process.env.NODE_ENV === 'development'
+        ? 'http://localhost:8787/data'
+        : 'https://voiscripter-sync.bluemist02.workers.dev/data');
 
 interface SyncState {
     isLoading: boolean;

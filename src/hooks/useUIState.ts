@@ -24,6 +24,8 @@ export interface UIStateHook {
   setCurrentSearchResultIndex: (index: number) => void;
   searchHistory: string[];
   setSearchHistory: (history: string[]) => void;
+  isDataSyncOpen: boolean;
+  setIsDataSyncOpen: (open: boolean) => void;
   handleSelectAllBlocks: () => void;
   handleDeselectAllBlocks: () => void;
   handleToggleBlockSelection: (blockId: string, selectedBlockIds: string[]) => string[];
@@ -41,6 +43,7 @@ export const useUIState = (): UIStateHook => {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [currentSearchResultIndex, setCurrentSearchResultIndex] = useState(0);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [isDataSyncOpen, setIsDataSyncOpen] = useState(false);
   // 通知関数
   const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setNotification({ message, type });
@@ -92,6 +95,8 @@ export const useUIState = (): UIStateHook => {
     currentSearchResultIndex,
     setCurrentSearchResultIndex,
     searchHistory,
-    setSearchHistory
+    setSearchHistory,
+    isDataSyncOpen,
+    setIsDataSyncOpen
   };
 };

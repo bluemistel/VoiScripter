@@ -8,6 +8,7 @@ import ProjectDialog from '@/components/ProjectDialog';
 import CSVExportDialog from '@/components/CSVExportDialog';
 import CharacterManager from '@/components/CharacterManager';
 import SearchDialog, { SearchResult } from '@/components/SearchDialog';
+import DataSyncDialog from '@/components/DataSyncDialog';
 import { Project, Character, ScriptBlock } from '@/types';
 
 // カスタムフックのインポート
@@ -573,6 +574,7 @@ export default function Home() {
         project={project}
         onOpenSettings={() => uiState.setIsSettingsOpen(true)}
         onOpenSearch={() => uiState.setIsSearchDialogOpen(true)}
+        onOpenDataSync={() => uiState.setIsDataSyncOpen(true)}
         projectList={projectManagement.projectList}
         onProjectChange={(projectId) => {
           setProjectId(projectId);
@@ -830,6 +832,26 @@ export default function Home() {
         onNavigateNext={handleNavigateNext}
         searchHistory={uiState.searchHistory}
         onAddToHistory={handleAddToSearchHistory}
+      />
+
+      {/* DataSyncDialog */}
+      <DataSyncDialog
+        isOpen={uiState.isDataSyncOpen}
+        onClose={() => uiState.setIsDataSyncOpen(false)}
+        currentData={JSON.stringify(project)}
+        onDataRestored={(restoredDataJson) => {
+          try {
+            const restoredProject = JSON.parse(restoredDataJson) as Project;
+            // 復元されたプロジェクトを適用
+            setProject(restoredProject);
+            if (restoredProject.scenes.length > 0) {
+              setSelectedSceneId(restoredProject.scenes[0].id);
+            }
+            showNotification('データを復元しました', 'success');
+          } catch (e) {
+            showNotification('データの復元に失敗しました', 'error');
+          }
+        }}
       />
 
       {/* 通知 */}
