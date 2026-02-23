@@ -49,16 +49,16 @@ async function uint8ArrayToBase64(arr: Uint8Array): Promise<string> {
         const CHUNK_SIZE = 0x8000; // 32KB chunks
         let binary = '';
         for (let i = 0; i < arr.length; i += CHUNK_SIZE) {
-            binary += String.fromCharCode(...arr.subarray(i, i + CHUNK_SIZE));
+            binary += String.fromCharCode.apply(null, Array.from(arr.subarray(i, i + CHUNK_SIZE)));
         }
         return btoa(binary);
     } else {
         // Method 4: Blob/FileReader (Native Asynchronous)
         return new Promise((resolve, reject) => {
-            const blob = new Blob([arr]);
+            const blob = new Blob([arr as unknown as ArrayBuffer]);
             const reader = new FileReader();
             reader.onload = (e) => {
-                const dataUrl = e.target.result as string;
+                const dataUrl = e.target?.result as string;
                 // Extract Base64 part from "data:...;base64,XXXX"
                 const base64 = dataUrl.split(',')[1];
                 resolve(base64);
