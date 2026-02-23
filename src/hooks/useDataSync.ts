@@ -37,10 +37,22 @@ export function useDataSync() {
             setState({ isLoading: true, error: null, lastSyncTime: null });
 
             try {
-                // Encrypt data
+                const rawSize = new Blob([data]).size;
+                const rawSizeMB = (rawSize / 1024 / 1024).toFixed(1);
+                console.log(`[DataSync] Raw data size: ${rawSizeMB}MB`);
+
                 const encrypted = await encrypt(data, credentials.password);
 
-                // Upload to server
+                const encryptedSize = new Blob([encrypted]).size;
+                const encryptedSizeMB = (encryptedSize / 1024 / 1024).toFixed(1);
+                console.log(`[DataSync] Encrypted data size: ${encryptedSizeMB}MB`);
+
+                if (encryptedSize > 25 * 1024 * 1024) {
+                    throw new Error(
+                        `データサイズが上限(25MB)を超えています (${encryptedSizeMB}MB)。画像を削除してデータサイズを削減してください。`
+                    );
+                }
+
                 const response = await fetch(`${SYNC_API_URL}/${credentials.uuid}`, {
                     method: 'PUT',
                     body: encrypted,
@@ -50,7 +62,12 @@ export function useDataSync() {
                 });
 
                 if (!response.ok) {
-                    throw new Error(`サーバーエラー: ${response.status}`);
+                    let detail = `${response.status}`;
+                    try {
+                        const body = await response.json();
+                        if (body.error) detail = body.error;
+                    } catch { /* ignore */ }
+                    throw new Error(`サーバーエラー: ${detail}`);
                 }
 
                 setState({
@@ -59,9 +76,13 @@ export function useDataSync() {
                     lastSyncTime: new Date(),
                 });
             } catch (error) {
+                const url = `${SYNC_API_URL}/${credentials.uuid}`;
+                const detail = error instanceof Error ? error.message : '不明なエラー';
+                const errorMsg = `同期に失敗しました: ${detail} (URL: ${url})`;
+                console.error('[DataSync] syncToCloud error:', error, 'URL:', url);
                 setState({
                     isLoading: false,
-                    error: error instanceof Error ? error.message : '同期に失敗しました',
+                    error: errorMsg,
                     lastSyncTime: null,
                 });
                 throw error;
@@ -78,8 +99,9 @@ export function useDataSync() {
             setState({ isLoading: true, error: null, lastSyncTime: null });
 
             try {
-                // Download from server
-                const response = await fetch(`${SYNC_API_URL}/${credentials.uuid}`);
+                const url = `${SYNC_API_URL}/${credentials.uuid}`;
+                console.log('[DataSync] restoreFromCloud URL:', url);
+                const response = await fetch(url);
 
                 if (!response.ok) {
                     if (response.status === 404) {
@@ -90,7 +112,6 @@ export function useDataSync() {
 
                 const encrypted = await response.text();
 
-                // Decrypt data
                 const decrypted = await decrypt(encrypted, credentials.password);
 
                 setState({
@@ -101,9 +122,13 @@ export function useDataSync() {
 
                 return decrypted;
             } catch (error) {
+                const url = `${SYNC_API_URL}/${credentials.uuid}`;
+                const detail = error instanceof Error ? error.message : '不明なエラー';
+                const errorMsg = `復元に失敗しました: ${detail} (URL: ${url})`;
+                console.error('[DataSync] restoreFromCloud error:', error, 'URL:', url);
                 setState({
                     isLoading: false,
-                    error: error instanceof Error ? error.message : '復元に失敗しました',
+                    error: errorMsg,
                     lastSyncTime: null,
                 });
                 throw error;
