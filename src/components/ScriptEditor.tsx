@@ -29,7 +29,8 @@ import {
   ScissorsIcon,
   PhotoIcon,
   ChevronDoubleLeftIcon,
-  ChevronDoubleRightIcon
+  ChevronDoubleRightIcon,
+  PencilSquareIcon
 } from '@heroicons/react/24/outline';
 
 interface ScriptEditorProps {
@@ -431,11 +432,12 @@ export default function ScriptEditor({
   const [lineIndicatorY, setLineIndicatorY] = useState<number | null>(null);
   const [segmentToDelete, setSegmentToDelete] = useState<StorySeparatorSegment | null>(null);
   const [lineDeleteTarget, setLineDeleteTarget] = useState<string | null>(null);
-  const [segmentLinePositions, setSegmentLinePositions] = useState<Record<string, number>>({});
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const imageActionRef = useRef<{ segmentId: string } | null>(null);
   const [imageToDelete, setImageToDelete] = useState<{ segmentId: string } | null>(null);
   const [currentDisplayedSegmentId, setCurrentDisplayedSegmentId] = useState<string | null>(null);
+  const [editingLabelSegmentId, setEditingLabelSegmentId] = useState<string | null>(null);
+  const [editingLabelValue, setEditingLabelValue] = useState('');
   
   useEffect(() => {
     setPanelWidth(script.storyPanelWidth || 320);
@@ -529,6 +531,33 @@ export default function ScriptEditor({
     },
     [updateStorySegments]
   );
+
+  const handleUpdateSegmentLabel = useCallback(
+    (segmentId: string, label: string) => {
+      updateStorySegments(prev =>
+        prev.map(segment => (segment.id === segmentId ? { ...segment, label: label || undefined } : segment))
+      );
+    },
+    [updateStorySegments]
+  );
+
+  const startEditingLabel = useCallback((segmentId: string, currentLabel: string) => {
+    setEditingLabelSegmentId(segmentId);
+    setEditingLabelValue(currentLabel);
+  }, []);
+
+  const commitLabelEdit = useCallback(() => {
+    if (editingLabelSegmentId) {
+      handleUpdateSegmentLabel(editingLabelSegmentId, editingLabelValue.trim());
+      setEditingLabelSegmentId(null);
+      setEditingLabelValue('');
+    }
+  }, [editingLabelSegmentId, editingLabelValue, handleUpdateSegmentLabel]);
+
+  const cancelLabelEdit = useCallback(() => {
+    setEditingLabelSegmentId(null);
+    setEditingLabelValue('');
+  }, []);
 
   const addSegmentAtAnchor = useCallback(
     (anchorBlockId: string | null) => {
@@ -789,37 +818,14 @@ export default function ScriptEditor({
     if (!isStoryPanelOpen) {
       setActiveSegmentId(null);
       setCurrentDisplayedSegmentId(null);
-      setSegmentLinePositions({});
       return;
     }
-    const updateLinePositions = () => {
-      const positions: Record<string, number> = {};
-      const container = document.querySelector('.story-main-column') as HTMLElement | null;
-      if (!container) return;
-      
-      orderedSegments.forEach((segment) => {
-        const anchorIndex = getAnchorIndex(segment.anchorBlockId);
-        const blockElement = anchorIndex < script.blocks.length 
-          ? document.querySelector(`[data-block-index="${anchorIndex}"]`) as HTMLElement | null
-          : null;
-        
-        if (blockElement) {
-          const containerRect = container.getBoundingClientRect();
-          const blockRect = blockElement.getBoundingClientRect();
-          // パネル内での相対位置を計算（パネルの高さに対する割合）
-          const relativeY = blockRect.top - containerRect.top + container.scrollTop;
-          positions[segment.id] = relativeY;
-        }
-      });
-      setSegmentLinePositions(positions);
-    };
     
     const handleScroll = () => {
       if (script.blocks.length === 0) {
         const firstSegment = orderedSegments[0];
         setActiveSegmentId(firstSegment?.id ?? null);
         setCurrentDisplayedSegmentId(firstSegment?.id ?? null);
-        updateLinePositions();
         return;
       }
       const threshold = 120;
@@ -838,19 +844,11 @@ export default function ScriptEditor({
           .find(segment => getAnchorIndex(segment.anchorBlockId) <= currentIndex) ?? orderedSegments[0];
       setActiveSegmentId(active?.id ?? null);
       setCurrentDisplayedSegmentId(active?.id ?? null);
-      updateLinePositions();
     };
     handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
-    const container = document.querySelector('.story-main-column');
-    if (container) {
-      container.addEventListener('scroll', handleScroll, { passive: true });
-    }
     return () => {
       window.removeEventListener('scroll', handleScroll);
-      if (container) {
-        container.removeEventListener('scroll', handleScroll);
-      }
     };
   }, [isStoryPanelOpen, orderedSegments, script.blocks, getAnchorIndex]);
 
@@ -1451,25 +1449,22 @@ export default function ScriptEditor({
         className="hidden"
         onChange={handleImageFileChange}
       />
-      {!isStoryPanelOpen ? (
-        <button
-          type="button"
-          className="fixed left-3 top-1/2 -translate-y-1/2 z-40 bg-primary text-primary-foreground p-2 rounded-full shadow-lg"
-          onClick={() => setIsStoryPanelOpen(true)}
-          title="ストーリーセパレートを開く"
-        >
-          <ChevronDoubleLeftIcon className="w-5 h-5" />
-        </button>
-      ) : (
-        <button
-          type="button"
-          className="fixed left-3 top-1/2 -translate-y-1/2 z-40 bg-muted text-foreground p-2 rounded-full shadow-lg"
-          onClick={() => setIsStoryPanelOpen(false)}
-          title="ストーリーセパレートを閉じる"
-        >
-          <ChevronDoubleRightIcon className="w-5 h-5" />
-        </button>
-      )}
+      <button
+        type="button"
+        className="fixed z-50 bg-primary text-primary-foreground p-2 rounded-full shadow-lg hover:bg-primary/90 transition-all"
+        style={{
+          top: '118px',
+          left: isStoryPanelOpen ? `${panelWidth + 8}px` : '8px',
+          transition: 'left 0.2s ease',
+        }}
+        onClick={() => setIsStoryPanelOpen(prev => !prev)}
+        title={isStoryPanelOpen ? 'ストーリーセパレートを閉じる' : 'ストーリーセパレートを開く'}
+      >
+        {isStoryPanelOpen
+          ? <ChevronDoubleLeftIcon className="w-5 h-5" />
+          : <ChevronDoubleRightIcon className="w-5 h-5" />
+        }
+      </button>
       <div className="script-editor-container min-h-auto">
         {script.blocks.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 text-center text-muted-foreground">
@@ -1488,127 +1483,94 @@ export default function ScriptEditor({
             {isStoryPanelOpen && (
               <>
                 <div
-                  className="fixed left-0 z-30 border-r bg-muted/30 flex-shrink-0 overflow-y-auto"
+                  className="fixed left-0 z-30 border-r bg-muted/30 flex-shrink-0 overflow-hidden flex flex-col"
                   style={{ width: panelWidth, top: '64px', height: 'calc(100vh - 64px)' }}
                 >
-                  <div className="sticky top-0 z-10 flex items-center justify-between p-3 border-b bg-muted/60 backdrop-blur">
+                  <div className="flex items-center justify-between p-2 px-3 border-b bg-muted/60 shrink-0">
                     <span className="text-sm font-semibold text-foreground">ストーリーセパレート</span>
                     <span className="text-xs text-muted-foreground">幅 {Math.round(panelWidth)}px</span>
                   </div>
-                  <div className="relative" style={{ minHeight: 'calc(100vh - 64px - 60px)' }}>
-                    {/* 区切り線と連番 */}
-                    {orderedSegments.map((segment, segIndex) => {
-                      const lineY = segmentLinePositions[segment.id];
-                      if (lineY === undefined) return null;
+                  <div className="flex-1 flex flex-col items-center justify-center p-4 overflow-hidden">
+                    {(() => {
+                      const currentIndex = orderedSegments.findIndex(seg => seg.id === currentDisplayedSegmentId);
+                      const currentSegment = orderedSegments[currentIndex] ?? orderedSegments[0];
+                      const prevSegment = currentIndex > 0 ? orderedSegments[currentIndex - 1] : null;
+                      const nextSegment = currentIndex < orderedSegments.length - 1 ? orderedSegments[currentIndex + 1] : null;
+                      
+                      if (!currentSegment) return null;
+                      
+                      const imageWidth = panelWidth - 32;
+                      const imageHeight = Math.max(Math.round(imageWidth * 9 / 16), 180);
+                      const segmentIndex = orderedSegments.findIndex(s => s.id === currentSegment.id);
                       
                       return (
-                        <div
-                          key={`line-${segment.id}`}
-                          className="absolute left-0 right-0 border-t border-dashed border-muted-foreground/20"
-                          style={{ top: `${lineY}px`, zIndex: 5 }}
-                        >
-                          <span className="absolute left-2 -top-2.5 px-1.5 py-0.5 text-xs text-muted-foreground/60 bg-muted/50 rounded border border-muted-foreground/20">
-                            {segIndex + 1}
-                          </span>
-                        </div>
-                      );
-                    })}
-                    
-                    {/* 画像ビューア（中央配置、前後の画像を折り重ね） */}
-                    <div className="sticky" style={{ top: 'calc(50vh - 64px - 120px)' }}>
-                      {(() => {
-                        const currentIndex = orderedSegments.findIndex(seg => seg.id === currentDisplayedSegmentId);
-                        const currentSegment = orderedSegments[currentIndex] ?? orderedSegments[0];
-                        const prevSegment = currentIndex > 0 ? orderedSegments[currentIndex - 1] : null;
-                        const nextSegment = currentIndex < orderedSegments.length - 1 ? orderedSegments[currentIndex + 1] : null;
-                        
-                        if (!currentSegment) return null;
-                        
-                        const imageHeight = Math.max(Math.round((panelWidth - 32) * 9 / 16), 180);
-                        
-                        return (
-                          <div className="relative" style={{ height: `${imageHeight}px` }}>
-                            {/* 前の画像（後ろに配置、半分見える） */}
-                            {prevSegment?.image && (
-                              <div 
-                                className="absolute left-0 right-0 rounded-lg overflow-hidden border opacity-50"
-                                style={{ 
-                                  top: '-40%',
-                                  transform: 'scale(0.9)',
-                                  zIndex: 1
-                                }}
-                              >
-                                <img
-                                  src={prevSegment.image.dataUrl}
-                                  alt={prevSegment.image.name}
-                                  className="w-full object-cover"
-                                  style={{ height: `${imageHeight}px` }}
-                                />
-                              </div>
-                            )}
-                            
-                            {/* 現在の画像（中央、前面） */}
-                            <div className="relative z-10">
-                              {currentSegment.image ? (
-                                <div className="relative group rounded-lg overflow-hidden border shadow-lg">
-                                  <img
-                                    src={currentSegment.image.dataUrl}
-                                    alt={currentSegment.image.name}
-                                    className="w-full object-cover"
-                                    style={{ height: `${imageHeight}px` }}
-                                  />
-                                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-4 text-white text-sm">
-                                    <button
-                                      type="button"
-                                      className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 transition"
-                                      onClick={() => openImagePicker(currentSegment.id)}
-                                    >
-                                      置き換え
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 transition"
-                                      onClick={() => setImageToDelete({ segmentId: currentSegment.id })}
-                                    >
-                                      削除
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="w-full border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-sm text-muted-foreground hover:bg-muted/40 transition shadow-lg"
-                                  style={{ height: `${imageHeight}px` }}
-                                  onClick={() => openImagePicker(currentSegment.id)}
-                                >
-                                  <PhotoIcon className="w-12 h-12 mb-3 opacity-60" />
-                                  <span>クリックして画像を追加</span>
-                                </button>
-                              )}
+                        <div className="relative w-full" style={{ height: `${imageHeight + 80}px` }}>
+                          {prevSegment?.image && (
+                            <div
+                              className="absolute left-0 right-0 mx-auto rounded-lg overflow-hidden border opacity-40 pointer-events-none"
+                              style={{
+                                width: `${imageWidth * 0.85}px`,
+                                top: '-30%',
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                zIndex: 1,
+                              }}
+                            >
+                              <img src={prevSegment.image.dataUrl} alt={prevSegment.image.name} className="w-full object-cover" style={{ height: `${imageHeight * 0.85}px` }} />
                             </div>
-                            
-                            {/* 次の画像（前に配置、半分見える） */}
-                            {nextSegment?.image && (
-                              <div 
-                                className="absolute left-0 right-0 rounded-lg overflow-hidden border opacity-50"
-                                style={{ 
-                                  top: '40%',
-                                  transform: 'scale(0.9)',
-                                  zIndex: 1
-                                }}
-                              >
-                                <img
-                                  src={nextSegment.image.dataUrl}
-                                  alt={nextSegment.image.name}
-                                  className="w-full object-cover"
-                                  style={{ height: `${imageHeight}px` }}
-                                />
+                          )}
+                          
+                          <div className="absolute left-0 right-0 z-10" style={{ top: prevSegment?.image ? '10%' : '0' }}>
+                            <div className="flex items-center justify-between mb-2 px-1">
+                              <span className="text-xs font-medium text-muted-foreground">
+                                {segmentIndex + 1} / {orderedSegments.length}
+                                {currentSegment.label && (
+                                  <span className="ml-1.5 text-foreground/80">{currentSegment.label}</span>
+                                )}
+                              </span>
+                            </div>
+                            {currentSegment.image ? (
+                              <div className="relative group rounded-lg overflow-hidden border shadow-lg">
+                                <img src={currentSegment.image.dataUrl} alt={currentSegment.image.name} className="w-full object-cover" style={{ height: `${imageHeight}px` }} />
+                                <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-4 text-white text-sm">
+                                  <button type="button" className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 transition" onClick={() => openImagePicker(currentSegment.id)}>
+                                    置き換え
+                                  </button>
+                                  <button type="button" className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 transition" onClick={() => setImageToDelete({ segmentId: currentSegment.id })}>
+                                    削除
+                                  </button>
+                                </div>
                               </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="w-full border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-sm text-muted-foreground hover:bg-muted/40 transition shadow-lg"
+                                style={{ height: `${imageHeight}px` }}
+                                onClick={() => openImagePicker(currentSegment.id)}
+                              >
+                                <PhotoIcon className="w-12 h-12 mb-3 opacity-60" />
+                                <span>クリックして画像を追加</span>
+                              </button>
                             )}
                           </div>
-                        );
-                      })()}
-                    </div>
+                          
+                          {nextSegment?.image && (
+                            <div
+                              className="absolute left-0 right-0 mx-auto rounded-lg overflow-hidden border opacity-40 pointer-events-none"
+                              style={{
+                                width: `${imageWidth * 0.85}px`,
+                                bottom: '-30%',
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                zIndex: 1,
+                              }}
+                            >
+                              <img src={nextSegment.image.dataUrl} alt={nextSegment.image.name} className="w-full object-cover" style={{ height: `${imageHeight * 0.85}px` }} />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div
@@ -1631,168 +1593,175 @@ export default function ScriptEditor({
                     items={script.blocks.map(block => block.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    {script.blocks.map((block, index) => (
-                      <div key={block.id} className="mb-1 last:mb-0 group/block-item">
-                        <SortableBlock
-                          block={block}
-                          characters={characters}
-                          character={characters.find(c => c.id === block.characterId)}
-                          onUpdate={updates => onUpdateBlock(block.id, updates)}
-                          onDelete={() => {
-                            onDeleteBlock(block.id);
-                            
-                            // 削除後のフォーカス処理
-                            setTimeout(() => {
-                              // 削除されたブロックの位置を考慮してフォーカスを設定
-                              let focusIndex = index;
-                              
-                              // 最上段の場合はそのまま、それ以外は一つ上のブロックにフォーカス
+                    {script.blocks.map((block, index) => {
+                      const nextBlockId = index < script.blocks.length - 1 ? script.blocks[index + 1]?.id : null;
+                      const existingSegment = nextBlockId ? storySegments.find(seg => seg.anchorBlockId === nextBlockId) : null;
+                      const segmentNumber = existingSegment ? orderedSegments.findIndex(s => s.id === existingSegment.id) + 1 : -1;
+                      
+                      return (
+                        <div key={block.id} className="mb-1 last:mb-0">
+                          <SortableBlock
+                            block={block}
+                            characters={characters}
+                            character={characters.find(c => c.id === block.characterId)}
+                            onUpdate={updates => onUpdateBlock(block.id, updates)}
+                            onDelete={() => {
+                              onDeleteBlock(block.id);
+                              setTimeout(() => {
+                                let focusIndex = index;
+                                if (index > 0) {
+                                  focusIndex = index - 1;
+                                }
+                                const focusRef = textareaRefs.current[focusIndex];
+                                if (focusRef) {
+                                  focusRef.focus();
+                                  onSelectedBlockIdsChange([script.blocks[focusIndex]?.id || '']);
+                                }
+                              }, 50);
+                            }}
+                            onDuplicate={() => {
+                              const newBlock: ScriptBlock = {
+                                ...block,
+                                id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                                text: block.text
+                              };
+                              insertIdx.current = index + 1;
+                              onInsertBlock(newBlock, index + 1);
+                              setTimeout(() => {
+                                setManualFocusTargetFn({ index: index + 1, id: newBlock.id });
+                              }, 10);
+                            }}
+                            onMoveUp={() => {
                               if (index > 0) {
-                                focusIndex = index - 1;
-                              }
-                              
-                              const focusRef = textareaRefs.current[focusIndex];
-                              if (focusRef) {
-                                focusRef.focus();
-                                onSelectedBlockIdsChange([script.blocks[focusIndex]?.id || '']);
-                              }
-                            }, 50);
-                          }}
-                          onDuplicate={() => {
-                            const newBlock: ScriptBlock = {
-                              ...block,
-                              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                              text: block.text // 元のテキストを保持
-                            };
-                            insertIdx.current = index + 1; // 複製ブロックの挿入インデックスを設定
-                            onInsertBlock(newBlock, index + 1);
-                            setTimeout(() => {
-                              setManualFocusTargetFn({ index: index + 1, id: newBlock.id });
-                            }, 10); // タイミングを調整
-                          }}
-                          onMoveUp={() => {
-                            if (index > 0) {
-                              onMoveBlock(index, index - 1);
-                              
-                              // 移動後のスクロール位置補正
-                              setTimeout(() => {
-                                const targetRef = textareaRefs.current[index - 1];
-                                if (targetRef) {
-                                  ensureBlockVisible(index - 1, 50);
-                                }
-                              }, 50);
-                            }
-                          }}
-                          onMoveDown={() => {
-                            if (index < script.blocks.length - 1) {
-                              onMoveBlock(index, index + 1);
-                              
-                              // 移動後のスクロール位置補正
-                              setTimeout(() => {
-                                const targetRef = textareaRefs.current[index + 1];
-                                if (targetRef) {
-                                  ensureBlockVisible(index + 1, 50);
-                                }
-                              }, 50);
-                            }
-                          }}
-                          textareaRef={el => textareaRefs.current[index] = el}
-                          isSelected={selectedBlockIds.includes(block.id)}
-                          onClick={(event) => handleBlockClick(block.id, index, event)}
-                          enterOnlyBlockAdd={enterOnlyBlockAdd}
-                          currentProjectId={currentProjectId}
-                          script={script}
-                          onInsertBlock={onInsertBlock}
-                          insertIdx={insertIdx}
-                        />
-                        {/* ブロック間のブロック追加とセパレートライン追加 */}
-                        <div className="relative my-1">
-                          <div className="flex justify-center items-center gap-2 min-h-[24px] opacity-0 group-hover/block-item:opacity-100 transition-opacity">
-                            <button
-                              type="button"
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground shadow hover:bg-primary/90 transition"
-                              onClick={() => {
-                                // Ctrl+Enterと同様の機能：最後のセリフブロックからキャラクター情報を引き継ぐ
-                                const lastSerif = [...script.blocks].reverse().find(b => b.characterId);
-                                const charId = lastSerif?.characterId || characters[0]?.id || '';
-                                const emotion = lastSerif?.emotion || 'normal';
-                                
-                                const newBlock: ScriptBlock = {
-                                  id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                                  characterId: charId,
-                                  emotion,
-                                  text: ''
-                                };
-                                onInsertBlock(newBlock, index + 1);
-                              }}
-                              title="ブロックを追加"
-                            >
-                              <PlusIcon className="w-4 h-4" />
-                            </button>
-                            {isStoryPanelOpen && script.blocks.length >= 2 && index < script.blocks.length - 1 && (
-                              <>
-                                {(() => {
-                                  const nextBlockId = script.blocks[index + 1]?.id;
-                                  const existingSegment = storySegments.find(seg => seg.anchorBlockId === nextBlockId);
-                                  if (existingSegment) {
-                                    return (
-                                      <div className="flex items-center gap-2 w-full">
-                                        <div className="flex-1 border-t border-dashed border-primary"></div>
-                                        <button
-                                          type="button"
-                                          className="p-1 rounded-full bg-background text-foreground shadow hover:bg-accent transition"
-                                          onMouseDown={handleStartMoveLine(existingSegment.id)}
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            setLineDeleteTarget(prev => (prev === existingSegment.id ? null : existingSegment.id));
-                                          }}
-                                          title="ドラッグで移動 / クリックで削除を表示"
-                                        >
-                                          <ScissorsIcon className="w-4 h-4" />
-                                        </button>
-                                        {lineDeleteTarget === existingSegment.id && (
-                                          <button
-                                            type="button"
-                                            className="p-1 rounded-full bg-destructive text-destructive-foreground shadow"
-                                            onClick={(e) => {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              setSegmentToDelete(existingSegment);
-                                            }}
-                                            title="ラインを削除"
-                                          >
-                                            <TrashIcon className="w-4 h-4" />
-                                          </button>
-                                        )}
-                                        <div className="flex-1 border-t border-dashed border-primary"></div>
-                                      </div>
-                                    );
+                                onMoveBlock(index, index - 1);
+                                setTimeout(() => {
+                                  const targetRef = textareaRefs.current[index - 1];
+                                  if (targetRef) {
+                                    ensureBlockVisible(index - 1, 50);
                                   }
-                                  return (
+                                }, 50);
+                              }
+                            }}
+                            onMoveDown={() => {
+                              if (index < script.blocks.length - 1) {
+                                onMoveBlock(index, index + 1);
+                                setTimeout(() => {
+                                  const targetRef = textareaRefs.current[index + 1];
+                                  if (targetRef) {
+                                    ensureBlockVisible(index + 1, 50);
+                                  }
+                                }, 50);
+                              }
+                            }}
+                            textareaRef={el => textareaRefs.current[index] = el}
+                            isSelected={selectedBlockIds.includes(block.id)}
+                            onClick={(event) => handleBlockClick(block.id, index, event)}
+                            enterOnlyBlockAdd={enterOnlyBlockAdd}
+                            currentProjectId={currentProjectId}
+                            script={script}
+                            onInsertBlock={onInsertBlock}
+                            insertIdx={insertIdx}
+                          />
+                          {/* セパレートライン（常時表示） */}
+                          {isStoryPanelOpen && existingSegment && index < script.blocks.length - 1 && (
+                            <div className="flex items-center w-full my-1 story-panel-line-control group/sep-line">
+                              {/* ブックマーク型ラベル */}
+                              <div className="flex items-center shrink-0 group/bookmark">
+                                {editingLabelSegmentId === existingSegment.id ? (
+                                  <div className="flex items-center">
+                                    <input
+                                      type="text"
+                                      className="text-xs px-2 py-1 border border-primary rounded-l bg-background text-foreground w-28 outline-none focus:ring-1 focus:ring-primary"
+                                      value={editingLabelValue}
+                                      onChange={(e) => setEditingLabelValue(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') { e.preventDefault(); commitLabelEdit(); }
+                                        if (e.key === 'Escape') { e.preventDefault(); cancelLabelEdit(); }
+                                      }}
+                                      onBlur={commitLabelEdit}
+                                      autoFocus
+                                      placeholder={`${segmentNumber}`}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center">
+                                    <div
+                                      className="relative flex items-center text-xs font-medium text-muted-foreground bg-muted pl-2 pr-3 py-1 select-none border border-muted-foreground/20"
+                                      style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 0 100%)' }}
+                                    >
+                                      {existingSegment.label ? (
+                                        <>
+                                          <span className="mr-1 opacity-60">{segmentNumber}.</span>
+                                          <span className="max-w-[120px] truncate">{existingSegment.label}</span>
+                                        </>
+                                      ) : (
+                                        <span>{segmentNumber}</span>
+                                      )}
+                                    </div>
                                     <button
                                       type="button"
-                                      className="inline-flex items-center justify-center w-8 h-8 rounded-full border text-foreground hover:bg-accent transition"
-                                      onMouseDown={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        if (nextBlockId) {
-                                          setLineDragState({ mode: 'new', targetBlockId: nextBlockId });
-                                          setLineIndicatorY(e.clientY);
-                                        }
-                                      }}
-                                      title="セパレートラインを追加（ドラッグ）"
+                                      className="p-0.5 text-muted-foreground/50 hover:text-foreground transition opacity-0 group-hover/bookmark:opacity-100 ml-1"
+                                      onClick={() => startEditingLabel(existingSegment.id, existingSegment.label || '')}
+                                      title="見出しを編集"
                                     >
-                                      <ScissorsIcon className="w-4 h-4" />
+                                      <PencilSquareIcon className="w-3.5 h-3.5" />
                                     </button>
-                                  );
-                                })()}
-                              </>
-                            )}
-                          </div>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex-1 border-t border-dashed border-primary/40 mx-1"></div>
+                              <button
+                                type="button"
+                                className="p-1 rounded-full bg-background text-foreground shadow hover:bg-accent transition shrink-0"
+                                onMouseDown={handleStartMoveLine(existingSegment.id)}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setLineDeleteTarget(prev => (prev === existingSegment.id ? null : existingSegment.id));
+                                }}
+                                title="ドラッグで移動 / クリックで削除を表示"
+                              >
+                                <ScissorsIcon className="w-4 h-4" />
+                              </button>
+                              {lineDeleteTarget === existingSegment.id && (
+                                <button
+                                  type="button"
+                                  className="p-1 rounded-full bg-destructive text-destructive-foreground shadow shrink-0 ml-1"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setSegmentToDelete(existingSegment);
+                                  }}
+                                  title="ラインを削除"
+                                >
+                                  <TrashIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {/* セパレートライン追加ボタン（ホバー時のみ、ラインが無い箇所） */}
+                          {isStoryPanelOpen && !existingSegment && script.blocks.length >= 2 && index < script.blocks.length - 1 && (
+                            <div className="flex justify-center my-0 group/sep-add">
+                              <button
+                                type="button"
+                                className="opacity-0 group-hover/sep-add:opacity-100 transition-opacity inline-flex items-center justify-center w-6 h-6 rounded-full border border-dashed border-muted-foreground/30 text-muted-foreground/50 hover:bg-accent hover:text-foreground hover:border-solid"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (nextBlockId) {
+                                    setLineDragState({ mode: 'new', targetBlockId: nextBlockId });
+                                    setLineIndicatorY(e.clientY);
+                                  }
+                                }}
+                                title="セパレートラインを追加"
+                              >
+                                <ScissorsIcon className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </SortableContext>
                 </DndContext>
               </div>

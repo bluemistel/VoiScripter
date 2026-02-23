@@ -16,7 +16,7 @@ export const buildEmptyScript = (params: BuildEmptyScriptParams = {}): Script =>
     {
       id: `segment_${generateId()}`,
       anchorBlockId: null,
-      images: []
+      image: undefined
     }
   ],
   storyPanelWidth: 320

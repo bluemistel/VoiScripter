@@ -31,6 +31,7 @@ export interface StorySeparatorSegment {
   id: string;
   anchorBlockId: string | null; // null は冒頭を指す
   image?: StorySeparatorImage;
+  label?: string;
 }
 
 export interface Script {
