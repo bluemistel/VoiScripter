@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { QRCodeSVG } from 'qrcode.react';
 import jsQR from 'jsqr';
+import { CHARACTER_SYNC_KEY_SUFFIX } from '@/utils/characterSync';
 
 /** QRコードスキャナーコンポーネント（カメラ利用） */
 function QRScanner({ onScan, onClose }: { onScan: (data: string) => void; onClose: () => void }) {
@@ -146,23 +147,41 @@ interface DataSyncDialogProps {
     isOpen: boolean;
     onClose: () => void;
     currentData: string;
-    onDataRestored: (data: string) => void;
+    currentCharacterData?: string;
+    syncId?: string;
+    lastSyncedAt?: string;
+    onDataRestored: (data: string, syncId: string, remoteUpdatedAt?: string, password?: string) => void;
+    onSyncSuccess?: (syncId: string, password?: string, remoteUpdatedAt?: string) => void;
+    onCharactersRestored?: (data: string) => void;
 }
 
 export default function DataSyncDialog({
     isOpen,
     onClose,
     currentData,
+    currentCharacterData,
+    syncId,
+    lastSyncedAt,
     onDataRestored,
+    onSyncSuccess,
+    onCharactersRestored,
 }: DataSyncDialogProps) {
     const { syncToCloud, restoreFromCloud, generateUUID, isLoading, error } = useDataSync();
 
-    const [uuid, setUuid] = useState(() => generateUUID());
+    const [uuid, setUuid] = useState('');
     const [password, setPassword] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
     const [showQRCode, setShowQRCode] = useState(false);
     const [showScanner, setShowScanner] = useState(false);
     const [copyFeedback, setCopyFeedback] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setUuid(syncId || '');
+        setSuccessMessage('');
+        setShowQRCode(false);
+        setShowScanner(false);
+    }, [isOpen, syncId]);
 
     if (!isOpen) return null;
 
@@ -174,7 +193,20 @@ export default function DataSyncDialog({
 
         try {
             setSuccessMessage('');
-            await syncToCloud(currentData, { uuid, password });
+            if (syncId && syncId !== uuid && lastSyncedAt) {
+                const shouldSwitch = window.confirm(
+                    `このプロジェクトは現在「${syncId}」で同期管理されています。\n` +
+                    `最後の同期日時: ${new Date(lastSyncedAt).toLocaleString()}\n\n` +
+                    `入力中の共有ID「${uuid}」に切り替えて同期しますか？\n` +
+                    `キャンセルすると現在の共有IDに戻します。`
+                );
+                if (!shouldSwitch) {
+                    setUuid(syncId);
+                    return;
+                }
+            }
+            const result = await syncToCloud(currentData, { uuid, password });
+            onSyncSuccess?.(uuid, password, result.remoteUpdatedAt);
             setSuccessMessage('クラウドへの同期が完了しました');
         } catch {
             // Error is handled by the hook
@@ -189,9 +221,55 @@ export default function DataSyncDialog({
 
         try {
             setSuccessMessage('');
-            const restoredData = await restoreFromCloud({ uuid, password });
-            onDataRestored(restoredData);
+            if (syncId && syncId !== uuid && lastSyncedAt) {
+                const shouldSwitch = window.confirm(
+                    `このプロジェクトは現在「${syncId}」で同期管理されています。\n` +
+                    `最後の同期日時: ${new Date(lastSyncedAt).toLocaleString()}\n\n` +
+                    `入力中の共有ID「${uuid}」を復元対象にしますか？\n` +
+                    `キャンセルすると現在の共有IDに戻します。`
+                );
+                if (!shouldSwitch) {
+                    setUuid(syncId);
+                    return;
+                }
+            }
+            const restored = await restoreFromCloud({ uuid, password });
+            onDataRestored(restored.data, uuid, restored.remoteUpdatedAt, password);
             setSuccessMessage('データの復元が完了しました');
+        } catch {
+            // Error is handled by the hook
+        }
+    };
+
+    const handleCharacterSync = async () => {
+        if (!password) {
+            alert('パスワードを入力してください');
+            return;
+        }
+        if (!currentCharacterData) {
+            alert('同期対象のキャラクターデータがありません');
+            return;
+        }
+
+        try {
+            setSuccessMessage('');
+            await syncToCloud(currentCharacterData, { uuid: `${uuid}${CHARACTER_SYNC_KEY_SUFFIX}`, password });
+            setSuccessMessage('キャラクター設定の同期が完了しました（アイコン除外）');
+        } catch {
+            // Error is handled by the hook
+        }
+    };
+
+    const handleCharacterRestore = async () => {
+        if (!uuid || !password) {
+            alert('UUIDとパスワードを入力してください');
+            return;
+        }
+        try {
+            setSuccessMessage('');
+            const restored = await restoreFromCloud({ uuid: `${uuid}${CHARACTER_SYNC_KEY_SUFFIX}`, password });
+            onCharactersRestored?.(restored.data);
+            setSuccessMessage('キャラクター設定の復元が完了しました（アイコン除外）');
         } catch {
             // Error is handled by the hook
         }
@@ -375,6 +453,24 @@ export default function DataSyncDialog({
                         >
                             <CloudArrowDownIcon className="w-5 h-5" />
                             復元 (ダウンロード)
+                        </button>
+                    </div>
+
+                    {/* Character Sync Buttons */}
+                    <div className="flex gap-3">
+                        <button
+                            onClick={handleCharacterSync}
+                            disabled={isLoading || !password || !currentCharacterData}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-border rounded-md bg-muted text-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-semibold"
+                        >
+                            キャラ同期(軽量)
+                        </button>
+                        <button
+                            onClick={handleCharacterRestore}
+                            disabled={isLoading || !uuid || !password}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-border rounded-md bg-muted text-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-semibold"
+                        >
+                            キャラ復元(軽量)
                         </button>
                     </div>
 

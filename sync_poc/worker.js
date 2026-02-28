@@ -34,13 +34,19 @@ export default {
                 const uuid = pathParts[2];
 
                 if (request.method === 'GET') {
-                    const data = await env.SYNC_KV.get(uuid);
+                    const result = await env.SYNC_KV.getWithMetadata(uuid, { type: 'text' });
+                    const data = result?.value;
                     if (!data) {
                         return new Response('Not Found', { status: 404, headers: corsHeaders });
                     }
+                    const updatedAt = result?.metadata?.updatedAt;
                     return new Response(data, {
                         status: 200,
-                        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                        headers: {
+                            ...corsHeaders,
+                            'Content-Type': 'text/plain',
+                            ...(updatedAt ? { 'X-Sync-Updated-At': updatedAt } : {})
+                        }
                     });
                 }
 
@@ -52,8 +58,15 @@ export default {
                             { status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
                         );
                     }
-                    await env.SYNC_KV.put(uuid, body, { expirationTtl: 7776000 });
-                    return new Response('OK', { status: 200, headers: corsHeaders });
+                    const updatedAt = new Date().toISOString();
+                    await env.SYNC_KV.put(uuid, body, {
+                        expirationTtl: 7776000,
+                        metadata: { updatedAt }
+                    });
+                    return new Response('OK', {
+                        status: 200,
+                        headers: { ...corsHeaders, 'X-Sync-Updated-At': updatedAt }
+                    });
                 }
             }
 

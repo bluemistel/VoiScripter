@@ -164,10 +164,12 @@ export const useKeyboardShortcuts = (
           const currentBlock = scriptBlocks[activeIdx];
           if (currentBlock) {
             event.preventDefault();
+            const lastSpeakerBlock = [...scriptBlocks].reverse().find(block => block.characterId);
+            const fallbackCharacterId = characters.find(c => c.id)?.id || '';
             const newBlock: ScriptBlock = {
               id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-              characterId: currentBlock.characterId,
-              emotion: currentBlock.emotion,
+              characterId: lastSpeakerBlock?.characterId || fallbackCharacterId,
+              emotion: lastSpeakerBlock?.emotion || 'normal',
               text: ''
             };
             onInsertBlock(newBlock, activeIdx + 1);

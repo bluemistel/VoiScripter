@@ -23,9 +23,10 @@ import { loadStoryPanelAsset, removeStoryPanelAsset, saveStoryPanelAsset } from 
 import {
   ArrowUpIcon,
   ArrowDownIcon,
+  ArrowUturnLeftIcon,
+  ArrowUturnRightIcon,
   TrashIcon,
   DocumentDuplicateIcon,
-  Bars3Icon,
   PlusIcon,
   ScissorsIcon,
   PhotoIcon,
@@ -56,6 +57,10 @@ interface ScriptEditorProps {
   enterOnlyBlockAdd?: boolean;
   currentProjectId?: string;
   onUpdateScript?: (updates: Partial<Script>) => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 interface SortableBlockProps {
@@ -126,22 +131,107 @@ function SortableBlock({
 
   // textareaのfocus状態を管理
   const [isTextareaFocused, setIsTextareaFocused] = useState(false);
+  const [isMobileCharacterPickerOpen, setIsMobileCharacterPickerOpen] = useState(false);
+  const [isMobileView, setIsMobileView] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const updateMobileView = () => {
+      const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+      const smallScreen = window.innerWidth < 640;
+      setIsMobileView(coarsePointer || smallScreen);
+    };
+    updateMobileView();
+    window.addEventListener('resize', updateMobileView);
+    return () => window.removeEventListener('resize', updateMobileView);
+  }, []);
+
+  const selectableCharacters = characters.filter(c =>
+    c.id === '' ||
+    !currentProjectId ||
+    !c.disabledProjects ||
+    !c.disabledProjects.includes(currentProjectId)
+  );
+
+  const renderCharacterVisual = () => {
+    if (!character) return null;
+    if (character.emotions[block.emotion]?.iconUrl) {
+      return (
+        <img
+          src={character.emotions[block.emotion]?.iconUrl}
+          alt={character.name}
+          className={`w-16 h-16 sm:w-16 sm:h-16 md:w-16 md:h-16 rounded-full object-cover mt-0 mr-2 transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
+        />
+      );
+    }
+    return (
+      <div
+        className={`w-16 h-16 sm:w-16 sm:h-16 md:w-16 md:h-16 rounded-full flex items-center justify-center text-center mt-0 mr-2 overflow-hidden transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
+        style={{ backgroundColor: character.backgroundColor || '#e5e7eb' }}
+      >
+        <span
+          className={`text-xs sm:text-xs md:text-xs font-bold text-foreground px-1 max-w-[60px] sm:max-w-[70px] md:max-w-[80px] whitespace-no-wrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}
+          style={{
+            textShadow: `
+              -1px -1px 0 var(--color-background),  
+               1px -1px 0 var(--color-background),
+              -1px  1px 0 var(--color-background),
+               1px  1px 0 var(--color-background)
+            `
+          }}
+        >
+          {character.name.length > 8 ? character.name.slice(0, 8) + '…' : character.name}
+        </span>
+      </div>
+    );
+  };
+
+  const handleSelectCharacter = (characterId: string) => {
+    onUpdate({ characterId });
+    setIsMobileCharacterPickerOpen(false);
+  };
+
+  const buildBlockFromLastSpeaker = () => {
+    const lastSpeakerBlock = [...script.blocks].reverse().find((b) => b.characterId);
+    const fallbackCharacterId = characters.find((c) => c.id)?.id || '';
+    return {
+      characterId: lastSpeakerBlock?.characterId || fallbackCharacterId,
+      emotion: (lastSpeakerBlock?.emotion || 'normal') as Emotion
+    };
+  };
+
+  const renderCharacterGridVisual = (c: Character) => {
+    const iconUrl = c.emotions.normal?.iconUrl;
+    if (iconUrl) {
+      return (
+        <img
+          src={iconUrl}
+          alt={c.name}
+        className="w-10 h-10 rounded-full object-cover border"
+        />
+      );
+    }
+    return (
+      <div
+        className="w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-bold border"
+        style={{ backgroundColor: c.backgroundColor || '#e5e7eb' }}
+      >
+        {c.name?.slice(0, 2) || '?'}
+      </div>
+    );
+  };
 
   return (
+    <>
     <div
       ref={setNodeRef}
+      {...attributes}
+      {...listeners}
       style={style}
-      className={`flex items-start space-x-1 sm:space-x-2 p-1 sm:p-2 border rounded-lg shadow mb-2 transition-colors ${isSelected && !isTextareaFocused ? 'ring-2 ring-primary ring-opacity-50' : ''}`}
+      className={`flex items-start space-x-1 sm:space-x-2 p-1 sm:p-2 rounded-xl bg-card/80 shadow-[0_2px_10px_-7px_rgba(17,24,39,0.4),0_0_0_1px_rgba(17,24,39,0.08)] dark:shadow-[0_2px_12px_-8px_rgba(0,0,0,0.7),0_0_0_1px_rgba(255,255,255,0.24)] ring-[0.5px] ring-foreground/10 dark:ring-white/15 mb-2 transition-colors cursor-grab touch-manipulation ${isSelected && !isTextareaFocused ? 'ring-2 ring-primary/50' : ''}`}
       onClick={onClick}
       data-block-index={script.blocks.findIndex(b => b.id === block.id)}
     >
-      <div
-        {...attributes}
-        {...listeners}
-        className="cursor-grab flex items-center justify-center w-0 h-0 sm:w-5 sm:h-4.5 md:w-8 md:h-6 rounded hover:bg-accent transition"
-      >
-        <Bars3Icon className="w-0 h-0 sm:w-5 sm:h-4.5 md:w-8 md:h-6 text-primary" />
-      </div>
       <div className="flex-1">
         {isTogaki ? (
           <div className="flex items-center space-x-2">
@@ -150,7 +240,7 @@ function SortableBlock({
               value={block.text}
               onChange={e => onUpdate({ text: e.target.value })}
               placeholder="ト書きを入力"
-              className="w-full p-2 pt-2 border rounded min-h-[40px] bg-muted text-foreground focus:ring-1 focus:ring-ring text-sm italic focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400 resize-none overflow-hidden"
+              className="w-full p-2 pt-2 rounded-2xl min-h-[40px] bg-muted/70 text-foreground ring-1 ring-foreground/15 dark:ring-white/20 shadow-[0_2px_8px_-3px_rgba(17,24,39,0.6),0_0_0_1px_rgba(17,24,39,0.14)] dark:shadow-[0_2px_10px_-4px_rgba(0,0,0,0.85),0_0_0_1px_rgba(255,255,255,0.28)] focus:ring-2 focus:ring-primary/40 text-sm italic focus:outline-none resize-none overflow-hidden"
               rows={1}
               style={{ height: 'auto', borderRadius: '20px 20px 20px 0' }}
               onFocus={() => setIsTextareaFocused(true)}
@@ -163,10 +253,11 @@ function SortableBlock({
                 
                 if (shouldAddBlock) {
                   e.preventDefault();
+                  const { characterId, emotion } = buildBlockFromLastSpeaker();
                   const newBlock: ScriptBlock = {
                     id: Date.now().toString(),
-                    characterId: character?.id || '',
-                    emotion: 'normal',
+                    characterId,
+                    emotion,
                     text: ''
                   };
                   const currentIndex = script.blocks.findIndex(b => b.id === block.id);
@@ -183,92 +274,77 @@ function SortableBlock({
 
             {/* キャラ選択リストとアイコン群を横並びに */}
             <div className="flex flex-col justify-between items-center h-16 mr-0.5 sm:mr-1 md:mr-2 mt-0">
-              <select
-                value={block.characterId}
-                onChange={e => onUpdate({ characterId: e.target.value })}
-                className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-24 sm:w-28 md:w-32 lg:w-36 mb-1"
-                style={{ height: '2.5rem' }}
-              >
-                <option value="">ト書きを入力</option>
-                {characters
-                  .filter(c => 
-                    // ト書きは常に表示
-                    c.id === '' || 
-                    // 現在のプロジェクトで有効なキャラクターのみ表示
-                    !currentProjectId || 
-                    !c.disabledProjects || 
-                    !c.disabledProjects.includes(currentProjectId)
-                  )
-                  .map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+              {!isMobileView && (
+                <select
+                  value={block.characterId}
+                  onChange={e => onUpdate({ characterId: e.target.value })}
+                  className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-24 sm:w-28 md:w-32 lg:w-36 mb-1"
+                  style={{ height: '2.5rem' }}
+                >
+                  <option value="">ト書きを入力</option>
+                  {selectableCharacters.map(c => (
+                    <option key={c.id || 'togaki'} value={c.id}>{c.name || 'ト書き'}</option>
                   ))}
-              </select>
-              <div className="flex flex-row justify-items-center space-x-0.5 sm:space-x-1.5 md:space-x-3.5 mt-0">
+                </select>
+              )}
+              <div className="flex flex-row justify-items-center space-x-0.5 sm:space-x-0.5 md:space-x-0.5 mt-0">
+                {!isMobileView && (
+                  <>
                 <button
-                  onClick={onMoveUp}
-                  className="p-1 rounded hover:bg-accent"
-                  title="Ctrl+↑:ブロックを上に移動"
-                  style={{ height: '1.75rem', width: '1.5rem' }}
-                >
-                  <ArrowUpIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
-                </button>
-                <button
-                  onClick={onMoveDown}
-                  className="p-1 rounded hover:bg-accent"
-                  title="Ctrl+↓:ブロックを下に移動"
-                  style={{ height: '1.75rem', width: '1.5rem' }}
-                >
-                  <ArrowDownIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
-                </button>
-                <button
-                  onClick={onDuplicate}
-                  className="p-1 rounded hover:bg-accent"
-                  title="Ctrl+B:ブロックを複製"
-                  style={{ height: '1.75rem', width: '1.5rem' }}
-                >
-                  <DocumentDuplicateIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
-                </button>
-                <button
-                  onClick={onDelete}
-                  className="p-1 text-destructive hover:bg-destructive/10 rounded"
-                  title="Alt+B:ブロックを削除"
-                  style={{ height: '1.75rem', width: '1.5rem' }}
-                >
-                  <TrashIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
-                </button>
+                      onClick={onMoveUp}
+                      className="p-1 rounded hover:bg-accent"
+                      title="Ctrl+↑:ブロックを上に移動"
+                      style={{ height: '2.25rem', width: '2.25rem' }}
+                    >
+                      <ArrowUpIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
+                    </button>
+                    <button
+                      onClick={onMoveDown}
+                      className="p-1 rounded hover:bg-accent"
+                      title="Ctrl+↓:ブロックを下に移動"
+                      style={{ height: '2.25rem', width: '2.25rem' }}
+                    >
+                      <ArrowDownIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
+                    </button>
+                  </>
+                )}
+                {!isMobileView && (
+                  <>
+                    <button
+                      onClick={onDuplicate}
+                      className="p-1 rounded hover:bg-accent"
+                      title="Ctrl+B:ブロックを複製"
+                      style={{ height: '2.25rem', width: '2.25rem' }}
+                    >
+                      <DocumentDuplicateIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
+                    </button>
+                    <button
+                      onClick={onDelete}
+                      className="p-1 text-destructive hover:bg-destructive/10 rounded"
+                      title="Alt+B:ブロックを削除"
+                      style={{ height: '2.25rem', width: '2.25rem' }}
+                    >
+                      <TrashIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
           
         ) : (
           <div className="flex items-start space-x-2">
-            {character && (
-              character.emotions[block.emotion]?.iconUrl ? (
-                <img
-                  src={character.emotions[block.emotion]?.iconUrl}
-                  alt={character.name}
-                  className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full object-cover mt-0 mr-2 transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
-                />
-              ) : (
-                <div 
-                  className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center text-center mt-0 mr-2 overflow-hidden transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
-                  style={{ backgroundColor: character.backgroundColor || '#e5e7eb' }}
-                >
-                  <span 
-                    className={`text-xs sm:text-xs md:text-xs font-bold text-foreground px-1 max-w-[60px] sm:max-w-[70px] md:max-w-[80px] whitespace-no-wrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}
-                    style={{
-                      textShadow: `
-                        -1px -1px 0 var(--color-background),  
-                         1px -1px 0 var(--color-background),
-                        -1px  1px 0 var(--color-background),
-                         1px  1px 0 var(--color-background)
-                      `
-                    }}
-                  >
-                    {character.name.length > 8 ? character.name.slice(0, 8) + '…' : character.name}
-                  </span>
-                </div>
-              )
+            {isMobileView ? (
+              <button
+                type="button"
+                className="rounded-full p-0.5"
+                onClick={() => setIsMobileCharacterPickerOpen(true)}
+                title="話者を選択"
+              >
+                {renderCharacterVisual()}
+              </button>
+            ) : (
+              renderCharacterVisual()
             )}
             <div className="relative flex-1 pl-2">
               <textarea
@@ -283,10 +359,11 @@ function SortableBlock({
                   
                   if (shouldAddBlock) {
                     e.preventDefault();
+                    const { characterId, emotion } = buildBlockFromLastSpeaker();
                     const newBlock: ScriptBlock = {
                       id: Date.now().toString(),
-                      characterId: character?.id || '',
-                      emotion: 'normal',
+                      characterId,
+                      emotion,
                       text: ''
                     };
                     const currentIndex = script.blocks.findIndex(b => b.id === block.id);
@@ -295,7 +372,7 @@ function SortableBlock({
                   }
                 }}
                 placeholder="セリフを入力"
-                className="rounded-2xl border p-2 bg-card shadow-md min-h-[60px] text-sm w-full text-foreground focus:ring-1 focus:ring-ring focus:outline-none focus:ring-ring-gray-400 focus:border-gray-400 resize-none overflow-hidden"
+                className="rounded-2xl p-2 bg-card/95 shadow-[0_2px_8px_-3px_rgba(17,24,39,0.6),0_0_0_1px_rgba(17,24,39,0.14)] dark:shadow-[0_2px_10px_-4px_rgba(0,0,0,0.85),0_0_0_1px_rgba(255,255,255,0.28)] ring-1 ring-foreground/15 dark:ring-white/20 min-h-[60px] text-sm w-full text-foreground focus:ring-2 focus:ring-primary/40 focus:outline-none resize-none overflow-hidden"
                 rows={1}
                 style={{ height: 'auto', borderRadius: '20px 20px 20px 0' }}
                 onFocus={() => setIsTextareaFocused(true)}
@@ -307,69 +384,113 @@ function SortableBlock({
                 }}
               />
               {/* フキダシの三角形 */}
-              <div className="absolute left-[-4px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-400"></div>
+              <div className="absolute left-[-4px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-border"></div>
             </div>
             {/* キャラ選択リストとアイコン群を横並びに */}
             <div className="flex flex-col justify-between items-center h-16 mr-0.5 sm:mr-1 md:mr-2 mt-0">
-              <select
-                value={block.characterId}
-                onChange={e => onUpdate({ characterId: e.target.value })}
-                className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-24 sm:w-28 md:w-32 lg:w-36 mb-1"
-                style={{ height: '2.5rem' }}
-              >
-                <option value="">ト書きを入力</option>
-                {characters
-                  .filter(c => 
-                    // ト書きは常に表示
-                    c.id === '' || 
-                    // 現在のプロジェクトで有効なキャラクターのみ表示
-                    !currentProjectId || 
-                    !c.disabledProjects || 
-                    !c.disabledProjects.includes(currentProjectId)
-                  )
-                  .map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+              {!isMobileView && (
+                <select
+                  value={block.characterId}
+                  onChange={e => onUpdate({ characterId: e.target.value })}
+                  className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-24 sm:w-28 md:w-32 lg:w-36 mb-1"
+                  style={{ height: '2.5rem' }}
+                >
+                  <option value="">ト書きを入力</option>
+                  {selectableCharacters.map(c => (
+                    <option key={c.id || 'togaki'} value={c.id}>{c.name || 'ト書き'}</option>
                   ))}
-              </select>
-              <div className="flex flex-row justify-items-center space-x-0.5 sm:space-x-1.5 md:space-x-3.5 mt-0">
-                <button
-                  onClick={onMoveUp}
-                  className="p-1 rounded hover:bg-accent"
-                  title="Ctrl+↑:ブロックを上に移動"
-                  style={{ height: '1.75rem', width: '1.5rem' }}
-                >
-                  <ArrowUpIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
-                </button>
-                <button
-                  onClick={onMoveDown}
-                  className="p-1 rounded hover:bg-accent"
-                  title="Ctrl+↓:ブロックを下に移動"
-                  style={{ height: '1.75rem', width: '1.5rem' }}
-                >
-                  <ArrowDownIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
-                </button>
-                <button
-                  onClick={onDuplicate}
-                  className="p-1 rounded hover:bg-accent"
-                  title="Ctrl+B:ブロックを複製"
-                  style={{ height: '1.75rem', width: '1.5rem' }}
-                >
-                  <DocumentDuplicateIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
-                </button>
-                <button
-                  onClick={onDelete}
-                  className="p-1 text-destructive hover:bg-destructive/10 rounded"
-                  title="Alt+B:ブロックを削除"
-                  style={{ height: '1.75rem', width: '1.5rem' }}
-                >
-                  <TrashIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
-                </button>
+                </select>
+              )}
+              <div className="flex flex-row justify-items-center space-x-0.5 sm:space-x-0.5 md:space-x-0.5 mt-0">
+                {!isMobileView && (
+                  <>
+                    <button
+                      onClick={onMoveUp}
+                      className="p-1 rounded hover:bg-accent"
+                      title="Ctrl+↑:ブロックを上に移動"
+                      style={{ height: '2.25rem', width: '2.25rem' }}
+                    >
+                      <ArrowUpIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
+                    </button>
+                    <button
+                      onClick={onMoveDown}
+                      className="p-1 rounded hover:bg-accent"
+                      title="Ctrl+↓:ブロックを下に移動"
+                      style={{ height: '2.25rem', width: '2.25rem' }}
+                    >
+                      <ArrowDownIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
+                    </button>
+                  </>
+                )}
+                {!isMobileView && (
+                  <>
+                    <button
+                      onClick={onDuplicate}
+                      className="p-1 rounded hover:bg-accent"
+                      title="Ctrl+B:ブロックを複製"
+                      style={{ height: '2.25rem', width: '2.25rem' }}
+                    >
+                      <DocumentDuplicateIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
+                    </button>
+                    <button
+                      onClick={onDelete}
+                      className="p-1 text-destructive hover:bg-destructive/10 rounded"
+                      title="Alt+B:ブロックを削除"
+                      style={{ height: '2.25rem', width: '2.25rem' }}
+                    >
+                      <TrashIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
         )}
       </div>
     </div>
+    {isMobileView && isMobileCharacterPickerOpen && (
+      <div className="fixed inset-0 z-50 bg-black/40 flex items-end" onClick={() => setIsMobileCharacterPickerOpen(false)}>
+        <div
+          className="w-full max-h-[70vh] bg-background border-t rounded-t-xl p-4 overflow-y-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-foreground">話者を選択</h3>
+            <button
+              type="button"
+              className="text-xs px-2 py-1 rounded border"
+              onClick={() => setIsMobileCharacterPickerOpen(false)}
+            >
+              閉じる
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              className={`p-2 border rounded text-left text-xs flex items-center gap-2 ${!block.characterId ? 'border-primary bg-primary/5' : ''}`}
+              onClick={() => handleSelectCharacter('')}
+            >
+              <div className="w-10 h-10 rounded-full border flex items-center justify-center text-xs font-bold bg-muted">ト</div>
+              ト書き
+            </button>
+            {selectableCharacters
+              .filter(c => c.id !== '')
+              .map(c => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`p-2 border rounded text-left text-xs flex items-center gap-2 ${block.characterId === c.id ? 'border-primary bg-primary/5' : ''}`}
+                  onClick={() => handleSelectCharacter(c.id)}
+                >
+                  {renderCharacterGridVisual(c)}
+                  {c.name}
+                </button>
+              ))}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
@@ -398,7 +519,11 @@ export default function ScriptEditor({
   setIsUndoRedoOperation: externalSetIsUndoRedoOperation,
   enterOnlyBlockAdd = false,
   currentProjectId,
-  onUpdateScript
+  onUpdateScript,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false
 }: ScriptEditorProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -440,10 +565,30 @@ export default function ScriptEditor({
   const [editingLabelSegmentId, setEditingLabelSegmentId] = useState<string | null>(null);
   const [editingLabelValue, setEditingLabelValue] = useState('');
   const [localSegmentImages, setLocalSegmentImages] = useState<Record<string, StorySeparatorImage>>({});
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const pendingFocusIndexAfterDelete = useRef<number | null>(null);
   
   useEffect(() => {
     setPanelWidth(script.storyPanelWidth || 320);
   }, [script.storyPanelWidth]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const updateLayout = () => {
+      const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+      const smallScreen = window.innerWidth < 1024;
+      setIsMobileLayout(coarsePointer || smallScreen);
+    };
+    updateLayout();
+    window.addEventListener('resize', updateLayout);
+    return () => window.removeEventListener('resize', updateLayout);
+  }, []);
+
+  useEffect(() => {
+    if (isMobileLayout && isStoryPanelOpen) {
+      setIsStoryPanelOpen(false);
+    }
+  }, [isMobileLayout, isStoryPanelOpen]);
 
   useEffect(() => {
     if (!lineDeleteTarget) return;
@@ -1020,43 +1165,32 @@ export default function ScriptEditor({
         }
       });
     }, 0);
-    
-    // 最下段にブロックが追加された場合のみスクロール位置を調整
-    const prevIdx = script.blocks.findIndex(block => block.id === selectedBlockIds[0]);  // 増える前のインデックス
-    const maxBlockCount = Math.max(script.blocks.length, prevBlockCount.current);
-    if (script.blocks.length > 0 && maxBlockCount <= script.blocks.length && prevBlockCount.current <= prevIdx + 1) {
-      const lastIdx = script.blocks.length - 1;
-      const lastRef = textareaRefs.current[lastIdx];
-      if (lastRef) {
-        // 手動フォーカスターゲットが設定されている場合は自動スクロールを無効にする
-        if (manualFocusTarget) {
-          return;
-        }
-        
-        // 現在のスクロール位置を取得
-        const currentScrollY = window.scrollY;
-        const windowHeight = window.innerHeight;
-        const documentHeight = document.documentElement.scrollHeight;
-        
-        // 最下段にスクロールが可能かチェック
-        const canScrollToBottom = currentScrollY + windowHeight < documentHeight;
-        
-        // 新しく追加されたブロックが画面外にあるかチェック
-        const rect = lastRef.getBoundingClientRect();
-        const isBlockVisible = rect.bottom > windowHeight && rect.bottom > 0;
-        
-        // 最下段にブロックが追加された場合のみ、最下段までスクロール
-        if (canScrollToBottom && isBlockVisible) {
-          setTimeout(() => {
-            window.scrollTo({
-              top: documentHeight - windowHeight,
-              behavior: 'smooth'
-            });
-          }, 50); // 少し遅延を入れてDOMの更新を待つ
-        }
-      }
+  }, [script.blocks.length]);
+
+  useEffect(() => {
+    const pendingIndex = pendingFocusIndexAfterDelete.current;
+    if (pendingIndex === null) return;
+    pendingFocusIndexAfterDelete.current = null;
+
+    if (script.blocks.length === 0) {
+      onSelectedBlockIdsChange([]);
+      return;
     }
-  }, [script.blocks.length, selectedBlockIds]);
+
+    const nextIndex = Math.min(pendingIndex, script.blocks.length - 1);
+    const nextBlockId = script.blocks[nextIndex]?.id;
+
+    setTimeout(() => {
+      const focusRef = textareaRefs.current[nextIndex];
+      if (focusRef) {
+        focusRef.focus();
+        ensureBlockVisible(nextIndex, 20);
+      }
+      if (nextBlockId) {
+        onSelectedBlockIdsChange([nextBlockId]);
+      }
+    }, 30);
+  }, [script.blocks, onSelectedBlockIdsChange]);
 
   // コンテンツの高さに応じてボタンの位置を調整
   useEffect(() => {
@@ -1508,6 +1642,79 @@ export default function ScriptEditor({
     }, 10);
   };
 
+  const getPrimarySelectedIndex = useCallback(() => {
+    if (selectedBlockIds.length === 0) return -1;
+    return script.blocks.findIndex((block) => block.id === selectedBlockIds[0]);
+  }, [selectedBlockIds, script.blocks]);
+
+  const handleMoveSelectedBlock = useCallback((direction: 'up' | 'down') => {
+    const currentIndex = getPrimarySelectedIndex();
+    if (currentIndex < 0) return;
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= script.blocks.length) return;
+    onMoveBlock(currentIndex, targetIndex);
+    setTimeout(() => {
+      const movedId = script.blocks[currentIndex]?.id;
+      if (movedId) {
+        onSelectedBlockIdsChange([movedId]);
+      }
+      ensureBlockVisible(targetIndex, 30);
+    }, 30);
+  }, [getPrimarySelectedIndex, onMoveBlock, onSelectedBlockIdsChange, script.blocks]);
+
+  const handleAddBlockBelowSelected = useCallback(() => {
+    const currentIndex = getPrimarySelectedIndex();
+    const insertIndex = currentIndex >= 0 ? currentIndex + 1 : script.blocks.length;
+    const baseCharacterId =
+      currentIndex >= 0
+        ? (script.blocks[currentIndex]?.characterId || '')
+        : (script.blocks[script.blocks.length - 1]?.characterId || characters[0]?.id || '');
+    const baseEmotion =
+      currentIndex >= 0
+        ? (script.blocks[currentIndex]?.emotion || 'normal')
+        : (script.blocks[script.blocks.length - 1]?.emotion || 'normal');
+
+    const newBlock: ScriptBlock = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      characterId: baseCharacterId,
+      emotion: baseEmotion as Emotion,
+      text: ''
+    };
+    insertIdx.current = insertIndex;
+    onInsertBlock(newBlock, insertIndex);
+    setTimeout(() => {
+      setManualFocusTargetFn({ index: insertIndex, id: newBlock.id });
+    }, 10);
+  }, [characters, getPrimarySelectedIndex, onInsertBlock, script.blocks, setManualFocusTargetFn]);
+
+  const handleAddTogakiBelowSelected = useCallback(() => {
+    const currentIndex = getPrimarySelectedIndex();
+    const insertIndex = currentIndex >= 0 ? currentIndex + 1 : script.blocks.length;
+    handleAddTogaki(insertIndex);
+  }, [getPrimarySelectedIndex, script.blocks.length]);
+
+  const primarySelectedBlockId = useMemo(() => selectedBlockIds[0] || null, [selectedBlockIds]);
+  const primarySelectedIndex = useMemo(() => {
+    if (!primarySelectedBlockId) return -1;
+    return script.blocks.findIndex((block) => block.id === primarySelectedBlockId);
+  }, [primarySelectedBlockId, script.blocks]);
+  const canMoveSelectedUp = primarySelectedIndex > 0;
+  const canMoveSelectedDown = primarySelectedIndex >= 0 && primarySelectedIndex < script.blocks.length - 1;
+  const canOperateSelectedBlock = primarySelectedIndex >= 0 && !!primarySelectedBlockId;
+
+  const handleDuplicateSelectedBlock = useCallback(() => {
+    if (!primarySelectedBlockId) return;
+    onDuplicateBlock(primarySelectedBlockId);
+  }, [onDuplicateBlock, primarySelectedBlockId]);
+
+  const handleDeleteSelectedBlock = useCallback(() => {
+    if (!primarySelectedBlockId) return;
+    if (primarySelectedIndex >= 0) {
+      pendingFocusIndexAfterDelete.current = primarySelectedIndex;
+    }
+    onDeleteBlock(primarySelectedBlockId);
+  }, [onDeleteBlock, primarySelectedBlockId, primarySelectedIndex]);
+
   return (
     <>
       <input
@@ -1517,22 +1724,24 @@ export default function ScriptEditor({
         className="hidden"
         onChange={handleImageFileChange}
       />
-      <button
-        type="button"
-        className="fixed z-50 bg-primary text-primary-foreground p-2 rounded-full shadow-lg hover:bg-primary/90 transition-all"
-        style={{
-          top: '118px',
-          left: isStoryPanelOpen ? `${panelWidth + 8}px` : '8px',
-          transition: 'left 0.2s ease',
-        }}
-        onClick={() => setIsStoryPanelOpen(prev => !prev)}
-        title={isStoryPanelOpen ? 'ストーリーセパレートを閉じる' : 'ストーリーセパレートを開く'}
-      >
-        {isStoryPanelOpen
-          ? <ChevronDoubleLeftIcon className="w-5 h-5" />
-          : <ChevronDoubleRightIcon className="w-5 h-5" />
-        }
-      </button>
+      {!isMobileLayout && (
+        <button
+          type="button"
+          className="fixed z-50 bg-primary text-primary-foreground p-2 rounded-full shadow-lg hover:bg-primary/90 transition-all"
+          style={{
+            top: '118px',
+            left: isStoryPanelOpen ? `${panelWidth + 8}px` : '8px',
+            transition: 'left 0.2s ease',
+          }}
+          onClick={() => setIsStoryPanelOpen(prev => !prev)}
+          title={isStoryPanelOpen ? 'ストーリーセパレートを閉じる' : 'ストーリーセパレートを開く'}
+        >
+          {isStoryPanelOpen
+            ? <ChevronDoubleLeftIcon className="w-5 h-5" />
+            : <ChevronDoubleRightIcon className="w-5 h-5" />
+          }
+        </button>
+      )}
       <div className="script-editor-container min-h-auto">
         {script.blocks.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 text-center text-muted-foreground">
@@ -1690,18 +1899,8 @@ export default function ScriptEditor({
                             character={characters.find(c => c.id === block.characterId)}
                             onUpdate={updates => onUpdateBlock(block.id, updates)}
                             onDelete={() => {
+                              pendingFocusIndexAfterDelete.current = index;
                               onDeleteBlock(block.id);
-                              setTimeout(() => {
-                                let focusIndex = index;
-                                if (index > 0) {
-                                  focusIndex = index - 1;
-                                }
-                                const focusRef = textareaRefs.current[focusIndex];
-                                if (focusRef) {
-                                  focusRef.focus();
-                                  onSelectedBlockIdsChange([script.blocks[focusIndex]?.id || '']);
-                                }
-                              }, 50);
                             }}
                             onDuplicate={() => {
                               const newBlock: ScriptBlock = {
@@ -1798,7 +1997,7 @@ export default function ScriptEditor({
                                       onClick={() => startEditingLabel(existingSegment.id, existingSegment.label || '')}
                                       title="見出しを編集"
                                     >
-                                      <PencilSquareIcon className="w-3.5 h-3.5" />
+                                      <PencilSquareIcon className="w-4 h-4" />
                                     </button>
                                   </div>
                                 )}
@@ -1806,7 +2005,7 @@ export default function ScriptEditor({
                               <div className="flex-1 border-t border-dashed border-primary/40 mx-1"></div>
                               <button
                                 type="button"
-                                className="p-1 rounded-full bg-background text-foreground shadow hover:bg-accent transition shrink-0"
+                                className="p-1.5 rounded-full bg-background text-foreground shadow hover:bg-accent transition shrink-0"
                                 onMouseDown={handleStartMoveLine(existingSegment.id)}
                                 onClick={(e) => {
                                   e.preventDefault();
@@ -1815,12 +2014,12 @@ export default function ScriptEditor({
                                 }}
                                 title="ドラッグで移動 / クリックで削除を表示"
                               >
-                                <ScissorsIcon className="w-4 h-4" />
+                                <ScissorsIcon className="w-5 h-5 sm:w-4 sm:h-4" />
                               </button>
                               {lineDeleteTarget === existingSegment.id && (
                                 <button
                                   type="button"
-                                  className="p-1 rounded-full bg-destructive text-destructive-foreground shadow shrink-0 ml-1"
+                                  className="p-1.5 rounded-full bg-destructive text-destructive-foreground shadow shrink-0 ml-1"
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
@@ -1828,7 +2027,7 @@ export default function ScriptEditor({
                                   }}
                                   title="ラインを削除"
                                 >
-                                  <TrashIcon className="w-4 h-4" />
+                                  <TrashIcon className="w-5 h-5 sm:w-4 sm:h-4" />
                                 </button>
                               )}
                             </div>
@@ -1838,7 +2037,7 @@ export default function ScriptEditor({
                             <div className="flex justify-center my-0 group/sep-add">
                               <button
                                 type="button"
-                                className="opacity-0 group-hover/sep-add:opacity-100 transition-opacity inline-flex items-center justify-center w-6 h-6 rounded-full border border-dashed border-muted-foreground/30 text-muted-foreground/50 hover:bg-accent hover:text-foreground hover:border-solid"
+                                className="opacity-0 group-hover/sep-add:opacity-100 transition-opacity inline-flex items-center justify-center w-8 h-8 sm:w-6 sm:h-6 rounded-full border border-dashed border-muted-foreground/30 text-muted-foreground/50 hover:bg-accent hover:text-foreground hover:border-solid"
                                 onMouseDown={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
@@ -1849,7 +2048,7 @@ export default function ScriptEditor({
                                 }}
                                 title="セパレートラインを追加"
                               >
-                                <ScissorsIcon className="w-3 h-3" />
+                                <ScissorsIcon className="w-4 h-4 sm:w-3 sm:h-3" />
                               </button>
                             </div>
                           )}
@@ -1923,7 +2122,109 @@ export default function ScriptEditor({
           </div>
         </div>
       )}
+      {isMobileLayout && (
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-4 z-40 w-[calc(100%-1rem)] max-w-lg">
+          <div className="bg-background/95 backdrop-blur border rounded-2xl shadow-lg px-2 py-2 flex items-center gap-1 overflow-x-auto whitespace-nowrap">
+          <button
+              type="button"
+              onClick={handleScrollTop}
+              className="h-10 w-10 rounded-lg border flex items-center justify-center shrink-0"
+              title="最上段へ"
+            >
+              <ArrowUpIcon className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleScrollBottom}
+              className="h-10 w-10 rounded-lg border flex items-center justify-center shrink-0"
+              title="最下段へ"
+            >
+              <ArrowDownIcon className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={onUndo}
+              disabled={!canUndo}
+              className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
+              title="元に戻す"
+            >
+              <ArrowUturnLeftIcon className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={onRedo}
+              disabled={!canRedo}
+              className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
+              title="やり直し"
+            >
+              <ArrowUturnRightIcon className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteSelectedBlock}
+              disabled={!canOperateSelectedBlock}
+              className="h-10 w-10 rounded-lg border flex items-center justify-center text-destructive disabled:opacity-40 shrink-0"
+              title="選択ブロックを削除"
+            >
+              <TrashIcon className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleDuplicateSelectedBlock}
+              disabled={!canOperateSelectedBlock}
+              className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
+              title="選択ブロックを複製"
+            >
+              <DocumentDuplicateIcon className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleMoveSelectedBlock('up')}
+              disabled={!canMoveSelectedUp}
+              className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
+              title="選択ブロックを上に移動"
+            >
+              <ArrowUpIcon className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleMoveSelectedBlock('down')}
+              disabled={!canMoveSelectedDown}
+              className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
+              title="選択ブロックを下に移動"
+            >
+              <ArrowDownIcon className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleAddTogakiBelowSelected}
+              className="h-10 px-2 rounded-lg bg-muted text-muted-foreground border text-xs font-medium whitespace-nowrap shrink-0"
+              title="現在のブロック直下にト書きを追加"
+            >
+              ト書
+            </button>
+            <button
+              type="button"
+              onClick={onAddBlock}
+              className="h-10 px-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium whitespace-nowrap shrink-0"
+              title="最下段に新規ブロック追加"
+            >
+              末追
+            </button>
+            <button
+              type="button"
+              onClick={handleAddBlockBelowSelected}
+              className="h-10 px-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium whitespace-nowrap shrink-0"
+              title="直下に新規ブロック追加"
+            >
+              直追
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 右下固定ボタン群 */}
+      {!isMobileLayout && (
       <div className="fixed right-6 z-40 flex flex-row items-end space-x-2 bottom-6">
         <button
           onClick={handleScrollTop}
@@ -1948,6 +2249,7 @@ export default function ScriptEditor({
             <span className="hidden sm:inline">ブロックを追加</span>
           </button>
       </div>
+      )}
     </>
   );
 }

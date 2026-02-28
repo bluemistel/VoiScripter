@@ -12,6 +12,7 @@ import DataSyncDialog from '@/components/DataSyncDialog';
 import { Project, Character, ScriptBlock } from '@/types';
 import { buildEmptyScript } from '@/utils/scriptDefaults';
 import { buildSyncProjectPayload } from '@/utils/storyPanelAssets';
+import { buildCharacterSyncPayload, restoreCharactersFromSyncPayload, LightweightCharacterSyncPayload } from '@/utils/characterSync';
 
 // カスタムフックのインポート
 import { useDataManagement } from '@/hooks/useDataManagement';
@@ -26,6 +27,7 @@ import { useScriptManagement } from '@/hooks/useScriptManagement';
 import { useSettings } from '@/hooks/useSettings';
 import { useUIState } from '@/hooks/useUIState';
 import { useDataProcessing } from '@/hooks/useDataProcessing';
+import { useDataSync } from '@/hooks/useDataSync';
 
 export default function Home() {
   // テキストエリアref配列（ScriptEditorとuseKeyboardShortcutsで共有）
@@ -35,6 +37,8 @@ export default function Home() {
 
   // ローディング状態
   const [isLoading, setIsLoading] = useState(true);
+  const [syncSession, setSyncSession] = useState<{ uuid: string; password: string } | null>(null);
+  const { syncToCloud } = useDataSync();
 
   // カスタムフックの初期化
   const dataManagement = useDataManagement();
@@ -132,6 +136,30 @@ export default function Home() {
 
   // Undo/Redoフック
   const undoRedo = useUndoRedo(projectId, dataManagement);
+
+  const applyHistoryResult = useCallback((result: { project: Project; selectedSceneId: string | null } | null) => {
+    if (!result) return;
+    if (setIsUndoRedoOperationRef.current) {
+      setIsUndoRedoOperationRef.current(true);
+    }
+    setProject(result.project);
+    setSelectedSceneId(result.selectedSceneId);
+    setTimeout(() => {
+      undoRedo.isUndoRedoOperation.current = false;
+    }, 100);
+  }, [setProject, setSelectedSceneId, undoRedo.isUndoRedoOperation]);
+
+  const handleUndoAction = useCallback(() => {
+    if (!undoRedo.canUndo) return;
+    const result = undoRedo.undo();
+    applyHistoryResult(result);
+  }, [undoRedo, applyHistoryResult]);
+
+  const handleRedoAction = useCallback(() => {
+    if (!undoRedo.canRedo) return;
+    const result = undoRedo.redo();
+    applyHistoryResult(result);
+  }, [undoRedo, applyHistoryResult]);
 
   // テーマフック
   const theme = useTheme();
@@ -261,55 +289,15 @@ export default function Home() {
   // アンドゥ・リドゥの結果を処理
   useEffect(() => {
     if (keyboardShortcuts.undoResult) {
-      // console.log('page.tsx - Undo result:', keyboardShortcuts.undoResult);
-      // console.log('page.tsx - Current project before undo:', project.id);
-      // console.log('page.tsx - Current selectedSceneId before undo:', selectedSceneId);
-      
-      // アンドゥ操作であることをScriptEditorに通知
-      if (setIsUndoRedoOperationRef.current) {
-        setIsUndoRedoOperationRef.current(true);
-        // console.log('page.tsx - Set isUndoRedoOperation to true');
-      }
-      
-      setProject(keyboardShortcuts.undoResult.project);
-      setSelectedSceneId(keyboardShortcuts.undoResult.selectedSceneId);
-      
-      // console.log('page.tsx - Set project to:', keyboardShortcuts.undoResult.project.id);
-      // console.log('page.tsx - Set selectedSceneId to:', keyboardShortcuts.undoResult.selectedSceneId);
-      
-      // アンドゥ操作後にisUndoRedoOperationをリセット
-      setTimeout(() => {
-        undoRedo.isUndoRedoOperation.current = false;
-        // console.log('page.tsx - Reset isUndoRedoOperation after undo');
-      }, 100);
+      applyHistoryResult(keyboardShortcuts.undoResult);
     }
-  }, [keyboardShortcuts.undoResult]);
+  }, [keyboardShortcuts.undoResult, applyHistoryResult]);
 
   useEffect(() => {
     if (keyboardShortcuts.redoResult) {
-      // console.log('page.tsx - Redo result:', keyboardShortcuts.redoResult);
-      // console.log('page.tsx - Current project before redo:', project.id);
-      // console.log('page.tsx - Current selectedSceneId before redo:', selectedSceneId);
-      
-      // リドゥ操作であることをScriptEditorに通知
-      if (setIsUndoRedoOperationRef.current) {
-        setIsUndoRedoOperationRef.current(true);
-        // console.log('page.tsx - Set isUndoRedoOperation to true');
-      }
-      
-      setProject(keyboardShortcuts.redoResult.project);
-      setSelectedSceneId(keyboardShortcuts.redoResult.selectedSceneId);
-      
-      // console.log('page.tsx - Set project to:', keyboardShortcuts.redoResult.project.id);
-      // console.log('page.tsx - Set selectedSceneId to:', keyboardShortcuts.redoResult.selectedSceneId);
-      
-      // リドゥ操作後にisUndoRedoOperationをリセット
-      setTimeout(() => {
-        undoRedo.isUndoRedoOperation.current = false;
-        // console.log('page.tsx - Reset isUndoRedoOperation after redo');
-      }, 100);
+      applyHistoryResult(keyboardShortcuts.redoResult);
     }
-  }, [keyboardShortcuts.redoResult]);
+  }, [keyboardShortcuts.redoResult, applyHistoryResult]);
 
   // プロジェクト変更時の最終シーン保存
   useEffect(() => {
@@ -374,6 +362,83 @@ export default function Home() {
     const newProject = scriptManagement.handleUpdateScriptTitle(project, selectedSceneId, newTitle);
     setProject(newProject);
   };
+
+  const normalizeRestoredProject = (restored: Project, syncId: string, remoteUpdatedAt?: string): Project => {
+    const safeName = restored.name?.trim() || '同期台本';
+    const safeId = restored.id?.trim() || safeName;
+    const scenes = (restored.scenes || []).length > 0
+      ? restored.scenes.map((scene, sceneIndex) => {
+          const scripts = (scene.scripts || []).length > 0
+            ? scene.scripts.map((script, scriptIndex) => ({
+                ...script,
+                title: script.title?.trim() || scene.name || `シーン${sceneIndex + 1}`
+              }))
+            : [buildEmptyScript({ title: scene.name || `シーン${sceneIndex + 1}` })];
+          return {
+            ...scene,
+            name: scene.name?.trim() || `シーン${sceneIndex + 1}`,
+            scripts
+          };
+        })
+      : [{
+          id: Date.now().toString(),
+          name: '新しいシーン',
+          scripts: [buildEmptyScript({ title: '新しいシーン' })]
+        }];
+
+    return {
+      ...restored,
+      id: safeId,
+      name: safeName,
+      scenes,
+      syncMeta: {
+        ...(restored.syncMeta || {}),
+        syncId,
+        autoSyncEnabled: true,
+        lastSyncedAt: remoteUpdatedAt || new Date().toISOString(),
+      }
+    };
+  };
+
+  const makeUniqueProjectId = (baseId: string): string => {
+    const trimmed = baseId.trim() || 'synced-project';
+    if (!projectList.includes(trimmed)) return trimmed;
+    let index = 2;
+    while (projectList.includes(`${trimmed}-${index}`)) {
+      index += 1;
+    }
+    return `${trimmed}-${index}`;
+  };
+
+  useEffect(() => {
+    if (!project.syncMeta?.syncId) return;
+    if (!project.syncMeta.autoSyncEnabled) return;
+    if (!syncSession) return;
+    if (syncSession.uuid !== project.syncMeta.syncId) return;
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const payload = JSON.stringify(buildSyncProjectPayload(project));
+        const result = await syncToCloud(payload, {
+          uuid: syncSession.uuid,
+          password: syncSession.password,
+        });
+        setProject({
+          ...project,
+          syncMeta: {
+            ...(project.syncMeta || {}),
+            syncId: syncSession.uuid,
+            autoSyncEnabled: true,
+            lastSyncedAt: result.remoteUpdatedAt || new Date().toISOString(),
+          }
+        });
+      } catch {
+        // 自動同期のエラーは通知せず、次回周期で再試行
+      }
+    }, 5 * 60 * 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [project, syncSession, syncToCloud]);
 
   // プロジェクト新規作成
   const handleNewProject = () => {
@@ -679,6 +744,10 @@ export default function Home() {
             enterOnlyBlockAdd={settings.enterOnlyBlockAdd}
             currentProjectId={projectId}
             onUpdateScript={handleScriptUpdate}
+            onUndo={handleUndoAction}
+            onRedo={handleRedoAction}
+            canUndo={undoRedo.canUndo}
+            canRedo={undoRedo.canRedo}
           />
         ) : (
           // 現在開いているプロジェクトが存在しない、かつ、シーンがひとつもない場合
@@ -841,18 +910,69 @@ export default function Home() {
       <DataSyncDialog
         isOpen={uiState.isDataSyncOpen}
         onClose={() => uiState.setIsDataSyncOpen(false)}
+        syncId={project.syncMeta?.syncId}
+        lastSyncedAt={project.syncMeta?.lastSyncedAt}
         currentData={JSON.stringify(buildSyncProjectPayload(project))}
-        onDataRestored={(restoredDataJson) => {
+        currentCharacterData={JSON.stringify(buildCharacterSyncPayload(characters, groups))}
+        onDataRestored={(restoredDataJson, restoredSyncId, remoteUpdatedAt, password) => {
           try {
-            const restoredProject = JSON.parse(restoredDataJson) as Project;
-            // 復元されたプロジェクトを適用
+            if (
+              project.syncMeta?.syncId === restoredSyncId &&
+              project.syncMeta?.lastSyncedAt &&
+              remoteUpdatedAt &&
+              new Date(project.syncMeta.lastSyncedAt).getTime() > new Date(remoteUpdatedAt).getTime()
+            ) {
+              const useCloud = window.confirm(
+                `ローカルの最終同期日時 (${new Date(project.syncMeta.lastSyncedAt).toLocaleString()}) が\n` +
+                `クラウド側 (${new Date(remoteUpdatedAt).toLocaleString()}) より新しい可能性があります。\n\n` +
+                `クラウドデータで上書きしますか？`
+              );
+              if (!useCloud) return;
+            }
+            const parsed = JSON.parse(restoredDataJson) as Project;
+            const normalized = normalizeRestoredProject(parsed, restoredSyncId, remoteUpdatedAt);
+            const targetProjectId =
+              project.syncMeta?.syncId === restoredSyncId
+                ? project.id
+                : makeUniqueProjectId(normalized.id);
+            const restoredProject = { ...normalized, id: targetProjectId };
+
             setProject(restoredProject);
-            if (restoredProject.scenes.length > 0) {
-              setSelectedSceneId(restoredProject.scenes[0].id);
+            setProjectId(targetProjectId);
+            setProjectList(prev => (prev.includes(targetProjectId) ? prev : [...prev, targetProjectId]));
+            setSelectedSceneId(restoredProject.scenes[0]?.id ?? null);
+            if (password) {
+              setSyncSession({ uuid: restoredSyncId, password });
             }
             showNotification('データを復元しました', 'success');
           } catch (e) {
             showNotification('データの復元に失敗しました', 'error');
+          }
+        }}
+        onSyncSuccess={(activeSyncId, password, remoteUpdatedAt) => {
+          if (!activeSyncId) return;
+          if (password) {
+            setSyncSession({ uuid: activeSyncId, password });
+          }
+          setProject({
+            ...project,
+            syncMeta: {
+              ...(project.syncMeta || {}),
+              syncId: activeSyncId,
+              autoSyncEnabled: true,
+              lastSyncedAt: remoteUpdatedAt || new Date().toISOString(),
+            }
+          });
+        }}
+        onCharactersRestored={(charactersDataJson) => {
+          try {
+            const payload = JSON.parse(charactersDataJson) as LightweightCharacterSyncPayload;
+            const restored = restoreCharactersFromSyncPayload(payload, characters, groups);
+            setCharacters(restored.characters);
+            setGroups(restored.groups);
+            showNotification('キャラクター設定を復元しました（アイコンはローカルデータを使用）', 'success');
+          } catch {
+            showNotification('キャラクター設定の復元に失敗しました', 'error');
           }
         }}
       />

@@ -105,7 +105,7 @@ export default function Settings({
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-background border rounded-lg shadow-lg w-full max-w-xs sm:max-w-md md:max-w-2xl lg:max-w-3xl mx-2 sm:mx-4 h-[90vh] sm:h-[750px] overflow-hidden flex flex-col">
-        <div className="flex justify-between items-center p-4 border-b flex-shrink-0">
+        <div className="flex justify-between items-center p-4 border-b shrink-0">
           <h2 className="text-lg font-semibold text-foreground">設定</h2>
           <button
             onClick={onClose}
@@ -117,61 +117,61 @@ export default function Settings({
         
         <div className="flex flex-1 overflow-hidden">
           {/* サイドバー */}
-          <div className="w-32 sm:w-40 md:w-48 border-r bg-muted/30 flex-shrink-0">
+          <div className="w-14 sm:w-40 md:w-48 border-r bg-muted/30 shrink-0">
             <button
               onClick={() => setActiveTab('settings')}
-              className={`w-full p-3 text-left flex items-center space-x-2 transition-colors ${
+              className={`w-full p-3 sm:text-left text-center flex items-center justify-center sm:justify-start space-x-0 sm:space-x-2 transition-colors ${
                 activeTab === 'settings' 
                   ? 'bg-primary text-primary-foreground' 
                   : 'hover:bg-accent'
               }`}
             >
               <Cog6ToothIcon className="w-5 h-5" />
-              <span>設定</span>
+              <span className="hidden sm:inline">設定</span>
             </button>
             <button
               onClick={() => setActiveTab('help')}
-              className={`w-full p-3 text-left flex items-center space-x-2 transition-colors ${
+              className={`w-full p-3 sm:text-left text-center flex items-center justify-center sm:justify-start space-x-0 sm:space-x-2 transition-colors ${
                 activeTab === 'help' 
                   ? 'bg-primary text-primary-foreground' 
                   : 'hover:bg-accent'
               }`}
             >
               <QuestionMarkCircleIcon className="w-5 h-5" />
-              <span>ヘルプ</span>
+              <span className="hidden sm:inline">ヘルプ</span>
             </button>
             <button
               onClick={() => setActiveTab('changelog')}
-              className={`w-full p-3 text-left flex items-center space-x-2 transition-colors ${
+              className={`w-full p-3 sm:text-left text-center flex items-center justify-center sm:justify-start space-x-0 sm:space-x-2 transition-colors ${
                 activeTab === 'changelog' 
                   ? 'bg-primary text-primary-foreground' 
                   : 'hover:bg-accent'
               }`}
             >
               <DocumentTextIcon className="w-5 h-5" />
-              <span>更新履歴</span>
+              <span className="hidden sm:inline">更新履歴</span>
             </button>
             <button
               onClick={() => setActiveTab('bugreport')}
-              className={`w-full p-3 text-left flex items-center space-x-2 transition-colors ${
+              className={`w-full p-3 sm:text-left text-center flex items-center justify-center sm:justify-start space-x-0 sm:space-x-2 transition-colors ${
                 activeTab === 'bugreport' 
                   ? 'bg-primary text-primary-foreground' 
                   : 'hover:bg-accent'
               }`}
             >
               <QuestionMarkCircleIcon className="w-5 h-5" />
-              <span>バグ報告</span>
+              <span className="hidden sm:inline">バグ報告</span>
             </button>
             <button
               onClick={() => setActiveTab('license')}
-              className={`w-full p-3 text-left flex items-center space-x-2 transition-colors ${
+              className={`w-full p-3 sm:text-left text-center flex items-center justify-center sm:justify-start space-x-0 sm:space-x-2 transition-colors ${
                 activeTab === 'license' 
                   ? 'bg-primary text-primary-foreground' 
                   : 'hover:bg-accent'
               }`}
             >
               <InformationCircleIcon className="w-5 h-5" />
-              <span>ライセンス</span>
+              <span className="hidden sm:inline">ライセンス</span>
             </button>
           </div>
           
@@ -585,7 +585,7 @@ export default function Settings({
 
       {/* 初期化確認ダイアログ */}
       {showResetDialog && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-60">
           <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4">
             <div className="p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">アプリを初期化しますか？</h3>

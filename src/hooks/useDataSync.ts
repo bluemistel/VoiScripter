@@ -22,6 +22,15 @@ interface SyncCredentials {
     password: string;
 }
 
+interface SyncUploadResult {
+    remoteUpdatedAt?: string;
+}
+
+interface SyncRestoreResult {
+    data: string;
+    remoteUpdatedAt?: string;
+}
+
 export function useDataSync() {
     const [state, setState] = useState<SyncState>({
         isLoading: false,
@@ -33,7 +42,7 @@ export function useDataSync() {
      * Upload encrypted data to server
      */
     const syncToCloud = useCallback(
-        async (data: string, credentials: SyncCredentials): Promise<void> => {
+        async (data: string, credentials: SyncCredentials): Promise<SyncUploadResult> => {
             setState({ isLoading: true, error: null, lastSyncTime: null });
 
             try {
@@ -69,12 +78,14 @@ export function useDataSync() {
                     } catch { /* ignore */ }
                     throw new Error(`サーバーエラー: ${detail}`);
                 }
+                const remoteUpdatedAt = response.headers.get('X-Sync-Updated-At') || undefined;
 
                 setState({
                     isLoading: false,
                     error: null,
                     lastSyncTime: new Date(),
                 });
+                return { remoteUpdatedAt };
             } catch (error) {
                 const url = `${SYNC_API_URL}/${credentials.uuid}`;
                 const detail = error instanceof Error ? error.message : '不明なエラー';
@@ -95,7 +106,7 @@ export function useDataSync() {
      * Download and decrypt data from server
      */
     const restoreFromCloud = useCallback(
-        async (credentials: SyncCredentials): Promise<string> => {
+        async (credentials: SyncCredentials): Promise<SyncRestoreResult> => {
             setState({ isLoading: true, error: null, lastSyncTime: null });
 
             try {
@@ -111,6 +122,7 @@ export function useDataSync() {
                 }
 
                 const encrypted = await response.text();
+                const remoteUpdatedAt = response.headers.get('X-Sync-Updated-At') || undefined;
 
                 const decrypted = await decrypt(encrypted, credentials.password);
 
@@ -120,7 +132,10 @@ export function useDataSync() {
                     lastSyncTime: new Date(),
                 });
 
-                return decrypted;
+                return {
+                    data: decrypted,
+                    remoteUpdatedAt
+                };
             } catch (error) {
                 const url = `${SYNC_API_URL}/${credentials.uuid}`;
                 const detail = error instanceof Error ? error.message : '不明なエラー';

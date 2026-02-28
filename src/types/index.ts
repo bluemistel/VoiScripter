@@ -40,6 +40,13 @@ export interface StorySeparatorSegment {
   label?: string;
 }
 
+export interface ProjectSyncMeta {
+  syncId?: string;
+  lastSyncedAt?: string;
+  autoSyncEnabled?: boolean;
+  lastSyncedDeviceId?: string;
+}
+
 export interface Script {
   id: string;
   title: string;
@@ -63,6 +70,7 @@ export interface Project {
   name: string;
   scenes: Scene[];
   schemaVersion?: number;
+  syncMeta?: ProjectSyncMeta;
   // プロジェクト全体の設定やメタ情報を追加可能
 }
 

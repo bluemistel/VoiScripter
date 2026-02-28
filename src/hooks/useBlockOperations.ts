@@ -82,7 +82,7 @@ export const useBlockOperations = (): BlockOperationsHook => {
     const duplicatedBlock: ScriptBlock = {
       ...blockToDuplicate,
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      text: blockToDuplicate.text + ' (コピー)'
+      text: blockToDuplicate.text + ''
     };
     
     const blockIndex = currentScript.blocks.findIndex(b => b.id === blockId);
