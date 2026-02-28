@@ -178,7 +178,7 @@ export default function SearchDialog({
               onFocus={() => setShowHistory(true)}
               onBlur={() => setTimeout(() => setShowHistory(false), 200)}
               placeholder="検索する単語を入力..."
-              className="w-full p-2 border rounded mb-3 text-foreground bg-background pr-8"
+              className="w-full p-2 border rounded mb-3 text-foreground bg-background pr-8 focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
               autoFocus
             />
             {showHistory && searchHistory.length > 0 && (

@@ -6,6 +6,7 @@ import {
     CloudArrowUpIcon,
     CloudArrowDownIcon,
     KeyIcon,
+    InformationCircleIcon,
     ClipboardDocumentIcon,
     QrCodeIcon,
     CameraIcon,
@@ -173,6 +174,7 @@ export default function DataSyncDialog({
     const [successMessage, setSuccessMessage] = useState('');
     const [showQRCode, setShowQRCode] = useState(false);
     const [showScanner, setShowScanner] = useState(false);
+    const [showGuide, setShowGuide] = useState(false);
     const [copyFeedback, setCopyFeedback] = useState(false);
 
     useEffect(() => {
@@ -181,6 +183,7 @@ export default function DataSyncDialog({
         setSuccessMessage('');
         setShowQRCode(false);
         setShowScanner(false);
+        setShowGuide(false);
     }, [isOpen, syncId]);
 
     if (!isOpen) return null;
@@ -304,17 +307,28 @@ export default function DataSyncDialog({
     };
 
     return (
+        <>
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
             <div className="bg-background border rounded-lg shadow-lg w-full max-w-lg p-6 mx-4">
                 {/* ヘッダー */}
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-xl font-bold text-foreground">データ同期 (E2EE)</h2>
-                    <button
-                        onClick={onClose}
-                        className="text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                        <XMarkIcon className="w-6 h-6" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowGuide(true)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs border border-border rounded-md bg-muted text-foreground hover:bg-accent transition-colors"
+                            title="データ同期の使い方"
+                        >
+                            <InformationCircleIcon className="w-4 h-4" />
+                            使い方
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                            <XMarkIcon className="w-6 h-6" />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="space-y-4">
@@ -332,7 +346,7 @@ export default function DataSyncDialog({
                                     setUuid(e.target.value);
                                     setShowQRCode(false);
                                 }}
-                                className="flex-1 px-3 py-2 border border-border rounded-md bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-transparent font-mono text-sm"
+                                className="flex-1 px-3 py-2 border border-border rounded-md bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none font-mono text-sm"
                                 placeholder="共有IDを入力またはQRコードから読み取り"
                                 disabled={isLoading}
                             />
@@ -427,7 +441,7 @@ export default function DataSyncDialog({
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-transparent"
+                            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
                             placeholder="秘密のパスワード"
                             disabled={isLoading}
                         />
@@ -503,5 +517,65 @@ export default function DataSyncDialog({
                 </div>
             </div>
         </div>
+        {showGuide && (
+            <div className="fixed inset-0 z-60 bg-black/50 flex items-center justify-center p-4">
+                <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-background border border-border rounded-xl shadow-xl">
+                    <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border p-4 flex items-center justify-between">
+                        <h3 className="text-base font-semibold text-foreground">データ同期の使い方</h3>
+                        <button
+                            type="button"
+                            onClick={() => setShowGuide(false)}
+                            className="p-1 rounded hover:bg-accent transition-colors"
+                            title="閉じる"
+                        >
+                            <XMarkIcon className="w-5 h-5 text-muted-foreground" />
+                        </button>
+                    </div>
+                    <div className="p-4 space-y-4 text-sm text-foreground">
+                        <p>
+                            別の VoiScripter へ現在の台本を同期して、作業を引き継ぐことができます。
+                            <br />
+                            同期対象は「プロジェクト本体の台本データ」です（ストーリーパネル画像は同期されません）。
+                        </p>
+
+                        <div>
+                            <h4 className="font-semibold mb-1">同期元の操作（アップロード）</h4>
+                            <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                                <li>「新規」ボタンで共有IDを発行します。</li>
+                                <li>任意の合言葉（Password）を入力します。</li>
+                                <li>「同期（アップロード）」で台本データを送信します。</li>
+                            </ol>
+                        </div>
+
+                        <div>
+                            <h4 className="font-semibold mb-1">復元側の操作（ダウンロード）</h4>
+                            <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                                <li>共有IDを入力するか、QR読取で取り込みます。</li>
+                                <li>同期元と同じ合言葉（Password）を入力します。</li>
+                                <li>「復元（ダウンロード）」で台本データを取得します。</li>
+                            </ol>
+                        </div>
+
+                        <div>
+                            <h4 className="font-semibold mb-1">補足</h4>
+                            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                                <li>同期成功後は、同じ共有IDで5分間隔の自動同期が有効になります。</li>
+                                <li>キャラクター設定は「キャラ同期（軽量）/ キャラ復元（軽量）」で同期できます（アイコン画像は同期対象外）。</li>
+                            </ul>
+                        </div>
+
+                        <div>
+                            <h4 className="font-semibold mb-1">注意点</h4>
+                            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                                <li>共有IDと合言葉の両方が一致しないと復元できません。</li>
+                                <li>データ破損を防ぐため、同じ台本を複数環境で同時編集しないでください。</li>
+                                <li>ストーリーパネル画像は軽量化のため同期されません（各端末のローカル管理です）。</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     );
 }

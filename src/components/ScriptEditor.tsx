@@ -27,11 +27,12 @@ import {
   ArrowUturnRightIcon,
   TrashIcon,
   DocumentDuplicateIcon,
-  PlusIcon,
   ScissorsIcon,
   PhotoIcon,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
   PencilSquareIcon
 } from '@heroicons/react/24/outline';
 
@@ -55,6 +56,7 @@ interface ScriptEditorProps {
   setIsCtrlEnterBlock?: (setIsCtrlEnterBlockFn: (isCtrlEnter: boolean) => void) => void;
   setIsUndoRedoOperation?: (setIsUndoRedoOperationFn: (isUndoRedo: boolean) => void) => void;
   enterOnlyBlockAdd?: boolean;
+  reverseToolbarOrder?: boolean;
   currentProjectId?: string;
   onUpdateScript?: (updates: Partial<Script>) => void;
   onUndo?: () => void;
@@ -228,7 +230,7 @@ function SortableBlock({
       {...attributes}
       {...listeners}
       style={style}
-      className={`flex items-start space-x-1 sm:space-x-2 p-1 sm:p-2 rounded-xl bg-card/80 shadow-[0_2px_10px_-7px_rgba(17,24,39,0.4),0_0_0_1px_rgba(17,24,39,0.08)] dark:shadow-[0_2px_12px_-8px_rgba(0,0,0,0.7),0_0_0_1px_rgba(255,255,255,0.24)] ring-[0.5px] ring-foreground/10 dark:ring-white/15 mb-2 transition-colors cursor-grab touch-manipulation ${isSelected && !isTextareaFocused ? 'ring-2 ring-primary/50' : ''}`}
+      className={`flex items-start space-x-1 sm:space-x-2 p-1 sm:p-2 rounded-xl bg-card/80 shadow-(--separator-shadow-block) mb-2 transition-colors cursor-grab touch-manipulation ${isSelected || isTextareaFocused ? 'ring-2 ring-primary/50' : 'ring-[0.5px] ring-foreground/10 dark:ring-white/15'}`}
       onClick={onClick}
       data-block-index={script.blocks.findIndex(b => b.id === block.id)}
     >
@@ -240,9 +242,12 @@ function SortableBlock({
               value={block.text}
               onChange={e => onUpdate({ text: e.target.value })}
               placeholder="ト書きを入力"
-              className="w-full p-2 pt-2 rounded-2xl min-h-[40px] bg-muted/70 text-foreground ring-1 ring-foreground/15 dark:ring-white/20 shadow-[0_2px_8px_-3px_rgba(17,24,39,0.6),0_0_0_1px_rgba(17,24,39,0.14)] dark:shadow-[0_2px_10px_-4px_rgba(0,0,0,0.85),0_0_0_1px_rgba(255,255,255,0.28)] focus:ring-2 focus:ring-primary/40 text-sm italic focus:outline-none resize-none overflow-hidden"
+              className="w-full p-2 pt-2 rounded-2xl min-h-[40px] bg-muted/70 text-foreground shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20 focus:ring-1 focus:ring-primary/40 text-sm italic focus:outline-none resize-none overflow-hidden"
               rows={1}
               style={{ height: 'auto', borderRadius: '20px 20px 20px 0' }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
               onFocus={() => setIsTextareaFocused(true)}
               onBlur={() => setIsTextareaFocused(false)}
               onKeyDown={e => {
@@ -372,9 +377,12 @@ function SortableBlock({
                   }
                 }}
                 placeholder="セリフを入力"
-                className="rounded-2xl p-2 bg-card/95 shadow-[0_2px_8px_-3px_rgba(17,24,39,0.6),0_0_0_1px_rgba(17,24,39,0.14)] dark:shadow-[0_2px_10px_-4px_rgba(0,0,0,0.85),0_0_0_1px_rgba(255,255,255,0.28)] ring-1 ring-foreground/15 dark:ring-white/20 min-h-[60px] text-sm w-full text-foreground focus:ring-2 focus:ring-primary/40 focus:outline-none resize-none overflow-hidden"
+                className="rounded-2xl p-2 bg-card/95 shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20 min-h-[60px] text-sm w-full text-foreground focus:ring-1 focus:ring-primary/40 focus:outline-none resize-none overflow-hidden"
                 rows={1}
                 style={{ height: 'auto', borderRadius: '20px 20px 20px 0' }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 onFocus={() => setIsTextareaFocused(true)}
                 onBlur={() => setIsTextareaFocused(false)}
                 onInput={e => {
@@ -384,7 +392,7 @@ function SortableBlock({
                 }}
               />
               {/* フキダシの三角形 */}
-              <div className="absolute left-[-4px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-border"></div>
+              <div className="absolute left-[-4px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-400 dark:border-r-gray-500"></div>
             </div>
             {/* キャラ選択リストとアイコン群を横並びに */}
             <div className="flex flex-col justify-between items-center h-16 mr-0.5 sm:mr-1 md:mr-2 mt-0">
@@ -518,6 +526,7 @@ export default function ScriptEditor({
   setIsCtrlEnterBlock: externalSetIsCtrlEnterBlock,
   setIsUndoRedoOperation: externalSetIsUndoRedoOperation,
   enterOnlyBlockAdd = false,
+  reverseToolbarOrder = false,
   currentProjectId,
   onUpdateScript,
   onUndo,
@@ -566,6 +575,8 @@ export default function ScriptEditor({
   const [editingLabelValue, setEditingLabelValue] = useState('');
   const [localSegmentImages, setLocalSegmentImages] = useState<Record<string, StorySeparatorImage>>({});
   const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const [isTabletOrLarger, setIsTabletOrLarger] = useState(false);
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
   const pendingFocusIndexAfterDelete = useRef<number | null>(null);
   
   useEffect(() => {
@@ -576,8 +587,13 @@ export default function ScriptEditor({
     if (typeof window === 'undefined') return;
     const updateLayout = () => {
       const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+      const tabletOrLarger = window.innerWidth >= 768;
       const smallScreen = window.innerWidth < 1024;
+      setIsTabletOrLarger(tabletOrLarger);
       setIsMobileLayout(coarsePointer || smallScreen);
+      if (!tabletOrLarger) {
+        setIsToolbarCollapsed(false);
+      }
     };
     updateLayout();
     window.addEventListener('resize', updateLayout);
@@ -1411,9 +1427,7 @@ export default function ScriptEditor({
     requestAnimationFrame(animateScroll);
   };
 
-  // スクロール＆選択機能＋ボタンスライドアニメーション
-  const [slideUp, setSlideUp] = useState(false);
-  const [slideDown, setSlideDown] = useState(false);
+  // スクロール＆選択機能
   const scrollToBlock = (index: number) => {
           if (textareaRefs.current[index]) {
         textareaRefs.current[index]?.focus();
@@ -1452,8 +1466,6 @@ export default function ScriptEditor({
   };
 
   const handleScrollTop = () => {
-    setSlideUp(true);
-    setTimeout(() => setSlideUp(false), 300);
     scrollToY(0, 500);
     setTimeout(() => {
               if (textareaRefs.current[0]) {
@@ -1463,8 +1475,6 @@ export default function ScriptEditor({
     }, 500);
   };
   const handleScrollBottom = () => {
-    setSlideDown(true);
-    setTimeout(() => setSlideDown(false), 300);
     scrollToY(document.body.scrollHeight, 500);
     setTimeout(() => {
       const lastIdx = script.blocks.length - 1;
@@ -2122,134 +2132,118 @@ export default function ScriptEditor({
           </div>
         </div>
       )}
-      {isMobileLayout && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-4 z-40 w-[calc(100%-1rem)] max-w-lg">
-          <div className="bg-background/95 backdrop-blur border rounded-2xl shadow-lg px-2 py-2 flex items-center gap-1 overflow-x-auto whitespace-nowrap">
+      {isTabletOrLarger && (
+        <button
+          type="button"
+          onClick={() => setIsToolbarCollapsed(prev => !prev)}
+          className="fixed right-3 bottom-6 z-50 h-10 w-10 rounded-lg border bg-background/95 backdrop-blur shadow flex items-center justify-center"
+          title={isToolbarCollapsed ? 'ツールバーを表示' : 'ツールバーを非表示'}
+        >
+          {isToolbarCollapsed ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}
+        </button>
+      )}
+      <div className="fixed left-1/2 -translate-x-1/2 bottom-4 z-40 px-2 flex justify-center w-full pointer-events-none">
+        <div className="inline-flex items-center gap-2 max-w-[calc(100vw-1rem)] pointer-events-auto">
+          <div
+            className={`bg-background/95 backdrop-blur border rounded-2xl shadow-lg px-2 py-2 inline-flex items-center gap-1 overflow-x-auto whitespace-nowrap transition-transform duration-300 max-w-[calc(100vw-1rem)] ${reverseToolbarOrder ? 'flex-row-reverse' : ''} ${isTabletOrLarger && isToolbarCollapsed ? 'translate-y-[140%] pointer-events-none' : 'translate-y-0'}`}
+          >
           <button
-              type="button"
-              onClick={handleScrollTop}
-              className="h-10 w-10 rounded-lg border flex items-center justify-center shrink-0"
-              title="最上段へ"
-            >
-              <ArrowUpIcon className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={handleScrollBottom}
-              className="h-10 w-10 rounded-lg border flex items-center justify-center shrink-0"
-              title="最下段へ"
-            >
-              <ArrowDownIcon className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={onUndo}
-              disabled={!canUndo}
-              className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
-              title="元に戻す"
-            >
-              <ArrowUturnLeftIcon className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={onRedo}
-              disabled={!canRedo}
-              className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
-              title="やり直し"
-            >
-              <ArrowUturnRightIcon className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={handleDeleteSelectedBlock}
-              disabled={!canOperateSelectedBlock}
-              className="h-10 w-10 rounded-lg border flex items-center justify-center text-destructive disabled:opacity-40 shrink-0"
-              title="選択ブロックを削除"
-            >
-              <TrashIcon className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={handleDuplicateSelectedBlock}
-              disabled={!canOperateSelectedBlock}
-              className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
-              title="選択ブロックを複製"
-            >
-              <DocumentDuplicateIcon className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleMoveSelectedBlock('up')}
-              disabled={!canMoveSelectedUp}
-              className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
-              title="選択ブロックを上に移動"
-            >
-              <ArrowUpIcon className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleMoveSelectedBlock('down')}
-              disabled={!canMoveSelectedDown}
-              className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
-              title="選択ブロックを下に移動"
-            >
-              <ArrowDownIcon className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={handleAddTogakiBelowSelected}
-              className="h-10 px-2 rounded-lg bg-muted text-muted-foreground border text-xs font-medium whitespace-nowrap shrink-0"
-              title="現在のブロック直下にト書きを追加"
-            >
-              ト書
-            </button>
-            <button
-              type="button"
-              onClick={onAddBlock}
-              className="h-10 px-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium whitespace-nowrap shrink-0"
-              title="最下段に新規ブロック追加"
-            >
-              末追
-            </button>
-            <button
-              type="button"
-              onClick={handleAddBlockBelowSelected}
-              className="h-10 px-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium whitespace-nowrap shrink-0"
-              title="直下に新規ブロック追加"
-            >
-              直追
-            </button>
+            type="button"
+            onClick={handleScrollTop}
+            className="h-10 w-10 rounded-lg border flex items-center justify-center shrink-0"
+            title="最上段へ"
+          >
+            <ArrowUpIcon className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleScrollBottom}
+            className="h-10 w-10 rounded-lg border flex items-center justify-center shrink-0"
+            title="最下段へ"
+          >
+            <ArrowDownIcon className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            onClick={onUndo}
+            disabled={!canUndo}
+            className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
+            title="元に戻す"
+          >
+            <ArrowUturnLeftIcon className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            onClick={onRedo}
+            disabled={!canRedo}
+            className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
+            title="やり直し"
+          >
+            <ArrowUturnRightIcon className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteSelectedBlock}
+            disabled={!canOperateSelectedBlock}
+            className="h-10 w-10 rounded-lg border flex items-center justify-center text-destructive disabled:opacity-40 shrink-0"
+            title="選択ブロックを削除"
+          >
+            <TrashIcon className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleDuplicateSelectedBlock}
+            disabled={!canOperateSelectedBlock}
+            className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
+            title="選択ブロックを複製"
+          >
+            <DocumentDuplicateIcon className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleMoveSelectedBlock('up')}
+            disabled={!canMoveSelectedUp}
+            className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
+            title="選択ブロックを上に移動"
+          >
+            <ArrowUpIcon className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleMoveSelectedBlock('down')}
+            disabled={!canMoveSelectedDown}
+            className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
+            title="選択ブロックを下に移動"
+          >
+            <ArrowDownIcon className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleAddTogakiBelowSelected}
+            className="h-10 px-2 rounded-lg bg-muted text-muted-foreground border text-xs font-medium whitespace-nowrap shrink-0"
+            title="現在のブロック直下にト書きを追加"
+          >
+            ト書
+          </button>
+          <button
+            type="button"
+            onClick={onAddBlock}
+            className="h-10 px-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium whitespace-nowrap shrink-0"
+            title="最下段に新規ブロック追加"
+          >
+            末追
+          </button>
+          <button
+            type="button"
+            onClick={handleAddBlockBelowSelected}
+            className="h-10 px-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium whitespace-nowrap shrink-0"
+            title="直下に新規ブロック追加"
+          >
+            直追
+          </button>
           </div>
         </div>
-      )}
-
-      {/* 右下固定ボタン群 */}
-      {!isMobileLayout && (
-      <div className="fixed right-6 z-40 flex flex-row items-end space-x-2 bottom-6">
-        <button
-          onClick={handleScrollTop}
-          className={`px-3 py-2 bg-muted hover:bg-muted/90 text-muted-foreground rounded-full shadow-lg text-lg transition-transform duration-600 ${slideUp ? '-translate-y-2' : ''}`}
-          title="Ctrl+Alt+↑: 最上段へ"
-        >
-          <ArrowUpIcon className="w-6 h-6" />
-        </button>
-        <button
-          onClick={handleScrollBottom}
-          className={`px-3 py-2 bg-muted hover:bg-muted/90 text-muted-foreground rounded-full shadow-lg text-lg transition-transform duration-600 ${slideDown ? 'translate-y-2' : ''}`}
-          title="Ctrl+,: 最下段へ"
-        >
-          <ArrowDownIcon className="w-6 h-6" />
-        </button>
-          <button
-            onClick={onAddBlock}
-            className={`px-3 py-2 sm:px-4 sm:py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full shadow-lg transition-all text-lg`}
-            title="Ctrl+B:新規ブロックを追加"
-          >
-            <PlusIcon className="w-6 h-6 inline-block sm:mr-0.5 sm:mb-0.5" />
-            <span className="hidden sm:inline">ブロックを追加</span>
-          </button>
       </div>
-      )}
     </>
   );
 }

@@ -9,12 +9,16 @@ export interface SettingsHook {
   enterOnlyBlockAdd: boolean;
   setEnterOnlyBlockAdd: (enabled: boolean) => void;
   handleEnterOnlyBlockAddChange: (enabled: boolean) => void;
+  reverseToolbarOrder: boolean;
+  setReverseToolbarOrder: (enabled: boolean) => void;
+  handleReverseToolbarOrderChange: (enabled: boolean) => void;
 }
 
 export const useSettings = (dataManagement: DataManagementHook): SettingsHook => {
   // saveDirectoryはdataManagementから取得
   const { saveDirectory, setSaveDirectory } = dataManagement;
   const [enterOnlyBlockAdd, setEnterOnlyBlockAdd] = useState<boolean>(false);
+  const [reverseToolbarOrder, setReverseToolbarOrder] = useState<boolean>(false);
 
   // 初回マウント時に設定を読み込み
   useEffect(() => {
@@ -23,6 +27,10 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
         const savedValue = await dataManagement.loadData('voiscripter_enterOnlyBlockAdd');
         if (savedValue !== null) {
           setEnterOnlyBlockAdd(savedValue === 'true');
+        }
+        const savedToolbarOrder = await dataManagement.loadData('voiscripter_reverseToolbarOrder');
+        if (savedToolbarOrder !== null) {
+          setReverseToolbarOrder(savedToolbarOrder === 'true');
         }
       }
     };
@@ -33,6 +41,11 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
   const handleEnterOnlyBlockAddChange = (enabled: boolean) => {
     setEnterOnlyBlockAdd(enabled);
     dataManagement.saveData('voiscripter_enterOnlyBlockAdd', enabled.toString());
+  };
+
+  const handleReverseToolbarOrderChange = (enabled: boolean) => {
+    setReverseToolbarOrder(enabled);
+    dataManagement.saveData('voiscripter_reverseToolbarOrder', enabled.toString());
   };
 
   // データ保存先変更
@@ -107,6 +120,9 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
     moveDataBetweenStorage,
     enterOnlyBlockAdd,
     setEnterOnlyBlockAdd,
-    handleEnterOnlyBlockAddChange
+    handleEnterOnlyBlockAddChange,
+    reverseToolbarOrder,
+    setReverseToolbarOrder,
+    handleReverseToolbarOrderChange
   };
 };

@@ -742,6 +742,7 @@ export default function Home() {
               setIsUndoRedoOperationRef.current = setIsUndoRedoOperationFn;
             }}
             enterOnlyBlockAdd={settings.enterOnlyBlockAdd}
+            reverseToolbarOrder={settings.reverseToolbarOrder}
             currentProjectId={projectId}
             onUpdateScript={handleScriptUpdate}
             onUndo={handleUndoAction}
@@ -871,6 +872,8 @@ export default function Home() {
         onSaveDirectoryChange={settings.handleSaveDirectoryChange}
         enterOnlyBlockAdd={settings.enterOnlyBlockAdd}
         onEnterOnlyBlockAddChange={settings.handleEnterOnlyBlockAddChange}
+        reverseToolbarOrder={settings.reverseToolbarOrder}
+        onReverseToolbarOrderChange={settings.handleReverseToolbarOrderChange}
       />
 
       {/* SearchDialog */}

@@ -10,6 +10,8 @@ interface SettingsProps {
   onSaveDirectoryChange: (directory: string) => void;
   enterOnlyBlockAdd?: boolean;
   onEnterOnlyBlockAddChange?: (enabled: boolean) => void;
+  reverseToolbarOrder?: boolean;
+  onReverseToolbarOrderChange?: (enabled: boolean) => void;
 }
 
 export default function Settings({
@@ -18,7 +20,9 @@ export default function Settings({
   saveDirectory,
   onSaveDirectoryChange,
   enterOnlyBlockAdd = false,
-  onEnterOnlyBlockAddChange
+  onEnterOnlyBlockAddChange,
+  reverseToolbarOrder = false,
+  onReverseToolbarOrderChange
 }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<'settings' | 'help' | 'license' | 'changelog' | 'bugreport'>('settings');
   const [isSelectingDirectory, setIsSelectingDirectory] = useState(false);
@@ -254,6 +258,21 @@ export default function Settings({
                     <div className="text-sm text-muted-foreground ml-7">
                       <p>• チェックをONにすると、セリフ入力エリアでEnterキーを押すだけでテキストブロックが追加されるようになります</p>
                       <p>• 改行の入力はShift+Enterに変更されます</p>
+                    </div>
+                    <div className="flex items-center space-x-3 pt-2">
+                      <input
+                        type="checkbox"
+                        id="reverseToolbarOrder"
+                        checked={reverseToolbarOrder}
+                        onChange={(e) => onReverseToolbarOrderChange?.(e.target.checked)}
+                        className="w-4 h-4 text-primary bg-background border-gray-300 rounded focus:ring-primary focus:ring-2"
+                      />
+                      <label htmlFor="reverseToolbarOrder" className="text-sm font-medium text-foreground">
+                        左利き向け（1段ツールバーの並びを反転）
+                      </label>
+                    </div>
+                    <div className="text-sm text-muted-foreground ml-7">
+                      <p>• チェックをONにすると、1段ツールバー内のボタン順序を左右反転します</p>
                     </div>
                   </div>
                 </div>
