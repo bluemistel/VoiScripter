@@ -914,7 +914,7 @@ export default function Home() {
         lastSyncedAt={project.syncMeta?.lastSyncedAt}
         currentData={JSON.stringify(buildSyncProjectPayload(project))}
         currentCharacterData={JSON.stringify(buildCharacterSyncPayload(characters, groups))}
-        onDataRestored={(restoredDataJson, restoredSyncId, remoteUpdatedAt, password) => {
+        onDataRestored={async (restoredDataJson, restoredSyncId, remoteUpdatedAt, password) => {
           try {
             if (
               project.syncMeta?.syncId === restoredSyncId &&
@@ -936,6 +936,19 @@ export default function Home() {
                 ? project.id
                 : makeUniqueProjectId(normalized.id);
             const restoredProject = { ...normalized, id: targetProjectId };
+
+            // projectId 切替時の再読込で古いローカルデータに上書きされないよう、
+            // 先に復元プロジェクトを永続化してから状態を切り替える
+            await dataManagement.saveData(
+              `voiscripter_project_${targetProjectId}`,
+              JSON.stringify(restoredProject)
+            );
+            if (restoredProject.scenes[0]?.id) {
+              await dataManagement.saveData(
+                `voiscripter_project_${targetProjectId}_lastScene`,
+                restoredProject.scenes[0].id
+              );
+            }
 
             setProject(restoredProject);
             setProjectId(targetProjectId);

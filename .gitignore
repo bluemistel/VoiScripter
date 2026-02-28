@@ -52,5 +52,8 @@ yarn-error.log*
 # workspace
 *.code-workspace
 
+# TypeScript Build Info
+*.tsbuildinfo
+
 # Cloudflare Wrangler
 .wrangler
