@@ -27,9 +27,15 @@ export interface StorySeparatorImage {
   dataUrl: string;
 }
 
+export interface StoryPanelImageRef {
+  assetId: string;
+  name?: string;
+}
+
 export interface StorySeparatorSegment {
   id: string;
   anchorBlockId: string | null; // null は冒頭を指す
+  imageRef?: StoryPanelImageRef;
   image?: StorySeparatorImage;
   label?: string;
 }
@@ -56,6 +62,7 @@ export interface Project {
   id: string;
   name: string;
   scenes: Scene[];
+  schemaVersion?: number;
   // プロジェクト全体の設定やメタ情報を追加可能
 }
 

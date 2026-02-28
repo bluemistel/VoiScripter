@@ -11,6 +11,7 @@ import SearchDialog, { SearchResult } from '@/components/SearchDialog';
 import DataSyncDialog from '@/components/DataSyncDialog';
 import { Project, Character, ScriptBlock } from '@/types';
 import { buildEmptyScript } from '@/utils/scriptDefaults';
+import { buildSyncProjectPayload } from '@/utils/storyPanelAssets';
 
 // カスタムフックのインポート
 import { useDataManagement } from '@/hooks/useDataManagement';
@@ -840,7 +841,7 @@ export default function Home() {
       <DataSyncDialog
         isOpen={uiState.isDataSyncOpen}
         onClose={() => uiState.setIsDataSyncOpen(false)}
-        currentData={JSON.stringify(project)}
+        currentData={JSON.stringify(buildSyncProjectPayload(project))}
         onDataRestored={(restoredDataJson) => {
           try {
             const restoredProject = JSON.parse(restoredDataJson) as Project;

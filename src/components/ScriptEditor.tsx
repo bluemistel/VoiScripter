@@ -19,6 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Script, ScriptBlock, Character, Emotion, StorySeparatorSegment, StorySeparatorImage } from '@/types';
+import { loadStoryPanelAsset, removeStoryPanelAsset, saveStoryPanelAsset } from '@/utils/storyPanelAssets';
 import {
   ArrowUpIcon,
   ArrowDownIcon,
@@ -438,6 +439,7 @@ export default function ScriptEditor({
   const [currentDisplayedSegmentId, setCurrentDisplayedSegmentId] = useState<string | null>(null);
   const [editingLabelSegmentId, setEditingLabelSegmentId] = useState<string | null>(null);
   const [editingLabelValue, setEditingLabelValue] = useState('');
+  const [localSegmentImages, setLocalSegmentImages] = useState<Record<string, StorySeparatorImage>>({});
   
   useEffect(() => {
     setPanelWidth(script.storyPanelWidth || 320);
@@ -505,6 +507,8 @@ export default function ScriptEditor({
     return segmentsCopy;
   }, [storySegments, getAnchorIndex]);
 
+  const projectStorageId = currentProjectId || 'default';
+
   const updateStorySegments = useCallback(
     (updater: (current: StorySeparatorSegment[]) => StorySeparatorSegment[]) => {
       if (!onUpdateScript) return;
@@ -514,22 +518,80 @@ export default function ScriptEditor({
     [onUpdateScript, script.storySegments, storySegments]
   );
 
+  useEffect(() => {
+    const nextLocalImages: Record<string, StorySeparatorImage> = {};
+    storySegments.forEach(segment => {
+      if (!segment.imageRef?.assetId) return;
+      const image = loadStoryPanelAsset(projectStorageId, script.id, segment.id);
+      if (image) {
+        nextLocalImages[segment.id] = image;
+      }
+    });
+    setLocalSegmentImages(nextLocalImages);
+  }, [projectStorageId, script.id, storySegments]);
+
+  useEffect(() => {
+    if (!onUpdateScript) return;
+    const needsMigration = storySegments.some(segment => segment.image?.dataUrl && !segment.imageRef?.assetId);
+    if (!needsMigration) return;
+
+    const migratedSegments = storySegments.map(segment => {
+      if (!segment.image?.dataUrl || segment.imageRef?.assetId) return segment;
+      const assetId = segment.image.id || `asset_${segment.id}`;
+      saveStoryPanelAsset(projectStorageId, script.id, segment.id, segment.image);
+      return {
+        ...segment,
+        imageRef: {
+          assetId,
+          name: segment.image.name
+        },
+        image: undefined
+      };
+    });
+
+    onUpdateScript({ storySegments: migratedSegments });
+  }, [onUpdateScript, projectStorageId, script.id, storySegments]);
+
   const handleSegmentImageChange = useCallback(
     (segmentId: string, image?: StorySeparatorImage) => {
+      if (!image) return;
+      saveStoryPanelAsset(projectStorageId, script.id, segmentId, image);
+      setLocalSegmentImages(prev => ({ ...prev, [segmentId]: image }));
       updateStorySegments(prev =>
-        prev.map(segment => (segment.id === segmentId ? { ...segment, image } : segment))
+        prev.map(segment =>
+          segment.id === segmentId
+            ? {
+                ...segment,
+                imageRef: {
+                  assetId: image.id,
+                  name: image.name
+                },
+                image: undefined
+              }
+            : segment
+        )
       );
     },
-    [updateStorySegments]
+    [projectStorageId, script.id, updateStorySegments]
   );
 
   const handleRemoveSegmentImage = useCallback(
     (segmentId: string) => {
+      removeStoryPanelAsset(projectStorageId, script.id, segmentId);
+      setLocalSegmentImages(prev => {
+        const next = { ...prev };
+        delete next[segmentId];
+        return next;
+      });
       updateStorySegments(prev =>
-        prev.map(segment => (segment.id === segmentId ? { ...segment, image: undefined } : segment))
+        prev.map(segment =>
+          segment.id === segmentId
+            ? { ...segment, image: undefined, imageRef: undefined }
+            : segment
+        )
       );
     },
-    [updateStorySegments]
+    [projectStorageId, script.id, updateStorySegments]
   );
 
   const handleUpdateSegmentLabel = useCallback(
@@ -596,6 +658,12 @@ export default function ScriptEditor({
         if (!target || target.anchorBlockId === null) {
           return prev;
         }
+        removeStoryPanelAsset(projectStorageId, script.id, segmentId);
+        setLocalSegmentImages(current => {
+          const nextImages = { ...current };
+          delete nextImages[segmentId];
+          return nextImages;
+        });
         const next = prev.filter(segment => segment.id !== segmentId);
         return next.length === 0
           ? [
@@ -607,7 +675,7 @@ export default function ScriptEditor({
           : next;
       });
     },
-    [updateStorySegments]
+    [projectStorageId, script.id, updateStorySegments]
   );
   
   const openImagePicker = (segmentId: string) => {
@@ -1502,10 +1570,14 @@ export default function ScriptEditor({
                       const imageWidth = panelWidth - 32;
                       const imageHeight = Math.max(Math.round(imageWidth * 9 / 16), 180);
                       const segmentIndex = orderedSegments.findIndex(s => s.id === currentSegment.id);
+                      const prevImage = prevSegment ? localSegmentImages[prevSegment.id] : undefined;
+                      const currentImage = localSegmentImages[currentSegment.id];
+                      const nextImage = nextSegment ? localSegmentImages[nextSegment.id] : undefined;
+                      const currentImageMissing = !!currentSegment.imageRef?.assetId && !currentImage;
                       
                       return (
                         <div className="relative w-full" style={{ height: `${imageHeight + 80}px` }}>
-                          {prevSegment?.image && (
+                          {prevImage && (
                             <div
                               className="absolute left-0 right-0 mx-auto rounded-lg overflow-hidden border opacity-40 pointer-events-none"
                               style={{
@@ -1516,22 +1588,27 @@ export default function ScriptEditor({
                                 zIndex: 1,
                               }}
                             >
-                              <img src={prevSegment.image.dataUrl} alt={prevSegment.image.name} className="w-full object-cover" style={{ height: `${imageHeight * 0.85}px` }} />
+                              <img src={prevImage.dataUrl} alt={prevImage.name} className="w-full object-cover" style={{ height: `${imageHeight * 0.85}px` }} />
                             </div>
                           )}
                           
-                          <div className="absolute left-0 right-0 z-10" style={{ top: prevSegment?.image ? '10%' : '0' }}>
+                          <div className="absolute left-0 right-0 z-10" style={{ top: prevImage ? '10%' : '0' }}>
                             <div className="flex items-center justify-between mb-2 px-1">
-                              <span className="text-xs font-medium text-muted-foreground">
+                              <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
                                 {segmentIndex + 1} / {orderedSegments.length}
                                 {currentSegment.label && (
                                   <span className="ml-1.5 text-foreground/80">{currentSegment.label}</span>
                                 )}
+                                {currentImageMissing && (
+                                  <span className="px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                                    ローカル画像未配置
+                                  </span>
+                                )}
                               </span>
                             </div>
-                            {currentSegment.image ? (
+                            {currentImage ? (
                               <div className="relative group rounded-lg overflow-hidden border shadow-lg">
-                                <img src={currentSegment.image.dataUrl} alt={currentSegment.image.name} className="w-full object-cover" style={{ height: `${imageHeight}px` }} />
+                                <img src={currentImage.dataUrl} alt={currentImage.name} className="w-full object-cover" style={{ height: `${imageHeight}px` }} />
                                 <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-4 text-white text-sm">
                                   <button type="button" className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 transition" onClick={() => openImagePicker(currentSegment.id)}>
                                     置き換え
@@ -1549,12 +1626,17 @@ export default function ScriptEditor({
                                 onClick={() => openImagePicker(currentSegment.id)}
                               >
                                 <PhotoIcon className="w-12 h-12 mb-3 opacity-60" />
-                                <span>クリックして画像を追加</span>
+                                <span>{currentImageMissing ? 'ローカル画像が見つかりません' : 'クリックして画像を追加'}</span>
+                                {currentImageMissing && (
+                                  <span className="mt-2 text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
+                                    クリックして再リンク
+                                  </span>
+                                )}
                               </button>
                             )}
                           </div>
                           
-                          {nextSegment?.image && (
+                          {nextImage && (
                             <div
                               className="absolute left-0 right-0 mx-auto rounded-lg overflow-hidden border opacity-40 pointer-events-none"
                               style={{
@@ -1565,7 +1647,7 @@ export default function ScriptEditor({
                                 zIndex: 1,
                               }}
                             >
-                              <img src={nextSegment.image.dataUrl} alt={nextSegment.image.name} className="w-full object-cover" style={{ height: `${imageHeight * 0.85}px` }} />
+                              <img src={nextImage.dataUrl} alt={nextImage.name} className="w-full object-cover" style={{ height: `${imageHeight * 0.85}px` }} />
                             </div>
                           )}
                         </div>
@@ -1597,6 +1679,8 @@ export default function ScriptEditor({
                       const nextBlockId = index < script.blocks.length - 1 ? script.blocks[index + 1]?.id : null;
                       const existingSegment = nextBlockId ? storySegments.find(seg => seg.anchorBlockId === nextBlockId) : null;
                       const segmentNumber = existingSegment ? orderedSegments.findIndex(s => s.id === existingSegment.id) + 1 : -1;
+                      const hasMissingLocalImage =
+                        !!existingSegment?.imageRef?.assetId && !localSegmentImages[existingSegment.id];
                       
                       return (
                         <div key={block.id} className="mb-1 last:mb-0">
@@ -1698,6 +1782,16 @@ export default function ScriptEditor({
                                         <span>{segmentNumber}</span>
                                       )}
                                     </div>
+                                    {hasMissingLocalImage && (
+                                      <button
+                                        type="button"
+                                        className="ml-1 px-1.5 py-0.5 text-[10px] rounded border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition"
+                                        onClick={() => openImagePicker(existingSegment.id)}
+                                        title="ローカル画像を再リンク"
+                                      >
+                                        未配置
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
                                       className="p-0.5 text-muted-foreground/50 hover:text-foreground transition opacity-0 group-hover/bookmark:opacity-100 ml-1"
