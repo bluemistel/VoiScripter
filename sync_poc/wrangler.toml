@@ -1,10 +1,18 @@
-name = "voiscripter-sync"
+name = "voiscripter-sync-dev"
 main = "worker.js"
 compatibility_date = "2024-01-01"
 workers_dev = true
 
 # KV Namespace binding
 [[kv_namespaces]]
+binding = "SYNC_KV"
+id = "8579b723057f4a56bd2b0224062e916d"
+
+[env.prd]
+name = "voiscripter-sync-prd"
+workers_dev = true
+
+[[env.prd.kv_namespaces]]
 binding = "SYNC_KV"
 id = "8579b723057f4a56bd2b0224062e916d"
 

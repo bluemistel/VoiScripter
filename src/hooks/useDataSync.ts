@@ -6,10 +6,12 @@
 import { useState, useCallback } from 'react';
 import { encrypt, decrypt } from '@/utils/crypto';
 
+const SYNC_ENV = process.env.NEXT_PUBLIC_SYNC_ENV ||
+    (process.env.NODE_ENV === 'development' ? 'dev' : 'prd');
+const SYNC_API_URL_DEV = process.env.NEXT_PUBLIC_SYNC_API_URL_DEV || 'http://localhost:8787/data';
+const SYNC_API_URL_PRD = process.env.NEXT_PUBLIC_SYNC_API_URL_PRD || 'https://voiscripter-sync-prd.bluemist02.workers.dev/data';
 const SYNC_API_URL = process.env.NEXT_PUBLIC_SYNC_API_URL ||
-    (process.env.NODE_ENV === 'development'
-        ? 'http://localhost:8787/data'
-        : 'https://voiscripter-sync.bluemist02.workers.dev/data');
+    (SYNC_ENV === 'dev' ? SYNC_API_URL_DEV : SYNC_API_URL_PRD);
 
 interface SyncState {
     isLoading: boolean;

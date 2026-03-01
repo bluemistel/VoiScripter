@@ -9,6 +9,9 @@ export default function RootLayout({
 }: {
   children: ReactNode
 }) {
+  const syncApiOrigin = process.env.NEXT_PUBLIC_SYNC_API_ORIGIN || 'https://voiscripter-sync-prd.bluemist02.workers.dev';
+  const cspContent = `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://localhost:* https://localhost:* ${syncApiOrigin}; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self';`;
+
   useEffect(() => {
     // Electron APIが利用可能な場合の初期化
     if (typeof window !== 'undefined' && window.electronAPI) {
@@ -88,7 +91,7 @@ export default function RootLayout({
       <head>
         <title>VoiScripter</title>
         <meta name="description" content="VoiScripter - 音声合成用台本作成ツール" />
-        <meta httpEquiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://localhost:* https://localhost:* https://voiscripter-sync.bluemist02.workers.dev; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self';" />
+        <meta httpEquiv="Content-Security-Policy" content={cspContent} />
         <link rel="icon" href="./favicon.ico" />
         <link rel="apple-touch-icon" href="./apple-icon.png" />
         <link rel="manifest" href="./manifest.json" />
