@@ -113,7 +113,7 @@ function SortableSceneTab({
     <div
       ref={setNodeRef}
       style={{ ...style, minWidth: 100, maxWidth: 120 }}
-      className={`relative rounded text-foreground text-sm font-medium mr-1 whitespace-nowrap flex-shrink-0 group ${isSelected ? 'bg-secondary text-secondary-foreground' : 'bg-muted hover:bg-accent'}`}
+      className={`relative rounded text-foreground text-sm font-medium mr-1 whitespace-nowrap group ${isSelected ? 'bg-secondary/70 text-secondary-foreground' : 'bg-muted hover:bg-accent'}`}
     >
       {/* ドラッグ可能なメイン領域 */}
       <div
@@ -855,7 +855,7 @@ export default function Header(props: HeaderProps) {
         {scenes.length < 30 && (
           <button
             onClick={() => setIsAddSceneDialogOpen(true)}
-            className="p-1 rounded-full bg-primary text-primary-foreground hover:bg-primary/80 transition flex-shrink-0"
+            className="p-1 rounded-full bg-background/95 backdrop-blur  hover:bg-muted transition"
             title="シーンを追加"
           >
             <PlusIcon className="w-5 h-5" />

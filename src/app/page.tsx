@@ -658,7 +658,7 @@ export default function Home() {
         saveCharacterProjectStates={characterManagement.saveCharacterProjectStates}
       />
       
-      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6 md:py-8 relative">
+      <main className="w-full max-w-none px-[clamp(0.5rem,1.6vw,1rem)] py-[clamp(1rem,2.2vw,2rem)] relative">
         {/* ローディング画面 */}
         <div 
           className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${

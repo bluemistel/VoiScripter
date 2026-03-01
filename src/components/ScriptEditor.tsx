@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo, useCallback, ChangeEvent, MouseEvent as ReactMouseEvent } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, ChangeEvent, DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -577,6 +577,7 @@ export default function ScriptEditor({
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [isTabletOrLarger, setIsTabletOrLarger] = useState(false);
   const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
+  const [dragOverSegmentId, setDragOverSegmentId] = useState<string | null>(null);
   const pendingFocusIndexAfterDelete = useRef<number | null>(null);
   
   useEffect(() => {
@@ -588,7 +589,7 @@ export default function ScriptEditor({
     const updateLayout = () => {
       const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
       const tabletOrLarger = window.innerWidth >= 768;
-      const smallScreen = window.innerWidth < 1024;
+      const smallScreen = window.innerWidth < 768;
       setIsTabletOrLarger(tabletOrLarger);
       setIsMobileLayout(coarsePointer || smallScreen);
       if (!tabletOrLarger) {
@@ -866,6 +867,41 @@ export default function ScriptEditor({
     event.target.value = '';
   };
 
+  const handleDropImageFile = useCallback(
+    (segmentId: string, file: File) => {
+      if (!file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const payload: StorySeparatorImage = {
+          id: `image_${generateSegmentId()}`,
+          name: file.name,
+          dataUrl
+        };
+        handleSegmentImageChange(segmentId, payload);
+      };
+      reader.readAsDataURL(file);
+    },
+    [handleSegmentImageChange]
+  );
+
+  const handlePanelImageDragOver = useCallback((event: ReactDragEvent<HTMLElement>, segmentId: string) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setDragOverSegmentId(segmentId);
+  }, []);
+
+  const handlePanelImageDrop = useCallback(
+    (event: ReactDragEvent<HTMLElement>, segmentId: string) => {
+      event.preventDefault();
+      const file = event.dataTransfer.files?.[0];
+      setDragOverSegmentId(null);
+      if (!file) return;
+      handleDropImageFile(segmentId, file);
+    },
+    [handleDropImageFile]
+  );
+
   const determineAnchorFromClientY = useCallback(
     (clientY: number): string | null => {
       if (typeof window === 'undefined') return null;
@@ -1058,15 +1094,21 @@ export default function ScriptEditor({
         return;
       }
       const threshold = 120;
+      const nearBottom =
+        window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 8;
       let currentIndex = 0;
-      script.blocks.forEach((_, index) => {
-        const element = document.querySelector(`[data-block-index="${index}"]`) as HTMLElement | null;
-        if (!element) return;
-        const rect = element.getBoundingClientRect();
-        if (rect.top - threshold <= 0) {
-          currentIndex = index;
-        }
-      });
+      if (nearBottom) {
+        currentIndex = script.blocks.length - 1;
+      } else {
+        script.blocks.forEach((_, index) => {
+          const element = document.querySelector(`[data-block-index="${index}"]`) as HTMLElement | null;
+          if (!element) return;
+          const rect = element.getBoundingClientRect();
+          if (rect.top - threshold <= 0) {
+            currentIndex = index;
+          }
+        });
+      }
       const active =
         [...orderedSegments]
           .reverse()
@@ -1737,14 +1779,14 @@ export default function ScriptEditor({
       {!isMobileLayout && (
         <button
           type="button"
-          className="fixed z-50 bg-primary text-primary-foreground p-2 rounded-full shadow-lg hover:bg-primary/90 transition-all"
+          className="fixed z-50 p-2 rounded-full shadow-lg hover:bg-muted/90 transition-all"
           style={{
             top: '118px',
             left: isStoryPanelOpen ? `${panelWidth + 8}px` : '8px',
             transition: 'left 0.2s ease',
           }}
           onClick={() => setIsStoryPanelOpen(prev => !prev)}
-          title={isStoryPanelOpen ? 'ストーリーセパレートを閉じる' : 'ストーリーセパレートを開く'}
+          title={isStoryPanelOpen ? 'ストーリーパネルを閉じる' : 'ストーリーパネルを開く'}
         >
           {isStoryPanelOpen
             ? <ChevronDoubleLeftIcon className="w-5 h-5" />
@@ -1766,7 +1808,7 @@ export default function ScriptEditor({
             )}
           </div>
         ) : (
-          <div className={`flex flex-col lg:flex-row gap-4 ${isStoryPanelOpen ? 'items-start' : ''}`}>
+          <div className="flex flex-col gap-4 items-stretch">
             {isStoryPanelOpen && (
               <>
                 <div
@@ -1826,7 +1868,12 @@ export default function ScriptEditor({
                               </span>
                             </div>
                             {currentImage ? (
-                              <div className="relative group rounded-lg overflow-hidden border shadow-lg">
+                              <div
+                                className={`relative group rounded-lg overflow-hidden border shadow-lg transition ${dragOverSegmentId === currentSegment.id ? 'ring-2 ring-primary/60 bg-primary/5' : ''}`}
+                                onDragOver={(e) => handlePanelImageDragOver(e, currentSegment.id)}
+                                onDragLeave={() => setDragOverSegmentId(null)}
+                                onDrop={(e) => handlePanelImageDrop(e, currentSegment.id)}
+                              >
                                 <img src={currentImage.dataUrl} alt={currentImage.name} className="w-full object-cover" style={{ height: `${imageHeight}px` }} />
                                 <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-4 text-white text-sm">
                                   <button type="button" className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 transition" onClick={() => openImagePicker(currentSegment.id)}>
@@ -1836,16 +1883,24 @@ export default function ScriptEditor({
                                     削除
                                   </button>
                                 </div>
+                                {dragOverSegmentId === currentSegment.id && (
+                                  <div className="absolute inset-0 bg-primary/10 flex items-center justify-center text-sm font-medium text-primary pointer-events-none">
+                                    ここにドロップして画像を置き換え
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <button
                                 type="button"
-                                className="w-full border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-sm text-muted-foreground hover:bg-muted/40 transition shadow-lg"
+                                className={`w-full border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-sm text-muted-foreground hover:bg-muted/40 transition shadow-lg ${dragOverSegmentId === currentSegment.id ? 'ring-2 ring-primary/60 bg-primary/5 border-primary/60' : ''}`}
                                 style={{ height: `${imageHeight}px` }}
                                 onClick={() => openImagePicker(currentSegment.id)}
+                                onDragOver={(e) => handlePanelImageDragOver(e, currentSegment.id)}
+                                onDragLeave={() => setDragOverSegmentId(null)}
+                                onDrop={(e) => handlePanelImageDrop(e, currentSegment.id)}
                               >
                                 <PhotoIcon className="w-12 h-12 mb-3 opacity-60" />
-                                <span>{currentImageMissing ? 'ローカル画像が見つかりません' : 'クリックして画像を追加'}</span>
+                                <span>{currentImageMissing ? 'ローカル画像が見つかりません' : 'クリックまたはドラッグ&ドロップで画像を追加'}</span>
                                 {currentImageMissing && (
                                   <span className="mt-2 text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
                                     クリックして再リンク
@@ -1884,7 +1939,7 @@ export default function ScriptEditor({
               </>
             )}
             <div className={`flex-1 story-main-column ${isStoryPanelOpen ? 'lg:ml-0' : ''}`} style={isStoryPanelOpen ? { marginLeft: `${panelWidth + 4}px` } : {}}>
-              <div className="bg-card rounded-lg shadow p-2 sm:p-3 md:p-4 mb-24 relative h-full flex flex-col justify-between">
+              <div className="bg-card rounded-lg shadow p-[clamp(0.5rem,1.2vw,1rem)] mb-24 relative h-full flex flex-col justify-between">
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
@@ -1894,6 +1949,74 @@ export default function ScriptEditor({
                     items={script.blocks.map(block => block.id)}
                     strategy={verticalListSortingStrategy}
                   >
+                    {isStoryPanelOpen && (() => {
+                      const firstSegment = orderedSegments.find(segment => segment.anchorBlockId === null) ?? orderedSegments[0];
+                      if (!firstSegment) return null;
+                      const firstSegmentNumber = orderedSegments.findIndex(segment => segment.id === firstSegment.id) + 1;
+                      const firstSegmentMissingImage =
+                        !!firstSegment.imageRef?.assetId && !localSegmentImages[firstSegment.id];
+
+                      return (
+                        <div className="mb-1">
+                          <div className="flex items-center w-full my-1 story-panel-line-control">
+                            <div className="flex items-center shrink-0 group/bookmark">
+                              {editingLabelSegmentId === firstSegment.id ? (
+                                <div className="flex items-center">
+                                  <input
+                                    type="text"
+                                    className="text-xs px-2 py-1 border border-primary rounded-l-lg bg-background text-foreground w-28 outline-none focus:ring-1 focus:ring-primary"
+                                    value={editingLabelValue}
+                                    onChange={(e) => setEditingLabelValue(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') { e.preventDefault(); commitLabelEdit(); }
+                                      if (e.key === 'Escape') { e.preventDefault(); cancelLabelEdit(); }
+                                    }}
+                                    onBlur={commitLabelEdit}
+                                    autoFocus
+                                    placeholder={`${firstSegmentNumber}`}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex items-center">
+                                  <div
+                                    className="relative flex items-center text-xs font-medium text-muted-foreground bg-muted pl-2 pr-3 py-1 select-none border border-muted-foreground/20"
+                                    style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 0 100%)' }}
+                                  >
+                                    {firstSegment.label ? (
+                                      <>
+                                        <span className="mr-1 opacity-60">{firstSegmentNumber}.</span>
+                                        <span className="max-w-[120px] truncate">{firstSegment.label}</span>
+                                      </>
+                                    ) : (
+                                      <span>{firstSegmentNumber}</span>
+                                    )}
+                                  </div>
+                                  {firstSegmentMissingImage && (
+                                    <button
+                                      type="button"
+                                      className="ml-1 px-1.5 py-0.5 text-[10px] rounded border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition"
+                                      onClick={() => openImagePicker(firstSegment.id)}
+                                      title="ローカル画像を再リンク"
+                                    >
+                                      未配置
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="p-0.5 text-muted-foreground/50 hover:text-foreground transition opacity-0 group-hover/bookmark:opacity-100 ml-1"
+                                    onClick={() => startEditingLabel(firstSegment.id, firstSegment.label || '')}
+                                    title="見出しを編集"
+                                  >
+                                    <PencilSquareIcon className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 border-t border-dashed border-primary/40 mx-1"></div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     {script.blocks.map((block, index) => {
                       const nextBlockId = index < script.blocks.length - 1 ? script.blocks[index + 1]?.id : null;
                       const existingSegment = nextBlockId ? storySegments.find(seg => seg.anchorBlockId === nextBlockId) : null;
@@ -2108,7 +2231,7 @@ export default function ScriptEditor({
           <div className="bg-background rounded-lg shadow-lg p-6 w-full max-w-sm">
             <h3 className="text-lg font-semibold text-foreground mb-3">画像を削除しますか？</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              この画像はストーリーセパレートから削除されます。元に戻す場合はアンドゥをご利用ください。
+              この画像はストーリーパネルから削除されます。元に戻す場合はアンドゥをご利用ください。
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -2136,7 +2259,7 @@ export default function ScriptEditor({
         <button
           type="button"
           onClick={() => setIsToolbarCollapsed(prev => !prev)}
-          className="fixed right-3 bottom-6 z-50 h-10 w-10 rounded-lg border bg-background/95 backdrop-blur shadow flex items-center justify-center"
+          className="fixed right-3 bottom-6 z-50 h-10 w-10 rounded-lg border bg-background/95 backdrop-blur shadow flex items-center justify-center hover:bg-muted"
           title={isToolbarCollapsed ? 'ツールバーを表示' : 'ツールバーを非表示'}
         >
           {isToolbarCollapsed ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}

@@ -357,6 +357,48 @@ export default function Settings({
               <div className="flex flex-col max-h-[60vh] pr-2">
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.2.5</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>
+                          • ストーリーパネル機能を追加
+                          <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                            <li>• 任意の画像と見出しを追加し、視覚的にストーリーを管理できます(ある程度の横幅がないと有効になりません)</li>
+                            <li>• テキストブロック間をホバーすると表示される「セパレートラインを追加」をクリックすると見出しを追加できます</li>
+                            <li>• サイドバーのストーリーパネルには、一つの見出しに対して一枚の画像を設定できます</li>
+                            <li>• 台本エリアをスクロールしていくと、ストーリーパネルが切り替わっていきます</li>
+                            <li>• ストーリーパネルの表示時のみ、見出しも表示されます</li>
+                          </ul>
+                      </li>
+                    </ul>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4 pt-2">
+                      <li>
+                        • データ同期機能を追加
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• 別の VoiScripter へ現在の台本を同期して、作業を引き継ぐことができます</li>
+                          <li>• 同期対象は「プロジェクト本体の台本データ」です（ストーリーパネル画像は同期されません）</li>
+                          <li>• 詳細はデータ同期ダイアログの「使い方」をご覧ください</li>
+                        </ul>
+                      </li>
+                    </ul>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4 pt-2">
+                      <li>
+                        • モバイル環境を想定したUIの改修
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• 元に戻す/やり直し/移動/追加/削除などの主要操作を集約したツールバーを追加</li>
+                          <li>• 話者選択UIをモバイル向けに改修。話者アイコンをタップするとキャラピッカーが表示</li>
+                          <li>• ブロック並び替えアイコンを廃止し、テキストブロックの本体ドラッグへ統一</li>
+                          <li>• 設定の詳細設定に左利きユーザー向けのツールバーの並び反転オプションを追加</li>
+                          <li>• 台本の入力エリアのUIを調整し、shadowを使用した柔らかい区切りに</li>
+                          <li>• シーン追加ボタンをアクセントカラー→背景色なしに変更して目立たなくした</li>
+                        </ul>
+                      </li>
+                    </ul>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4 pt-2">
+                      <li>• その他、細かいUI調整、不具合修正</li>                      
+                   </ul>
+                  </div>
+
                 <div>
                     <h4 className="font-medium text-foreground mb-2">v0.2.4</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">

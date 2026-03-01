@@ -23,7 +23,7 @@ https://bluemist.booth.pm/items/7272767
 - プロジェクト内サブプロジェクトの管理機能 (Ver.0.16.0)
 
 ## 技術スタック
-- Next.js 14
+- Next.js 16
 - TypeScript (Apache-2.0)
 - TailwindCSS v4
 - React DnD Kit
@@ -41,7 +41,7 @@ https://bluemist.booth.pm/items/7272767
 2. または `npm run electron-build` でビルドして実行ファイルを作成
 
 ## ビルドとデプロイ
-1. `npm run buid` でビルド
+1. `npm run build` でビルド
 2. `npm run electron-pack` で実行ファイルを作成
 
 ## ライセンス
@@ -50,3 +50,4 @@ MIT License
 ## 更新履歴
 * 2025/07/22 テスト公開
 * 2025/08/08 全体を調整
+* 2026/03/01 v0.2.5 リリース（モバイルUI改善、1段ツールバー、データ同期、ストーリーパネル追加）
