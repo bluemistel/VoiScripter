@@ -191,6 +191,22 @@ function SortableBlock({
     setIsMobileCharacterPickerOpen(false);
   };
 
+  const keepTextareaAboveToolbar = (target: HTMLTextAreaElement) => {
+    if (typeof window === 'undefined') return;
+    const toolbarElement = document.querySelector('[data-floating-toolbar="true"]') as HTMLElement | null;
+    if (!toolbarElement) return;
+
+    const toolbarTop = toolbarElement.getBoundingClientRect().top;
+    const textareaRect = target.getBoundingClientRect();
+    const overlap = textareaRect.bottom - (toolbarTop - 8);
+    if (overlap > 0) {
+      window.scrollBy({
+        top: overlap + 20,
+        behavior: 'smooth'
+      });
+    }
+  };
+
   const isImeComposingKey = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const nativeEvent = event.nativeEvent as KeyboardEvent;
     return nativeEvent.isComposing || nativeEvent.keyCode === 229;
@@ -284,6 +300,7 @@ function SortableBlock({
                 const target = e.target as HTMLTextAreaElement;
                 target.style.height = 'auto';
                 target.style.height = target.scrollHeight + 'px';
+                keepTextareaAboveToolbar(target);
               }}
             />
 
@@ -406,6 +423,7 @@ function SortableBlock({
                   const target = e.target as HTMLTextAreaElement;
                   target.style.height = 'auto';
                   target.style.height = target.scrollHeight + 'px';
+                  keepTextareaAboveToolbar(target);
                 }}
               />
               {/* フキダシの三角形 */}
@@ -1373,8 +1391,10 @@ export default function ScriptEditor({
       if (insertIdx.current >= 0) {
         //console.log(`Auto focusing inserted block at index: ${insertIdx.current}`);
         setTimeout(() => {
-          textareaRefs.current[insertIdx.current]?.focus();
+          const insertedRef = textareaRefs.current[insertIdx.current];
+          insertedRef?.focus({ preventScroll: true });
           onSelectedBlockIdsChange([script.blocks[insertIdx.current]?.id || '']); // 単一選択に変更
+          ensureBlockVisible(insertIdx.current, 10);
           insertIdx.current = -1; // リセット
         }, 10);
         prevBlockCount.current = script.blocks.length;
@@ -1385,8 +1405,9 @@ export default function ScriptEditor({
       //console.log('Auto focusing last block');
       setTimeout(() => {
         const lastIdx = script.blocks.length - 1;
-        textareaRefs.current[lastIdx]?.focus();
+        textareaRefs.current[lastIdx]?.focus({ preventScroll: true });
         onSelectedBlockIdsChange([script.blocks[lastIdx]?.id || '']); // 単一選択に変更
+        ensureBlockVisible(lastIdx, 10);
       }, 10); // タイミングを調整
     }
     prevBlockCount.current = script.blocks.length;
@@ -1433,14 +1454,13 @@ export default function ScriptEditor({
         if (targetRef) {
           // スクロールが必要か事前に判定
           const rect = targetRef.getBoundingClientRect();
-          const windowHeight = window.innerHeight;
-          const headerHeight = 64;
-          const needsScroll = rect.bottom > windowHeight || rect.top < headerHeight;
+          const { bottomBoundary, headerHeight } = getViewportBounds();
+          const needsScroll = rect.bottom > bottomBoundary || rect.top < headerHeight;
           
           // スクロールが必要な場合のみ、スクロール位置を保存
           const scrollYBeforeFocus = needsScroll ? window.scrollY : null;
           
-          targetRef.focus();
+          targetRef.focus({ preventScroll: true });
           onSelectedBlockIdsChange([manualFocusTarget.id]); // 単一選択に変更
           
           if (needsScroll && scrollYBeforeFocus !== null) {
@@ -1492,19 +1512,26 @@ export default function ScriptEditor({
       }
   };
 
+  const getViewportBounds = () => {
+    const headerHeight = 64;
+    const toolbarElement = document.querySelector('[data-floating-toolbar="true"]') as HTMLElement | null;
+    const toolbarTop = toolbarElement?.getBoundingClientRect().top ?? window.innerHeight;
+    const bottomBoundary = Math.min(window.innerHeight, toolbarTop) - 8;
+    return { headerHeight, bottomBoundary };
+  };
+
   // ブロックがウィンドウの表示領域に収まるようにスクロール位置を調整する関数
   const ensureBlockVisible = (index: number, delay: number = 10) => {
     setTimeout(() => {
       const targetRef = textareaRefs.current[index];
       if (targetRef) {
         const rect = targetRef.getBoundingClientRect();
-        const windowHeight = window.innerHeight;
-        const headerHeight = 64;
+        const { bottomBoundary, headerHeight } = getViewportBounds();
         
         // ブロックが画面外にある場合のみスクロール
-        if (rect.bottom > windowHeight) {
+        if (rect.bottom > bottomBoundary) {
           // 下方向にスクロールが必要な場合
-          const scrollOffset = rect.bottom - windowHeight + 20; // 20pxのマージン
+          const scrollOffset = rect.bottom - bottomBoundary + 20; // 20pxのマージン
           window.scrollBy({
             top: scrollOffset,
             behavior: 'smooth'
@@ -1577,11 +1604,10 @@ export default function ScriptEditor({
               if (targetRef) {
                 // focus()の前に位置を取得
                 const rectBeforeFocus = targetRef.getBoundingClientRect();
-                const windowHeight = window.innerHeight;
-                const headerHeight = 64;
+                const { bottomBoundary, headerHeight } = getViewportBounds();
                 
                 // ブロックが画面外にあるかどうかを判定
-                const needsScrollDown = rectBeforeFocus.bottom > windowHeight;
+                const needsScrollDown = rectBeforeFocus.bottom > bottomBoundary;
                 const needsScrollUp = rectBeforeFocus.top < headerHeight;
                 const needsScroll = needsScrollDown || needsScrollUp;
                 
@@ -1593,7 +1619,7 @@ export default function ScriptEditor({
                   setTimeout(() => {
                     if (needsScrollDown) {
                       // ブロックの下端が画面下端に来るようにスクロール
-                      const scrollOffset = rectBeforeFocus.bottom - windowHeight + 20; // 20pxのマージン
+                      const scrollOffset = rectBeforeFocus.bottom - bottomBoundary + 20; // 20pxのマージン
                       window.scrollBy({
                         top: scrollOffset,
                         behavior: 'smooth'
@@ -1638,11 +1664,10 @@ export default function ScriptEditor({
               if (targetRef) {
                 // focus()の前に位置を取得
                 const rectBeforeFocus = targetRef.getBoundingClientRect();
-                const windowHeight = window.innerHeight;
-                const headerHeight = 64;
+                const { bottomBoundary, headerHeight } = getViewportBounds();
                 
                 // ブロックが画面外にあるかどうかを判定
-                const needsScrollDown = rectBeforeFocus.bottom > windowHeight;
+                const needsScrollDown = rectBeforeFocus.bottom > bottomBoundary;
                 const needsScrollUp = rectBeforeFocus.top < headerHeight;
                 const needsScroll = needsScrollDown || needsScrollUp;
                 
@@ -1654,7 +1679,7 @@ export default function ScriptEditor({
                   setTimeout(() => {
                     if (needsScrollDown) {
                       // ブロックの下端が画面下端に来るようにスクロール
-                      const scrollOffset = rectBeforeFocus.bottom - windowHeight + 20; // 20pxのマージン
+                      const scrollOffset = rectBeforeFocus.bottom - bottomBoundary + 20; // 20pxのマージン
                       window.scrollBy({
                         top: scrollOffset,
                         behavior: 'smooth'
@@ -1716,6 +1741,15 @@ export default function ScriptEditor({
     return script.blocks.findIndex((block) => block.id === selectedBlockIds[0]);
   }, [selectedBlockIds, script.blocks]);
 
+  const getLastSpeakerTemplate = useCallback(() => {
+    const lastSpeakerBlock = [...script.blocks].reverse().find((block) => block.characterId);
+    const fallbackCharacterId = characters.find((c) => c.id)?.id || '';
+    return {
+      characterId: lastSpeakerBlock?.characterId || fallbackCharacterId,
+      emotion: (lastSpeakerBlock?.emotion || 'normal') as Emotion
+    };
+  }, [characters, script.blocks]);
+
   const handleMoveSelectedBlock = useCallback((direction: 'up' | 'down') => {
     const currentIndex = getPrimarySelectedIndex();
     if (currentIndex < 0) return;
@@ -1734,19 +1768,12 @@ export default function ScriptEditor({
   const handleAddBlockBelowSelected = useCallback(() => {
     const currentIndex = getPrimarySelectedIndex();
     const insertIndex = currentIndex >= 0 ? currentIndex + 1 : script.blocks.length;
-    const baseCharacterId =
-      currentIndex >= 0
-        ? (script.blocks[currentIndex]?.characterId || '')
-        : (script.blocks[script.blocks.length - 1]?.characterId || characters[0]?.id || '');
-    const baseEmotion =
-      currentIndex >= 0
-        ? (script.blocks[currentIndex]?.emotion || 'normal')
-        : (script.blocks[script.blocks.length - 1]?.emotion || 'normal');
+    const { characterId, emotion } = getLastSpeakerTemplate();
 
     const newBlock: ScriptBlock = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      characterId: baseCharacterId,
-      emotion: baseEmotion as Emotion,
+      characterId,
+      emotion,
       text: ''
     };
     insertIdx.current = insertIndex;
@@ -1754,7 +1781,7 @@ export default function ScriptEditor({
     setTimeout(() => {
       setManualFocusTargetFn({ index: insertIndex, id: newBlock.id });
     }, 10);
-  }, [characters, getPrimarySelectedIndex, onInsertBlock, script.blocks, setManualFocusTargetFn]);
+  }, [getLastSpeakerTemplate, getPrimarySelectedIndex, onInsertBlock, script.blocks.length, setManualFocusTargetFn]);
 
   const handleAddTogakiBelowSelected = useCallback(() => {
     const currentIndex = getPrimarySelectedIndex();
@@ -1772,9 +1799,22 @@ export default function ScriptEditor({
   const canOperateSelectedBlock = primarySelectedIndex >= 0 && !!primarySelectedBlockId;
 
   const handleDuplicateSelectedBlock = useCallback(() => {
-    if (!primarySelectedBlockId) return;
-    onDuplicateBlock(primarySelectedBlockId);
-  }, [onDuplicateBlock, primarySelectedBlockId]);
+    if (!primarySelectedBlockId || primarySelectedIndex < 0) return;
+    const sourceBlock = script.blocks[primarySelectedIndex];
+    if (!sourceBlock) return;
+
+    const duplicatedBlock: ScriptBlock = {
+      ...sourceBlock,
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
+    };
+
+    const insertIndex = primarySelectedIndex + 1;
+    insertIdx.current = insertIndex;
+    onInsertBlock(duplicatedBlock, insertIndex);
+    setTimeout(() => {
+      setManualFocusTargetFn({ index: insertIndex, id: duplicatedBlock.id });
+    }, 10);
+  }, [onInsertBlock, primarySelectedBlockId, primarySelectedIndex, script.blocks, setManualFocusTargetFn]);
 
   const handleDeleteSelectedBlock = useCallback(() => {
     if (!primarySelectedBlockId) return;
@@ -2285,6 +2325,7 @@ export default function ScriptEditor({
       <div className="fixed left-1/2 -translate-x-1/2 bottom-4 z-40 px-2 flex justify-center w-full pointer-events-none">
         <div className="inline-flex items-center gap-2 max-w-[calc(100vw-1rem)] pointer-events-auto">
           <div
+            data-floating-toolbar="true"
             className={`bg-background/95 backdrop-blur border rounded-2xl shadow-lg px-2 py-2 inline-flex items-center gap-1 overflow-x-auto whitespace-nowrap transition-transform duration-300 max-w-[calc(100vw-1rem)] ${reverseToolbarOrder ? 'flex-row-reverse' : ''} ${isTabletOrLarger && isToolbarCollapsed ? 'translate-y-[140%] pointer-events-none' : 'translate-y-0'}`}
           >
           <button

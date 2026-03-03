@@ -47,13 +47,15 @@ export const useKeyboardShortcuts = (
     if (!targetRef) return;
     
     const rect = targetRef.getBoundingClientRect();
-    const windowHeight = window.innerHeight;
+    const toolbarElement = document.querySelector('[data-floating-toolbar="true"]') as HTMLElement | null;
+    const toolbarTop = toolbarElement?.getBoundingClientRect().top ?? window.innerHeight;
+    const bottomBoundary = Math.min(window.innerHeight, toolbarTop) - 8;
     const headerHeight = 64;
     
     // ブロックが画面外にある場合のみスクロール
-    if (rect.bottom > windowHeight) {
+    if (rect.bottom > bottomBoundary) {
       // 下方向にスクロールが必要な場合
-      const scrollOffset = rect.bottom - windowHeight + 20; // 20pxのマージン
+      const scrollOffset = rect.bottom - bottomBoundary + 20; // 20pxのマージン
       window.scrollBy({
         top: scrollOffset,
         behavior: 'smooth'

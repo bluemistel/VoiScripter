@@ -378,6 +378,9 @@ export default function Settings({
                     <h4 className="font-medium text-foreground mb-2">v0.2.6</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                     <li>• テキスト入力中にIME確定EnterやSpaceで並び替えモードへ誤遷移する不具合を修正</li>
+                    <li>• 追加したテキストブロックがツールバーに被る事態が多いため自動スクロール補正位置を調整</li>
+                    <li>• ツールバー複製で選択ブロックが一番下のものが選択される不具合を修正</li>
+                    <li>• ツールバーの直追ボタンで追加されるブロックが「最後に追加した話者」ロジックから外れている不具合を修正</li>
                     <li>
                       • アップデート通知を追加(アプリ版のみ)
                       <ul className="text-sm text-muted-foreground space-y-1 ml-4">
