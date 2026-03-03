@@ -115,11 +115,11 @@ export const useAppUpdate = (dataManagement: DataManagementHook) => {
 
     const normalizedReleases: UpdateReleaseNote[] = releases
       .filter(release => !release.draft && !release.prerelease)
-      .map(release => {
+      .flatMap((release): UpdateReleaseNote[] => {
         const version = normalizeVersion(release.tag_name);
-        if (!version) return null;
+        if (!version) return [];
         const htmlUrl = release.html_url || '';
-        return {
+        return [{
           version,
           tagName: release.tag_name || `v${version}`,
           name: release.name || release.tag_name || `v${version}`,
@@ -128,9 +128,8 @@ export const useAppUpdate = (dataManagement: DataManagementHook) => {
             ? htmlUrl
             : `https://github.com/bluemistel/VoiScripter/releases/tag/v${version}`,
           publishedAt: release.published_at
-        };
+        }];
       })
-      .filter((release): release is UpdateReleaseNote => release !== null)
       .sort((a, b) => compareVersion(b.version, a.version));
 
     if (normalizedReleases.length === 0) return null;
