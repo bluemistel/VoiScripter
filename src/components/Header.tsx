@@ -195,6 +195,8 @@ interface HeaderProps {
   saveCharacterProjectStates: (currentProjectId: string, characterStates: {[characterId: string]: boolean}, projectList?: string[]) => void;
   onOpenSearch: () => void;
   onOpenDataSync: () => void;
+  showLatestDownloadMenu?: boolean;
+  onOpenLatestDownload?: () => void;
 }
 
 // CSVインポート時の選択ダイアログ
@@ -314,7 +316,9 @@ export default function Header(props: HeaderProps) {
     getCharacterProjectStates,
     saveCharacterProjectStates,
     onOpenSearch,
-    onOpenDataSync
+    onOpenDataSync,
+    showLatestDownloadMenu = false,
+    onOpenLatestDownload
   } = props;
   const logoPath = useLogoPath();
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
@@ -662,6 +666,15 @@ export default function Header(props: HeaderProps) {
           >
             <CloudArrowUpIcon className="w-7 h-7" />
           </button>
+          {showLatestDownloadMenu && (
+            <button
+              onClick={onOpenLatestDownload}
+              className="px-2 py-1 text-xs text-primary hover:bg-accent rounded-lg transition border"
+              title="最新版のダウンロード案内"
+            >
+              最新版のDL
+            </button>
+          )}
           <button
             onClick={onOpenSettings}
             className="p-1 text-primary hover:bg-accent rounded-lg transition"
@@ -800,6 +813,20 @@ export default function Header(props: HeaderProps) {
                     <span>データ同期</span>
                   </div>
                 </button>
+                {showLatestDownloadMenu && (
+                  <button
+                    onClick={() => {
+                      onOpenLatestDownload?.();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <DocumentTextIcon className="w-5 h-5" />
+                      <span>最新版のDL</span>
+                    </div>
+                  </button>
+                )}
 
                 <button
                   onClick={() => {

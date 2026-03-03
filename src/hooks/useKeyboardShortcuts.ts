@@ -69,6 +69,10 @@ export const useKeyboardShortcuts = (
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.isComposing || event.keyCode === 229) {
+      return;
+    }
+
     // グローバルショートカット（常に動作）
     // Ctrl+F: 検索ダイアログを開く
     if (event.ctrlKey && event.key === 'f' && onOpenSearch) {

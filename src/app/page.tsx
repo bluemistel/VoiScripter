@@ -9,6 +9,7 @@ import CSVExportDialog from '@/components/CSVExportDialog';
 import CharacterManager from '@/components/CharacterManager';
 import SearchDialog, { SearchResult } from '@/components/SearchDialog';
 import DataSyncDialog from '@/components/DataSyncDialog';
+import UpdateDialog from '@/components/UpdateDialog';
 import { Project, Character, ScriptBlock } from '@/types';
 import { buildEmptyScript } from '@/utils/scriptDefaults';
 import { buildSyncProjectPayload } from '@/utils/storyPanelAssets';
@@ -25,6 +26,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useBlockOperations } from '@/hooks/useBlockOperations';
 import { useScriptManagement } from '@/hooks/useScriptManagement';
 import { useSettings } from '@/hooks/useSettings';
+import { useAppUpdate } from '@/hooks/useAppUpdate';
 import { useUIState } from '@/hooks/useUIState';
 import { useDataProcessing } from '@/hooks/useDataProcessing';
 import { useDataSync } from '@/hooks/useDataSync';
@@ -172,6 +174,12 @@ export default function Home() {
 
   // 設定フック
   const settings = useSettings(dataManagement);
+  const appUpdate = useAppUpdate(dataManagement);
+
+  useEffect(() => {
+    if (!dataManagement.isInitialized) return;
+    appUpdate.checkForUpdates({ openDialogIfNeeded: true });
+  }, [dataManagement.isInitialized, appUpdate.checkForUpdates]);
 
   // selectedSceneIdの自動初期化
   useEffect(() => {
@@ -584,6 +592,15 @@ export default function Home() {
     theme.setTheme(isDark);
   };
 
+  const handleOpenLatestDownload = async () => {
+    const info = appUpdate.updateInfo || await appUpdate.checkForUpdates({ openDialogIfNeeded: false });
+    if (info) {
+      appUpdate.setIsUpdateDialogOpen(true);
+      return;
+    }
+    showNotification('現在のバージョンは最新です', 'info');
+  };
+
   // 通知表示
   const renderNotification = () => {
     if (!notification) return null;
@@ -642,6 +659,8 @@ export default function Home() {
         onOpenSettings={() => uiState.setIsSettingsOpen(true)}
         onOpenSearch={() => uiState.setIsSearchDialogOpen(true)}
         onOpenDataSync={() => uiState.setIsDataSyncOpen(true)}
+        showLatestDownloadMenu={appUpdate.isUpdateSkipped}
+        onOpenLatestDownload={handleOpenLatestDownload}
         projectList={projectManagement.projectList}
         onProjectChange={(projectId) => {
           setProjectId(projectId);
@@ -874,6 +893,8 @@ export default function Home() {
         onEnterOnlyBlockAddChange={settings.handleEnterOnlyBlockAddChange}
         reverseToolbarOrder={settings.reverseToolbarOrder}
         onReverseToolbarOrderChange={settings.handleReverseToolbarOrderChange}
+        showLatestDownloadMenu={appUpdate.isUpdateSkipped}
+        onOpenLatestDownload={handleOpenLatestDownload}
       />
 
       {/* SearchDialog */}
@@ -991,6 +1012,16 @@ export default function Home() {
             showNotification('キャラクター設定の復元に失敗しました', 'error');
           }
         }}
+      />
+
+      <UpdateDialog
+        isOpen={appUpdate.isUpdateDialogOpen}
+        updateInfo={appUpdate.updateInfo}
+        skipChecked={appUpdate.isUpdateSkipped}
+        onSkipCheckedChange={(checked) => {
+          appUpdate.setSkipForLatest(checked);
+        }}
+        onClose={() => appUpdate.setIsUpdateDialogOpen(false)}
       />
 
       {/* 通知 */}

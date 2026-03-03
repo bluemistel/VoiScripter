@@ -4,7 +4,6 @@ import { useState, useRef, useEffect, useMemo, useCallback, ChangeEvent, DragEve
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
   PointerSensor,
   TouchSensor,
   useSensor,
@@ -13,7 +12,6 @@ import {
 } from '@dnd-kit/core';
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
@@ -193,6 +191,11 @@ function SortableBlock({
     setIsMobileCharacterPickerOpen(false);
   };
 
+  const isImeComposingKey = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const nativeEvent = event.nativeEvent as KeyboardEvent;
+    return nativeEvent.isComposing || nativeEvent.keyCode === 229;
+  };
+
   const buildBlockFromLastSpeaker = () => {
     const lastSpeakerBlock = [...script.blocks].reverse().find((b) => b.characterId);
     const fallbackCharacterId = characters.find((c) => c.id)?.id || '';
@@ -251,6 +254,13 @@ function SortableBlock({
               onFocus={() => setIsTextareaFocused(true)}
               onBlur={() => setIsTextareaFocused(false)}
               onKeyDown={e => {
+                // DnDキーボードセンサーへの伝播を防ぎ、IME確定Enterで並び替えモードに入らないようにする
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                }
+                if (isImeComposingKey(e)) {
+                  return;
+                }
                 // チェックボックスの状態に応じてEnter操作のみで切り替え
                 const shouldAddBlock = enterOnlyBlockAdd 
                   ? (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey)  // Enter入力のみモード
@@ -357,6 +367,13 @@ function SortableBlock({
                 value={block.text}
                 onChange={e => onUpdate({ text: e.target.value })}
                 onKeyDown={e => {
+                  // DnDキーボードセンサーへの伝播を防ぎ、IME確定Enterで並び替えモードに入らないようにする
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation();
+                  }
+                  if (isImeComposingKey(e)) {
+                    return;
+                  }
                   // チェックボックスの状態に応じてEnter操作のみで切り替え
                   const shouldAddBlock = enterOnlyBlockAdd 
                     ? (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey)  // Enter入力のみモード
@@ -545,9 +562,6 @@ export default function ScriptEditor({
         delay: 100,
         tolerance: 5,
       },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates
     })
   );
 
@@ -1533,6 +1547,9 @@ export default function ScriptEditor({
   
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.isComposing || e.keyCode === 229) {
+        return;
+      }
       // フォーカス中のtextareaを特定
       const activeIdx = textareaRefs.current.findIndex(ref => ref === document.activeElement);
       

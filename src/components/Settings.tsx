@@ -12,6 +12,8 @@ interface SettingsProps {
   onEnterOnlyBlockAddChange?: (enabled: boolean) => void;
   reverseToolbarOrder?: boolean;
   onReverseToolbarOrderChange?: (enabled: boolean) => void;
+  showLatestDownloadMenu?: boolean;
+  onOpenLatestDownload?: () => void;
 }
 
 export default function Settings({
@@ -22,9 +24,11 @@ export default function Settings({
   enterOnlyBlockAdd = false,
   onEnterOnlyBlockAddChange,
   reverseToolbarOrder = false,
-  onReverseToolbarOrderChange
+  onReverseToolbarOrderChange,
+  showLatestDownloadMenu = false,
+  onOpenLatestDownload
 }: SettingsProps) {
-  const [activeTab, setActiveTab] = useState<'settings' | 'help' | 'license' | 'changelog' | 'bugreport'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'help' | 'license' | 'changelog' | 'bugreport' | 'latestdownload'>('settings');
   const [isSelectingDirectory, setIsSelectingDirectory] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [fontFamily, setFontFamily] = useState<string>(() => {
@@ -177,6 +181,19 @@ export default function Settings({
               <InformationCircleIcon className="w-5 h-5" />
               <span className="hidden sm:inline">ライセンス</span>
             </button>
+            {showLatestDownloadMenu && (
+              <button
+                onClick={() => setActiveTab('latestdownload')}
+                className={`w-full p-3 sm:text-left text-center flex items-center justify-center sm:justify-start space-x-0 sm:space-x-2 transition-colors ${
+                  activeTab === 'latestdownload'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'hover:bg-accent'
+                }`}
+              >
+                <DocumentTextIcon className="w-5 h-5" />
+                <span className="hidden sm:inline">最新版のDL</span>
+              </button>
+            )}
           </div>
           
           {/* メインコンテンツ */}
@@ -357,6 +374,19 @@ export default function Settings({
               <div className="flex flex-col max-h-[60vh] pr-2">
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.2.6</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                    <li>• テキスト入力中にIME確定EnterやSpaceで並び替えモードへ誤遷移する不具合を修正</li>
+                    <li>
+                      • アップデート通知を追加(アプリ版のみ)
+                      <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                        <li>• 最新版へのダウンロード導線を追加（Booth / GitHub Release）</li>
+                        <li>• アップデート通知のスキップ設定と、再表示用の「最新版のDL」メニューを追加</li>
+                      </ul>
+                      </li>
+                    </ul>
+                  </div>
                   <div>
                     <h4 className="font-medium text-foreground mb-2">v0.2.5</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
@@ -640,6 +670,20 @@ export default function Settings({
                   </div>
                 </div>
               )}
+            {activeTab === 'latestdownload' && showLatestDownloadMenu && (
+              <div className="space-y-4">
+                <h4 className="font-medium text-foreground mb-2">最新版のダウンロード</h4>
+                <p className="text-sm text-muted-foreground">
+                  通知をスキップ中のため、ここから最新バージョンの案内を再表示できます。
+                </p>
+                <button
+                  onClick={() => onOpenLatestDownload?.()}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
+                >
+                  アップデート案内を開く
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
