@@ -10,6 +10,7 @@ import CharacterManager from '@/components/CharacterManager';
 import SearchDialog, { SearchResult } from '@/components/SearchDialog';
 import DataSyncDialog from '@/components/DataSyncDialog';
 import UpdateDialog from '@/components/UpdateDialog';
+import DialogFrame from '@/components/common/DialogFrame';
 import { Project, Character, ScriptBlock } from '@/types';
 import { buildEmptyScript } from '@/utils/scriptDefaults';
 import { buildSyncProjectPayload } from '@/utils/storyPanelAssets';
@@ -1029,8 +1030,12 @@ export default function Home() {
 
       {/* 削除確認ダイアログ */}
       {deleteConfirmation && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300 p-4">
-          <div className="bg-background rounded-lg p-6 max-w-md w-full mx-4">
+        <DialogFrame
+          isOpen={!!deleteConfirmation}
+          onCancel={() => setDeleteConfirmation(null)}
+          panelClassName="bg-background rounded-lg p-6 max-w-md w-full mx-4"
+          overlayClassName="transition-opacity duration-300 p-4"
+        >
             <h3 className="text-lg font-bold mb-4">プロジェクトの削除</h3>
             <p className="mb-6">このプロジェクトを削除しますか？この操作は元に戻せません。</p>
             <div className="flex space-x-4">
@@ -1055,8 +1060,7 @@ export default function Home() {
                   削除
                 </button>
             </div>
-          </div>
-        </div>
+        </DialogFrame>
       )}
     </div>
   );

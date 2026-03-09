@@ -37,6 +37,7 @@ import CharacterManager from './CharacterManager';
 import Settings from './Settings';
 import CSVExportDialog from './CSVExportDialog';
 import { Character, Project, Scene } from '@/types';
+import DialogFrame from '@/components/common/DialogFrame';
 
 // ロゴパスを取得するカスタムフック
 const useLogoPath = () => {
@@ -202,17 +203,24 @@ interface HeaderProps {
 // CSVインポート時の選択ダイアログ
 function ImportChoiceDialog({ isOpen, onClose, onImportToCurrent, onImportToNew }: { isOpen: boolean, onClose: () => void, onImportToCurrent: () => void, onImportToNew: (name: string) => void }) {
   const [newProjectName, setNewProjectName] = useState('');
+  const handleCancel = () => {
+    setNewProjectName('');
+    onClose();
+  };
   useEffect(() => {
     if (!isOpen) setNewProjectName('');
   }, [isOpen]);
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6 relative">
+    <DialogFrame
+      isOpen={isOpen}
+      onCancel={handleCancel}
+      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6 relative"
+    >
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-foreground">CSVインポート先の選択</h3>
           <button
-            onClick={() => { setNewProjectName(''); onClose(); }}
+            onClick={handleCancel}
             className="text-muted-foreground hover:text-foreground text-2xl"
             title="キャンセル"
           >
@@ -227,8 +235,7 @@ function ImportChoiceDialog({ isOpen, onClose, onImportToCurrent, onImportToNew 
             <button onClick={() => { onImportToNew(newProjectName); setNewProjectName(''); }} disabled={!newProjectName.trim()} className="w-full px-4 py-2 bg-secondary text-secondary-foreground rounded hover:bg-secondary/90 font-semibold disabled:opacity-50">新規作成してインポート</button>
           </div>
         </div>
-      </div>
-    </div>
+    </DialogFrame>
   );
 }
 
@@ -253,8 +260,11 @@ function ProjectRenameDialog({ isOpen, onClose, currentName, onRename }: { isOpe
   
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+    <DialogFrame
+      isOpen={isOpen}
+      onCancel={onClose}
+      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+    >
         <h3 className="text-lg font-semibold text-foreground mb-4">プロジェクト名の変更</h3>
         <input 
           ref={inputRef}
@@ -267,8 +277,7 @@ function ProjectRenameDialog({ isOpen, onClose, currentName, onRename }: { isOpe
           <button onClick={onClose} className="px-4 py-2 text-muted-foreground hover:bg-accent rounded">キャンセル</button>
           <button onClick={() => { onRename(newName); onClose(); }} disabled={!newName.trim()} className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold disabled:opacity-50">変更</button>
         </div>
-      </div>
-    </div>
+    </DialogFrame>
   );
 }
 
@@ -891,8 +900,11 @@ export default function Header(props: HeaderProps) {
       </div>
       {/* シーン追加ダイアログ */}
       {isAddSceneDialogOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+        <DialogFrame
+          isOpen={isAddSceneDialogOpen}
+          onCancel={() => { setIsAddSceneDialogOpen(false); setSceneError(''); setNewSceneName(''); }}
+          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+        >
             <h3 className="text-lg font-semibold text-foreground mb-4">シーンを追加</h3>
             <input
               type="text"
@@ -907,8 +919,7 @@ export default function Header(props: HeaderProps) {
               <button onClick={() => { setIsAddSceneDialogOpen(false); setSceneError(''); setNewSceneName(''); }} className="px-4 py-2 text-muted-foreground hover:bg-accent rounded">キャンセル</button>
               <button onClick={handleAddSceneLocal} className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold">OK</button>
             </div>
-          </div>
-        </div>
+        </DialogFrame>
       )}
       {isCharacterModalOpen && (
         <CharacterManager
@@ -926,14 +937,12 @@ export default function Header(props: HeaderProps) {
           currentProjectId={project.id} projectList={projectList} getCharacterProjectStates={getCharacterProjectStates} saveCharacterProjectStates={saveCharacterProjectStates}              />
       )}
       {isSettingsOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300">
-          <Settings
-            isOpen={isSettingsOpen}
-            onClose={() => setIsSettingsOpen(false)}
-            saveDirectory={saveDirectory}
-            onSaveDirectoryChange={onSaveDirectoryChange}
-          />
-        </div>
+        <Settings
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          saveDirectory={saveDirectory}
+          onSaveDirectoryChange={onSaveDirectoryChange}
+        />
       )}
       <CSVExportDialog
         isOpen={isCSVExportDialogOpen}
@@ -988,8 +997,11 @@ export default function Header(props: HeaderProps) {
       />
       {/* シーン名変更ダイアログ */}
       {isRenameSceneDialogOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+        <DialogFrame
+          isOpen={isRenameSceneDialogOpen}
+          onCancel={() => { setIsRenameSceneDialogOpen(false); setRenameSceneError(''); }}
+          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+        >
             <h3 className="text-lg font-semibold text-foreground mb-4">シーン名の変更</h3>
             <input
               type="text"
@@ -1004,21 +1016,22 @@ export default function Header(props: HeaderProps) {
               <button onClick={() => { setIsRenameSceneDialogOpen(false); setRenameSceneError(''); }} className="px-4 py-2 text-muted-foreground hover:bg-accent rounded">キャンセル</button>
               <button onClick={handleRenameSceneLocal} className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold">変更</button>
             </div>
-          </div>
-        </div>
+        </DialogFrame>
       )}
       {/* シーン削除ダイアログ */}
       {isDeleteSceneDialogOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+        <DialogFrame
+          isOpen={isDeleteSceneDialogOpen}
+          onCancel={() => setIsDeleteSceneDialogOpen(false)}
+          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+        >
             <h3 className="text-lg font-semibold text-foreground mb-4">シーンの削除</h3>
             <p className="mb-4 text-foreground">「{deleteTargetSceneName}」を削除しますか？<br/>この操作は元に戻せません。</p>
             <div className="flex justify-end space-x-2">
               <button onClick={() => setIsDeleteSceneDialogOpen(false)} className="px-4 py-2 text-muted-foreground hover:bg-accent rounded">キャンセル</button>
               <button onClick={handleDeleteSceneLocal} className="px-4 py-2 bg-destructive text-destructive-foreground rounded hover:bg-destructive/80 font-semibold">削除</button>
             </div>
-          </div>
-        </div>
+        </DialogFrame>
       )}
     </header>
   );

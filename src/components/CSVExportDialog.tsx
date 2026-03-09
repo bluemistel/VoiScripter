@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Character, Scene } from '@/types';
+import DialogFrame from '@/components/common/DialogFrame';
 
 interface CSVExportDialogProps {
   isOpen: boolean;
@@ -166,11 +167,13 @@ export default function CSVExportDialog({
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300 p-4">
-      <div className="bg-background border rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col transition-opacity duration-300">
+    <DialogFrame
+      isOpen={isOpen}
+      onCancel={handleClose}
+      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col transition-opacity duration-300"
+      overlayClassName="transition-opacity duration-300 p-4"
+    >
         <div className="flex-shrink-0 p-6 pb-4">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-foreground">エクスポート</h3>
@@ -521,7 +524,6 @@ export default function CSVExportDialog({
           </button>
         </div>
         </div>
-      </div>
-    </div>
+    </DialogFrame>
   );
 } 

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
+import DialogFrame from '@/components/common/DialogFrame';
 
 interface ProjectDialogProps {
   isOpen: boolean;
@@ -50,11 +51,12 @@ export default function ProjectDialog({
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4">
+    <DialogFrame
+      isOpen={isOpen}
+      onCancel={handleCancel}
+      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4"
+    >
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-lg font-semibold text-foreground">{title}</h2>
           <button
@@ -103,7 +105,6 @@ export default function ProjectDialog({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </DialogFrame>
   );
 } 

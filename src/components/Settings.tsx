@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { XMarkIcon, Cog6ToothIcon, QuestionMarkCircleIcon, InformationCircleIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import DialogFrame from '@/components/common/DialogFrame';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -111,8 +112,11 @@ export default function Settings({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-background border rounded-lg shadow-lg w-full max-w-xs sm:max-w-md md:max-w-2xl lg:max-w-3xl mx-2 sm:mx-4 h-[90vh] sm:h-[750px] overflow-hidden flex flex-col">
+    <DialogFrame
+      isOpen={isOpen}
+      onCancel={onClose}
+      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-xs sm:max-w-md md:max-w-2xl lg:max-w-3xl mx-2 sm:mx-4 h-[90vh] sm:h-[750px] overflow-hidden flex flex-col"
+    >
         <div className="flex justify-between items-center p-4 border-b shrink-0">
           <h2 className="text-lg font-semibold text-foreground">設定</h2>
           <button
@@ -689,12 +693,15 @@ export default function Settings({
             )}
           </div>
         </div>
-      </div>
 
       {/* 初期化確認ダイアログ */}
       {showResetDialog && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-60">
-          <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4">
+        <DialogFrame
+          isOpen={showResetDialog}
+          onCancel={() => setShowResetDialog(false)}
+          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4"
+          overlayClassName="z-60 bg-black/60"
+        >
             <div className="p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">アプリを初期化しますか？</h3>
               <div className="space-y-4">
@@ -728,9 +735,8 @@ export default function Settings({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+        </DialogFrame>
       )}
-    </div>
+    </DialogFrame>
   );
 } 

@@ -15,6 +15,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import jsQR from 'jsqr';
 import { CHARACTER_SYNC_KEY_SUFFIX } from '@/utils/characterSync';
+import DialogFrame from '@/components/common/DialogFrame';
 
 /** QRコードスキャナーコンポーネント（カメラ利用） */
 function QRScanner({ onScan, onClose }: { onScan: (data: string) => void; onClose: () => void }) {
@@ -186,8 +187,6 @@ export default function DataSyncDialog({
         setShowGuide(false);
     }, [isOpen, syncId]);
 
-    if (!isOpen) return null;
-
     const handleSync = async () => {
         if (!password) {
             alert('パスワードを入力してください');
@@ -308,8 +307,11 @@ export default function DataSyncDialog({
 
     return (
         <>
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-background border rounded-lg shadow-lg w-full max-w-lg p-6 mx-4">
+        <DialogFrame
+            isOpen={isOpen}
+            onCancel={onClose}
+            panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-lg p-6 mx-4"
+        >
                 {/* ヘッダー */}
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-xl font-bold text-foreground">データ同期 (E2EE)</h2>
@@ -515,11 +517,15 @@ export default function DataSyncDialog({
                         </ul>
                     </div>
                 </div>
-            </div>
-        </div>
+        </DialogFrame>
         {showGuide && (
-            <div className="fixed inset-0 z-60 bg-black/50 flex items-center justify-center p-4">
-                <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-background border border-border rounded-xl shadow-xl">
+            <DialogFrame
+                isOpen={showGuide}
+                onCancel={() => setShowGuide(false)}
+                panelClassName="w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-background border border-border rounded-xl shadow-xl"
+                overlayClassName="z-60 bg-black/50 p-4"
+                enableEnterShortcut={false}
+            >
                     <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border p-4 flex items-center justify-between">
                         <h3 className="text-base font-semibold text-foreground">データ同期の使い方</h3>
                         <button
@@ -573,8 +579,7 @@ export default function DataSyncDialog({
                             </ul>
                         </div>
                     </div>
-                </div>
-            </div>
+            </DialogFrame>
         )}
         </>
     );

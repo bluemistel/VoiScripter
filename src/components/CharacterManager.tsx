@@ -17,6 +17,7 @@ import {
   rectSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import DialogFrame from '@/components/common/DialogFrame';
 
 const defaultEmotions: Emotion[] = ['normal'];
 
@@ -374,8 +375,11 @@ export default function CharacterManager({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-background border rounded-lg shadow-lg w-full max-w-sm sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+    <DialogFrame
+      isOpen={isOpen}
+      onCancel={handleClose}
+      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-sm sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
+    >
         <div className="flex-shrink-0 p-6 pb-4 border-b">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold text-foreground">キャラクター管理</h3>
@@ -625,12 +629,15 @@ export default function CharacterManager({
             )}
           </div>
         </div>
-      </div>
       
       {/* グループ設定ダイアログ */}
       {isGroupSettingsOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+        <DialogFrame
+          isOpen={isGroupSettingsOpen}
+          onCancel={() => setIsGroupSettingsOpen(false)}
+          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+          overlayClassName="bg-black/50"
+        >
             <h3 className="text-lg font-semibold text-foreground mb-4">グループ設定</h3>
             
             {/* グループ追加 */}
@@ -689,14 +696,17 @@ export default function CharacterManager({
                 閉じる
               </button>
             </div>
-          </div>
-        </div>
+        </DialogFrame>
       )}
 
       {/* カラーピッカーダイアログ */}
       {showColorPicker && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-background border rounded-lg shadow-lg w-full max-w-sm mx-4 p-6">
+        <DialogFrame
+          isOpen={!!showColorPicker}
+          onCancel={() => setShowColorPicker(null)}
+          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-sm mx-4 p-6"
+          overlayClassName="bg-black/50"
+        >
             <h3 className="text-lg font-semibold text-foreground mb-4">背景色を選択</h3>
             <div className="flex flex-col items-center space-y-4">
               <input
@@ -720,14 +730,16 @@ export default function CharacterManager({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+        </DialogFrame>
       )}
       
       {/* 確認ダイアログ */}
       {showCloseDialog && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+        <DialogFrame
+          isOpen={showCloseDialog}
+          onCancel={() => setShowCloseDialog(false)}
+          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+        >
             <h3 className="text-lg font-semibold text-foreground mb-4">確認</h3>
             <p className="mb-4 text-foreground">
               ・編集中の台本で使用しないキャラクターをプルダウンから非表示にします。<br />
@@ -751,9 +763,8 @@ export default function CharacterManager({
                 OK
               </button>
             </div>
-          </div>
-        </div>
+        </DialogFrame>
       )}
-    </div>
+    </DialogFrame>
   );
 }
