@@ -753,54 +753,85 @@ export default function ScriptEditor({
   );
 
   useEffect(() => {
-    const nextLocalImages: Record<string, StorySeparatorImage> = {};
-    storySegments.forEach(segment => {
-      if (!segment.imageRef?.assetId) return;
-      const image = loadStoryPanelAsset(projectStorageId, script.id, segment.id);
-      if (image) {
-        nextLocalImages[segment.id] = image;
+    let cancelled = false;
+    const hydrateLocalImages = async () => {
+      const nextLocalImages: Record<string, StorySeparatorImage> = {};
+      for (const segment of storySegments) {
+        if (!segment.imageRef?.assetId) continue;
+        const image = await loadStoryPanelAsset(projectStorageId, script.id, segment.id);
+        if (image) {
+          nextLocalImages[segment.id] = image;
+        }
       }
-    });
-    setLocalSegmentImages(nextLocalImages);
+      if (!cancelled) {
+        setLocalSegmentImages(nextLocalImages);
+      }
+    };
+    void hydrateLocalImages();
+    return () => {
+      cancelled = true;
+    };
   }, [projectStorageId, script.id, storySegments]);
 
   useEffect(() => {
     if (!onUpdateScript) return;
     const needsMigration = storySegments.some(segment => segment.image?.dataUrl && !segment.imageRef?.assetId);
     if (!needsMigration) return;
-
-    const migratedSegments = storySegments.map(segment => {
-      if (!segment.image?.dataUrl || segment.imageRef?.assetId) return segment;
-      const assetId = segment.image.id || `asset_${segment.id}`;
-      saveStoryPanelAsset(projectStorageId, script.id, segment.id, segment.image);
-      return {
-        ...segment,
-        imageRef: {
-          assetId,
-          name: segment.image.name
-        },
-        image: undefined
-      };
-    });
-
-    onUpdateScript({ storySegments: migratedSegments });
+    let cancelled = false;
+    const migrateSegments = async () => {
+      const migratedSegments: StorySeparatorSegment[] = [];
+      for (const segment of storySegments) {
+        if (!segment.image?.dataUrl || segment.imageRef?.assetId) {
+          migratedSegments.push(segment);
+          continue;
+        }
+        const assetId = segment.image.id || `asset_${segment.id}`;
+        const saved = await saveStoryPanelAsset(projectStorageId, script.id, segment.id, segment.image);
+        if (!saved) {
+          migratedSegments.push(segment);
+          continue;
+        }
+        migratedSegments.push({
+          ...segment,
+          imageRef: {
+            assetId,
+            name: segment.image.name
+          },
+          image: undefined
+        });
+      }
+      if (!cancelled) {
+        onUpdateScript({ storySegments: migratedSegments });
+      }
+    };
+    void migrateSegments();
+    return () => {
+      cancelled = true;
+    };
   }, [onUpdateScript, projectStorageId, script.id, storySegments]);
 
   const handleSegmentImageChange = useCallback(
-    (segmentId: string, image?: StorySeparatorImage) => {
+    async (segmentId: string, image?: StorySeparatorImage) => {
       if (!image) return;
-      saveStoryPanelAsset(projectStorageId, script.id, segmentId, image);
+      const saved = await saveStoryPanelAsset(projectStorageId, script.id, segmentId, image);
       setLocalSegmentImages(prev => ({ ...prev, [segmentId]: image }));
       updateStorySegments(prev =>
         prev.map(segment =>
           segment.id === segmentId
             ? {
                 ...segment,
-                imageRef: {
-                  assetId: image.id,
-                  name: image.name
-                },
-                image: undefined
+                ...(saved
+                  ? {
+                      imageRef: {
+                        assetId: image.id,
+                        name: image.name
+                      },
+                      image: undefined
+                    }
+                  : {
+                      imageRef: undefined,
+                      image
+                    })
               }
             : segment
         )
@@ -811,7 +842,7 @@ export default function ScriptEditor({
 
   const handleRemoveSegmentImage = useCallback(
     (segmentId: string) => {
-      removeStoryPanelAsset(projectStorageId, script.id, segmentId);
+      void removeStoryPanelAsset(projectStorageId, script.id, segmentId);
       setLocalSegmentImages(prev => {
         const next = { ...prev };
         delete next[segmentId];
@@ -892,7 +923,7 @@ export default function ScriptEditor({
         if (!target || target.anchorBlockId === null) {
           return prev;
         }
-        removeStoryPanelAsset(projectStorageId, script.id, segmentId);
+        void removeStoryPanelAsset(projectStorageId, script.id, segmentId);
         setLocalSegmentImages(current => {
           const nextImages = { ...current };
           delete nextImages[segmentId];
@@ -933,7 +964,7 @@ export default function ScriptEditor({
         name: file.name,
         dataUrl
       };
-      handleSegmentImageChange(action.segmentId, payload);
+      void handleSegmentImageChange(action.segmentId, payload);
     };
     reader.readAsDataURL(file);
     event.target.value = '';
@@ -950,7 +981,7 @@ export default function ScriptEditor({
           name: file.name,
           dataUrl
         };
-        handleSegmentImageChange(segmentId, payload);
+        void handleSegmentImageChange(segmentId, payload);
       };
       reader.readAsDataURL(file);
     },

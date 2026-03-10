@@ -14,6 +14,7 @@ import DialogFrame from '@/components/common/DialogFrame';
 import { Project, Character, ScriptBlock } from '@/types';
 import { buildEmptyScript } from '@/utils/scriptDefaults';
 import { buildSyncProjectPayload } from '@/utils/storyPanelAssets';
+import { migrateLegacyStoryPanelAssets } from '@/utils/storyPanelAssets';
 import { buildCharacterSyncPayload, restoreCharactersFromSyncPayload, LightweightCharacterSyncPayload } from '@/utils/characterSync';
 
 // カスタムフックのインポート
@@ -37,6 +38,7 @@ export default function Home() {
   const textareaRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
   const setIsUndoRedoOperationRef = useRef<((isUndoRedo: boolean) => void) | null>(null);
   const setIsCtrlEnterBlockRef = useRef<((isCtrlEnter: boolean) => void) | null>(null);
+  const storyAssetMigrationDoneRef = useRef(false);
 
   // ローディング状態
   const [isLoading, setIsLoading] = useState(true);
@@ -181,6 +183,12 @@ export default function Home() {
     if (!dataManagement.isInitialized) return;
     appUpdate.checkForUpdates({ openDialogIfNeeded: true });
   }, [dataManagement.isInitialized, appUpdate.checkForUpdates]);
+
+  useEffect(() => {
+    if (!dataManagement.isInitialized || storyAssetMigrationDoneRef.current) return;
+    storyAssetMigrationDoneRef.current = true;
+    void migrateLegacyStoryPanelAssets();
+  }, [dataManagement.isInitialized]);
 
   // selectedSceneIdの自動初期化
   useEffect(() => {
