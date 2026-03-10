@@ -47,6 +47,7 @@ export default function SearchDialog({
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isMobileView, setIsMobileView] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isTypingRef = useRef(false);
@@ -55,9 +56,13 @@ export default function SearchDialog({
   // ダイアログが開いた時に初期位置を設定し、フォーカスを設定
   useEffect(() => {
     if (isOpen) {
-      // ウィンドウの上から2/5の位置に配置
-      const initialY = window.innerHeight * 0.4;
-      const initialX = (window.innerWidth - 672) / 2; // max-w-2xl (672px) を考慮
+      const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+      const mobile = coarsePointer || window.innerWidth < 768;
+      setIsMobileView(mobile);
+      // モバイル時は中央寄せ、PC時は従来位置
+      const initialY = mobile ? Math.max(24, window.innerHeight * 0.18) : window.innerHeight * 0.4;
+      const dialogWidth = mobile ? Math.min(window.innerWidth - 16, 672) : 672;
+      const initialX = Math.max(8, (window.innerWidth - dialogWidth) / 2);
       setPosition({ x: initialX, y: initialY });
       
       if (inputRef.current) {
@@ -71,6 +76,7 @@ export default function SearchDialog({
 
   // ドラッグ開始
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isMobileView) return;
     if (dialogRef.current) {
       setIsDragging(true);
       const rect = dialogRef.current.getBoundingClientRect();
@@ -148,12 +154,13 @@ export default function SearchDialog({
     <div className="fixed inset-0 bg-black/40 z-50" onPointerDown={handleOverlayClick}>
       <div
         ref={dialogRef}
-        className="bg-background border rounded-lg shadow-lg w-full max-w-2xl p-6 absolute"
+        className={`bg-background border rounded-lg shadow-lg p-4 sm:p-6 ${isMobileView ? 'w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)]' : 'w-full max-w-2xl'} absolute`}
         style={{
           left: `${position.x}px`,
           top: `${position.y}px`,
           cursor: isDragging ? 'grabbing' : 'default'
         }}
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
         onFocusCapture={(e) => {
           const target = e.target as HTMLElement;
@@ -181,7 +188,7 @@ export default function SearchDialog({
         }}
       >
         <div
-          className="flex items-center justify-between mb-4 cursor-move select-none"
+          className={`flex items-center justify-between mb-4 select-none ${isMobileView ? '' : 'cursor-move'}`}
           onMouseDown={handleMouseDown}
         >
           <h3 className="text-lg font-semibold text-foreground flex items-center">

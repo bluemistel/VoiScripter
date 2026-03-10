@@ -380,7 +380,7 @@ export default function CharacterManager({
       onCancel={handleClose}
       panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-sm sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
     >
-        <div className="flex-shrink-0 p-6 pb-4 border-b">
+        <div className="shrink-0 p-6 pb-4 border-b">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold text-foreground">キャラクター管理</h3>
             <button
@@ -648,7 +648,8 @@ export default function CharacterManager({
                   value={newGroup}
                   onChange={e => setNewGroup(e.target.value)}
                   placeholder="新しいグループ名"
-                  className="flex-1 p-2 border rounded bg-background text-foreground"
+                  className="flex-1 p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                  autoFocus
                 />
                 <button
                   onClick={() => {

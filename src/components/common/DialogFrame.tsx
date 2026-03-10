@@ -147,7 +147,9 @@ export default function DialogFrame({
       className={`fixed inset-0 bg-black/40 flex items-center justify-center z-50 ${overlayClassName}`.trim()}
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) {
-          if (isTypingRef.current || Date.now() - lastTypingAtRef.current < 350) {
+          const active = document.activeElement as HTMLElement | null;
+          const isAnyTyping = isEditableElement(active);
+          if (isTypingRef.current || isAnyTyping || Date.now() - lastTypingAtRef.current < 350) {
             return;
           }
           onCancel();

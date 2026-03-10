@@ -1588,7 +1588,8 @@ export default function ScriptEditor({
     const toolbarElement = document.querySelector('[data-floating-toolbar="true"]') as HTMLElement | null;
     const toolbarTop = toolbarElement?.getBoundingClientRect().top ?? window.innerHeight;
     const bottomBoundary = Math.min(window.innerHeight, toolbarTop) - 8;
-    return { headerHeight, bottomBoundary };
+    const bottomSafeMargin = isMobileLayout ? 92 : 20;
+    return { headerHeight, bottomBoundary, bottomSafeMargin };
   };
 
   // ブロックがウィンドウの表示領域に収まるようにスクロール位置を調整する関数
@@ -1597,12 +1598,13 @@ export default function ScriptEditor({
       const targetRef = textareaRefs.current[index];
       if (targetRef) {
         const rect = targetRef.getBoundingClientRect();
-        const { bottomBoundary, headerHeight } = getViewportBounds();
+        const { bottomBoundary, headerHeight, bottomSafeMargin } = getViewportBounds();
+        const safeBottom = bottomBoundary - bottomSafeMargin;
         
         // ブロックが画面外にある場合のみスクロール
-        if (rect.bottom > bottomBoundary) {
+        if (rect.bottom > safeBottom) {
           // 下方向にスクロールが必要な場合
-          const scrollOffset = rect.bottom - bottomBoundary + 20; // 20pxのマージン
+          const scrollOffset = rect.bottom - safeBottom + 8;
           window.scrollBy({
             top: scrollOffset,
             behavior: 'smooth'
