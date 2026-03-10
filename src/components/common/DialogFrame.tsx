@@ -30,6 +30,13 @@ export default function DialogFrame({
   children
 }: DialogFrameProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const isTypingInDialog = () => {
+    const panel = panelRef.current;
+    const active = document.activeElement as HTMLElement | null;
+    if (!panel || !active || !panel.contains(active)) return false;
+    const tagName = active.tagName.toLowerCase();
+    return tagName === 'input' || tagName === 'textarea' || active.isContentEditable;
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -93,6 +100,9 @@ export default function DialogFrame({
       className={`fixed inset-0 bg-black/40 flex items-center justify-center z-50 ${overlayClassName}`.trim()}
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) {
+          if (isTypingInDialog()) {
+            return;
+          }
           onCancel();
         }
       }}

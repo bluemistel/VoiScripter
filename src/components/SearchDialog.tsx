@@ -135,8 +135,18 @@ export default function SearchDialog({
 
   if (!isOpen) return null;
 
+  const handleOverlayClick = () => {
+    const active = document.activeElement as HTMLElement | null;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+      if (dialogRef.current?.contains(active)) {
+        return;
+      }
+    }
+    onClose();
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/40 z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/40 z-50" onClick={handleOverlayClick}>
       <div
         ref={dialogRef}
         className="bg-background border rounded-lg shadow-lg w-full max-w-2xl p-6 absolute"
