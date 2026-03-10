@@ -49,6 +49,7 @@ export default function SearchDialog({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const dialogRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isTypingRef = useRef(false);
 
   // ダイアログが開いた時に初期位置を設定し、フォーカスを設定
   useEffect(() => {
@@ -136,11 +137,8 @@ export default function SearchDialog({
   if (!isOpen) return null;
 
   const handleOverlayClick = () => {
-    const active = document.activeElement as HTMLElement | null;
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
-      if (dialogRef.current?.contains(active)) {
-        return;
-      }
+    if (isTypingRef.current) {
+      return;
     }
     onClose();
   };
@@ -156,6 +154,22 @@ export default function SearchDialog({
           cursor: isDragging ? 'grabbing' : 'default'
         }}
         onClick={(e) => e.stopPropagation()}
+        onFocusCapture={(e) => {
+          const target = e.target as HTMLElement;
+          const tagName = target.tagName.toLowerCase();
+          isTypingRef.current = tagName === 'input' || tagName === 'textarea' || target.isContentEditable;
+        }}
+        onBlurCapture={() => {
+          setTimeout(() => {
+            const active = document.activeElement as HTMLElement | null;
+            if (!active || !dialogRef.current?.contains(active)) {
+              isTypingRef.current = false;
+              return;
+            }
+            const tagName = active.tagName.toLowerCase();
+            isTypingRef.current = tagName === 'input' || tagName === 'textarea' || active.isContentEditable;
+          }, 0);
+        }}
       >
         <div
           className="flex items-center justify-between mb-4 cursor-move select-none"

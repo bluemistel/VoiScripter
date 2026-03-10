@@ -30,17 +30,17 @@ export default function DialogFrame({
   children
 }: DialogFrameProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const isTypingInDialog = () => {
-    const panel = panelRef.current;
-    const active = document.activeElement as HTMLElement | null;
-    if (!panel || !active || !panel.contains(active)) return false;
-    const tagName = active.tagName.toLowerCase();
-    return tagName === 'input' || tagName === 'textarea' || active.isContentEditable;
+  const isTypingRef = useRef(false);
+  const isEditableElement = (el: HTMLElement | null) => {
+    if (!el) return false;
+    const tagName = el.tagName.toLowerCase();
+    return tagName === 'input' || tagName === 'textarea' || el.isContentEditable;
   };
 
   useEffect(() => {
     if (!isOpen) return;
     panelRef.current?.focus();
+    isTypingRef.current = false;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -88,8 +88,26 @@ export default function DialogFrame({
     };
 
     document.addEventListener('keydown', handleKeyDown);
+
+    const panel = panelRef.current;
+    const handleFocusIn = (event: FocusEvent) => {
+      isTypingRef.current = isEditableElement(event.target as HTMLElement | null);
+    };
+    const handleFocusOut = () => {
+      setTimeout(() => {
+        const active = document.activeElement as HTMLElement | null;
+        isTypingRef.current = !!(panel && active && panel.contains(active) && isEditableElement(active));
+      }, 0);
+    };
+
+    panel?.addEventListener('focusin', handleFocusIn);
+    panel?.addEventListener('focusout', handleFocusOut);
+
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      panel?.removeEventListener('focusin', handleFocusIn);
+      panel?.removeEventListener('focusout', handleFocusOut);
+      isTypingRef.current = false;
     };
   }, [isOpen, onCancel, enableEnterShortcut]);
 
@@ -100,7 +118,7 @@ export default function DialogFrame({
       className={`fixed inset-0 bg-black/40 flex items-center justify-center z-50 ${overlayClassName}`.trim()}
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) {
-          if (isTypingInDialog()) {
+          if (isTypingRef.current) {
             return;
           }
           onCancel();
