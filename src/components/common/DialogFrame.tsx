@@ -149,7 +149,17 @@ export default function DialogFrame({
         if (event.target === event.currentTarget) {
           const active = document.activeElement as HTMLElement | null;
           const isAnyTyping = isEditableElement(active);
-          if (isTypingRef.current || isAnyTyping || Date.now() - lastTypingAtRef.current < 350) {
+          const visualViewport = typeof window !== 'undefined' ? window.visualViewport : null;
+          const keyboardInset = visualViewport
+            ? Math.max(0, Math.round(window.innerHeight - (visualViewport.height + visualViewport.offsetTop)))
+            : 0;
+          const isMobileKeyboardOpen = keyboardInset > 80;
+          if (
+            isTypingRef.current ||
+            isAnyTyping ||
+            isMobileKeyboardOpen ||
+            Date.now() - lastTypingAtRef.current < 350
+          ) {
             return;
           }
           onCancel();

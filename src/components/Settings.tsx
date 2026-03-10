@@ -379,6 +379,16 @@ export default function Settings({
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
                   <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.2.7</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• ストーリーパネルの画像保存がLocalStrageになっていたため現在の保存先（IndexedDB/任意ディレクトリ）に追従するよう変更し、旧localStorageにあるデータの自動移行処理を追加</li>
+                      <li>• ダイアログを画面外のクリック・タップで閉じられるように操作性を改善</li>
+                      <li>• ダイアログ表示のOK扱いのボタンをEnter、キャンセル扱いのボタンをEscキーでも閉じられるように操作性を改善</li>
+                      <li>• 横幅が狭い画面の時に検索ダイアログの表示位置と幅を修正してレスポンシブ対応</li>
+                      <li>• モバイル/タブレット環境の文字入力エリアにツールバーに隠れにくくなるよう自動スクロール補正を調整</li>
+                    </ul>
+                  </div>
+                  <div>
                     <h4 className="font-medium text-foreground mb-2">v0.2.6</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                     <li>• テキスト入力中にIME確定EnterやSpaceで並び替えモードへ誤遷移する不具合を修正</li>
