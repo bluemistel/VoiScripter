@@ -50,6 +50,7 @@ export default function SearchDialog({
   const dialogRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isTypingRef = useRef(false);
+  const lastTypingAtRef = useRef(0);
 
   // ダイアログが開いた時に初期位置を設定し、フォーカスを設定
   useEffect(() => {
@@ -137,14 +138,14 @@ export default function SearchDialog({
   if (!isOpen) return null;
 
   const handleOverlayClick = () => {
-    if (isTypingRef.current) {
+    if (isTypingRef.current || Date.now() - lastTypingAtRef.current < 350) {
       return;
     }
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50" onClick={handleOverlayClick}>
+    <div className="fixed inset-0 bg-black/40 z-50" onPointerDown={handleOverlayClick}>
       <div
         ref={dialogRef}
         className="bg-background border rounded-lg shadow-lg w-full max-w-2xl p-6 absolute"
@@ -157,7 +158,11 @@ export default function SearchDialog({
         onFocusCapture={(e) => {
           const target = e.target as HTMLElement;
           const tagName = target.tagName.toLowerCase();
-          isTypingRef.current = tagName === 'input' || tagName === 'textarea' || target.isContentEditable;
+          const typing = tagName === 'input' || tagName === 'textarea' || target.isContentEditable;
+          isTypingRef.current = typing;
+          if (typing) {
+            lastTypingAtRef.current = Date.now();
+          }
         }}
         onBlurCapture={() => {
           setTimeout(() => {
@@ -167,7 +172,11 @@ export default function SearchDialog({
               return;
             }
             const tagName = active.tagName.toLowerCase();
-            isTypingRef.current = tagName === 'input' || tagName === 'textarea' || active.isContentEditable;
+            const typing = tagName === 'input' || tagName === 'textarea' || active.isContentEditable;
+            isTypingRef.current = typing;
+            if (typing) {
+              lastTypingAtRef.current = Date.now();
+            }
           }, 0);
         }}
       >

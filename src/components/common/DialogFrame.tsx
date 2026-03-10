@@ -31,6 +31,7 @@ export default function DialogFrame({
 }: DialogFrameProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const isTypingRef = useRef(false);
+  const lastTypingAtRef = useRef(0);
   const isEditableElement = (el: HTMLElement | null) => {
     if (!el) return false;
     const tagName = el.tagName.toLowerCase();
@@ -39,8 +40,26 @@ export default function DialogFrame({
 
   useEffect(() => {
     if (!isOpen) return;
-    panelRef.current?.focus();
     isTypingRef.current = false;
+    lastTypingAtRef.current = 0;
+
+    // 入力要素がある場合はそちらへ優先フォーカスし、なければパネルへフォーカス
+    const focusTimer = setTimeout(() => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      const preferred = panel.querySelector<HTMLElement>(
+        'input[autofocus], textarea[autofocus], input:not([disabled]), textarea:not([disabled]), [contenteditable="true"]'
+      );
+      if (preferred) {
+        preferred.focus();
+        if (isEditableElement(preferred)) {
+          isTypingRef.current = true;
+          lastTypingAtRef.current = Date.now();
+        }
+        return;
+      }
+      panel.focus();
+    }, 0);
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -91,12 +110,20 @@ export default function DialogFrame({
 
     const panel = panelRef.current;
     const handleFocusIn = (event: FocusEvent) => {
-      isTypingRef.current = isEditableElement(event.target as HTMLElement | null);
+      const typing = isEditableElement(event.target as HTMLElement | null);
+      isTypingRef.current = typing;
+      if (typing) {
+        lastTypingAtRef.current = Date.now();
+      }
     };
     const handleFocusOut = () => {
       setTimeout(() => {
         const active = document.activeElement as HTMLElement | null;
-        isTypingRef.current = !!(panel && active && panel.contains(active) && isEditableElement(active));
+        const typing = !!(panel && active && panel.contains(active) && isEditableElement(active));
+        isTypingRef.current = typing;
+        if (typing) {
+          lastTypingAtRef.current = Date.now();
+        }
       }, 0);
     };
 
@@ -104,10 +131,12 @@ export default function DialogFrame({
     panel?.addEventListener('focusout', handleFocusOut);
 
     return () => {
+      clearTimeout(focusTimer);
       document.removeEventListener('keydown', handleKeyDown);
       panel?.removeEventListener('focusin', handleFocusIn);
       panel?.removeEventListener('focusout', handleFocusOut);
       isTypingRef.current = false;
+      lastTypingAtRef.current = 0;
     };
   }, [isOpen, onCancel, enableEnterShortcut]);
 
@@ -118,7 +147,7 @@ export default function DialogFrame({
       className={`fixed inset-0 bg-black/40 flex items-center justify-center z-50 ${overlayClassName}`.trim()}
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) {
-          if (isTypingRef.current) {
+          if (isTypingRef.current || Date.now() - lastTypingAtRef.current < 350) {
             return;
           }
           onCancel();
