@@ -609,6 +609,7 @@ export default function ScriptEditor({
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [isTabletOrLarger, setIsTabletOrLarger] = useState(false);
   const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
+  const [mobileToolbarBottom, setMobileToolbarBottom] = useState(16);
   const [dragOverSegmentId, setDragOverSegmentId] = useState<string | null>(null);
   const pendingFocusIndexAfterDelete = useRef<number | null>(null);
   
@@ -638,6 +639,45 @@ export default function ScriptEditor({
       setIsStoryPanelOpen(false);
     }
   }, [isMobileLayout, isStoryPanelOpen]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!isMobileLayout) {
+      setMobileToolbarBottom(16);
+      return;
+    }
+
+    const visualViewport = window.visualViewport;
+    if (!visualViewport) {
+      setMobileToolbarBottom(16);
+      return;
+    }
+
+    const updateToolbarBottom = () => {
+      const keyboardInset = Math.max(
+        0,
+        Math.round(window.innerHeight - (visualViewport.height + visualViewport.offsetTop))
+      );
+
+      // 小さなUI変動は無視し、キーボード表示時のみツールバーを押し上げる
+      if (keyboardInset > 80) {
+        setMobileToolbarBottom(keyboardInset + 8);
+      } else {
+        setMobileToolbarBottom(16);
+      }
+    };
+
+    updateToolbarBottom();
+    visualViewport.addEventListener('resize', updateToolbarBottom);
+    visualViewport.addEventListener('scroll', updateToolbarBottom);
+    window.addEventListener('resize', updateToolbarBottom);
+
+    return () => {
+      visualViewport.removeEventListener('resize', updateToolbarBottom);
+      visualViewport.removeEventListener('scroll', updateToolbarBottom);
+      window.removeEventListener('resize', updateToolbarBottom);
+    };
+  }, [isMobileLayout]);
 
   useEffect(() => {
     if (!lineDeleteTarget) return;
@@ -2322,7 +2362,10 @@ export default function ScriptEditor({
           {isToolbarCollapsed ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}
         </button>
       )}
-      <div className="fixed left-1/2 -translate-x-1/2 bottom-4 z-40 px-2 flex justify-center w-full pointer-events-none">
+      <div
+        className="fixed left-1/2 -translate-x-1/2 z-40 px-2 flex justify-center w-full pointer-events-none"
+        style={{ bottom: `${mobileToolbarBottom}px` }}
+      >
         <div className="inline-flex items-center gap-2 max-w-[calc(100vw-1rem)] pointer-events-auto">
           <div
             data-floating-toolbar="true"
