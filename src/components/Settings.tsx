@@ -379,6 +379,12 @@ export default function Settings({
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
                   <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.2.8</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• キャラクター管理内の文字入力中にフォーカスが外れて連続入力できなくなる不具合を修正</li>
+                    </ul>
+                  </div>
+                  <div>
                     <h4 className="font-medium text-foreground mb-2">v0.2.7</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                       <li>• ストーリーパネルの画像保存がLocalStrageになっていたため現在の保存先（IndexedDB/任意ディレクトリ）に追従するよう変更し、旧localStorageにあるデータの自動移行処理を追加</li>

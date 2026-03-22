@@ -30,6 +30,8 @@ export default function DialogFrame({
   children
 }: DialogFrameProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
   const isTypingRef = useRef(false);
   const lastTypingAtRef = useRef(0);
   const isEditableElement = (el: HTMLElement | null) => {
@@ -64,7 +66,7 @@ export default function DialogFrame({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onCancel();
+        onCancelRef.current();
         return;
       }
 
@@ -138,7 +140,7 @@ export default function DialogFrame({
       isTypingRef.current = false;
       lastTypingAtRef.current = 0;
     };
-  }, [isOpen, onCancel, enableEnterShortcut]);
+  }, [isOpen, enableEnterShortcut]);
 
   if (!isOpen) return null;
 
