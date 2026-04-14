@@ -641,6 +641,7 @@ export default function Home() {
         onExportByGroups={exportImport.handleExportByGroups}
         onExportToClipboard={exportImport.handleExportToClipboard}
         onExportProjectJson={exportImport.handleExportProjectJson}
+        onExportPresetSeparator={exportImport.handleExportPresetSeparator}
         onImportCSV={exportImport.handleImportCSV}
         onImportCharacterCSV={exportImport.handleImportCharacterCSV}
         onImportJson={exportImport.handleImportJson}
@@ -847,14 +848,14 @@ export default function Home() {
         characters={characters}
         groups={groups}
         selectedBlockIds={uiState.selectedBlockIds}
-        onExportCSV={(includeTogaki = false, selectedOnly = false, fileFormat = 'csv') => {
-          exportImport.handleExportCSV(includeTogaki, selectedOnly, fileFormat);
+        onExportCSV={(includeTogaki = false, selectedOnly = false, fileFormat = 'csv', includeUserPreset = false) => {
+          exportImport.handleExportCSV(includeTogaki, selectedOnly, fileFormat, includeUserPreset);
         }}
-        onExportSerifOnly={(selectedOnly = false, fileFormat = 'csv', includeTogaki = false) => {
-          exportImport.handleExportSerifOnly(selectedOnly, fileFormat, includeTogaki);
+        onExportSerifOnly={(selectedOnly = false, fileFormat = 'csv', includeTogaki = false, includeUserPreset = false) => {
+          exportImport.handleExportSerifOnly(selectedOnly, fileFormat, includeTogaki, includeUserPreset);
         }}
-        onExportByGroups={(selectedGroups, exportType, includeTogaki = false, selectedOnly = false, sceneIds, fileFormat = 'csv') => {
-          exportImport.handleExportByGroups(selectedGroups, exportType, includeTogaki, selectedOnly, sceneIds, fileFormat);
+        onExportByGroups={(selectedGroups, exportType, includeTogaki = false, selectedOnly = false, sceneIds, fileFormat = 'csv', includeUserPreset = false) => {
+          exportImport.handleExportByGroups(selectedGroups, exportType, includeTogaki, selectedOnly, sceneIds, fileFormat, includeUserPreset);
         }}
         onExportCharacterCSV={() => {
           exportImport.handleExportCharacterCSV();
@@ -864,11 +865,14 @@ export default function Home() {
         }}
         scenes={project.scenes}
         selectedSceneId={selectedSceneId}
-        onExportSceneCSV={(sceneIds, exportType, includeTogaki, selectedOnly, fileFormat = 'csv') => {
-          exportImport.handleExportSceneCSV(sceneIds, exportType, includeTogaki, selectedOnly, fileFormat);
+        onExportSceneCSV={(sceneIds, exportType, includeTogaki, selectedOnly, fileFormat = 'csv', includeUserPreset = false) => {
+          exportImport.handleExportSceneCSV(sceneIds, exportType, includeTogaki, selectedOnly, fileFormat, includeUserPreset);
         }}
         onExportProjectJson={() => {
           exportImport.handleExportProjectJson();
+        }}
+        onExportPresetSeparator={(separator, includeTogaki, selectedOnly, fileFormat, useGroupExport, selectedGroups, useSceneExport, sceneIds) => {
+          exportImport.handleExportPresetSeparator(separator, includeTogaki, selectedOnly, fileFormat, useGroupExport, selectedGroups, useSceneExport, sceneIds);
         }}
         project={project}
       />

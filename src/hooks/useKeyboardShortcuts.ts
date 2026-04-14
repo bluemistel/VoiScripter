@@ -280,18 +280,18 @@ export const useKeyboardShortcuts = (
       }
 
       // Alt+↑: 上のキャラクターを選択（ト書き以外、現在のプロジェクトで有効なキャラクターのみ）
-      if (!event.ctrlKey && event.altKey && event.key === 'ArrowUp') {
+      if (!event.ctrlKey && event.altKey && !event.shiftKey && event.key === 'ArrowUp') {
         if (activeIdx >= 0 && activeIdx < scriptBlocks.length) {
           const block = scriptBlocks[activeIdx];
           if (block && block.characterId) {
             // 現在のプロジェクトで有効なキャラクターのみをフィルタリング
-            const validCharacters = characters.filter(c => 
-              c.id === '' || 
-              !currentProjectId || 
-              !c.disabledProjects || 
+            const validCharacters = characters.filter(c =>
+              c.id === '' ||
+              !currentProjectId ||
+              !c.disabledProjects ||
               !c.disabledProjects.includes(currentProjectId)
             );
-            
+
             const charIdx = validCharacters.findIndex(c => c.id === block.characterId);
             if (charIdx > 0) {
               event.preventDefault();
@@ -302,22 +302,68 @@ export const useKeyboardShortcuts = (
       }
 
       // Alt+↓: 下のキャラクターを選択（ト書き以外、現在のプロジェクトで有効なキャラクターのみ）
-      if (!event.ctrlKey && event.altKey && event.key === 'ArrowDown') {
+      if (!event.ctrlKey && event.altKey && !event.shiftKey && event.key === 'ArrowDown') {
         if (activeIdx >= 0 && activeIdx < scriptBlocks.length) {
           const block = scriptBlocks[activeIdx];
           if (block && block.characterId) {
             // 現在のプロジェクトで有効なキャラクターのみをフィルタリング
-            const validCharacters = characters.filter(c => 
-              c.id === '' || 
-              !currentProjectId || 
-              !c.disabledProjects || 
+            const validCharacters = characters.filter(c =>
+              c.id === '' ||
+              !currentProjectId ||
+              !c.disabledProjects ||
               !c.disabledProjects.includes(currentProjectId)
             );
-            
+
             const charIdx = validCharacters.findIndex(c => c.id === block.characterId);
             if (charIdx >= 0 && charIdx < validCharacters.length - 1) {
               event.preventDefault();
               onUpdateBlock(block.id, { characterId: validCharacters[charIdx + 1].id });
+            }
+          }
+        }
+      }
+
+      // Alt+Shift+↑: 前のユーザープリセットを選択
+      if (!event.ctrlKey && event.altKey && event.shiftKey && event.key === 'ArrowUp') {
+        if (activeIdx >= 0 && activeIdx < scriptBlocks.length) {
+          const block = scriptBlocks[activeIdx];
+          if (block && block.characterId) {
+            const char = characters.find(c => c.id === block.characterId);
+            const presets = char?.userPresets || [];
+            if (presets.length > 0) {
+              event.preventDefault();
+              const currentPresetIdx = presets.findIndex((p: { id: string }) => p.id === block.userPresetId);
+              if (currentPresetIdx > 0) {
+                onUpdateBlock(block.id, { userPresetId: presets[currentPresetIdx - 1].id });
+              } else if (currentPresetIdx === 0) {
+                // 先頭なら「なし」へ
+                onUpdateBlock(block.id, { userPresetId: undefined });
+              } else {
+                // 未選択なら末尾へ
+                onUpdateBlock(block.id, { userPresetId: presets[presets.length - 1].id });
+              }
+            }
+          }
+        }
+      }
+
+      // Alt+Shift+↓: 次のユーザープリセットを選択
+      if (!event.ctrlKey && event.altKey && event.shiftKey && event.key === 'ArrowDown') {
+        if (activeIdx >= 0 && activeIdx < scriptBlocks.length) {
+          const block = scriptBlocks[activeIdx];
+          if (block && block.characterId) {
+            const char = characters.find(c => c.id === block.characterId);
+            const presets = char?.userPresets || [];
+            if (presets.length > 0) {
+              event.preventDefault();
+              const currentPresetIdx = presets.findIndex((p: { id: string }) => p.id === block.userPresetId);
+              if (currentPresetIdx === -1) {
+                // 未選択なら先頭へ
+                onUpdateBlock(block.id, { userPresetId: presets[0].id });
+              } else if (currentPresetIdx < presets.length - 1) {
+                onUpdateBlock(block.id, { userPresetId: presets[currentPresetIdx + 1].id });
+              }
+              // 末尾ならそのまま
             }
           }
         }

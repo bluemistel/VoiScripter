@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Character, Emotion } from '@/types';
-import { PlusIcon, TrashIcon, PencilIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
+import { Character, Emotion, UserPreset } from '@/types';
+import { PlusIcon, TrashIcon, PencilIcon, Cog6ToothIcon, ListBulletIcon } from '@heroicons/react/24/outline';
 import {
   DndContext,
   closestCenter,
@@ -67,6 +67,30 @@ function SortableCharacter({ character, isEditing, children, ...props }: any) {
   );
 }
 
+function SortablePreset({ preset, children, ...props }: any) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: `preset-${preset.id}` });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center justify-between p-2 border rounded bg-muted/30 mb-1">
+      <div {...attributes} {...listeners} className="cursor-grab mr-2 select-none">
+        <svg width="16" height="16" fill="none"><rect width="3" height="3" x="1" y="1" rx="1" fill="#888"/><rect width="3" height="3" x="1" y="7" rx="1" fill="#888"/><rect width="3" height="3" x="7" y="1" rx="1" fill="#888"/><rect width="3" height="3" x="7" y="7" rx="1" fill="#888"/></svg>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function SortableGroup({ group, children, ...props }: any) {
   const {
     attributes,
@@ -124,6 +148,10 @@ export default function CharacterManager({
 
   // 編集用
   const [editCharacter, setEditCharacter] = useState<Partial<Character> | null>(null);
+
+  // ユーザープリセット設定ダイアログ
+  const [isPresetSettingsOpen, setIsPresetSettingsOpen] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
 
   // カラーピッカー用の状態
   const [showColorPicker, setShowColorPicker] = useState<string | null>(null);
@@ -330,10 +358,29 @@ export default function CharacterManager({
         name: editCharacter.name,
         group: editCharacter.group || 'なし',
         emotions: { normal: { iconUrl: editCharacter.emotions?.normal?.iconUrl || '' } },
-        backgroundColor: editCharacter.backgroundColor || '#e5e7eb'
+        backgroundColor: editCharacter.backgroundColor || '#e5e7eb',
+        userPresets: editCharacter.userPresets || []
       } as Character);
       setIsEditingId(null);
       setEditCharacter(null);
+      setIsPresetSettingsOpen(false);
+    }
+  };
+
+  // プリセット並び替え
+  const presetSensors = useSensors(useSensor(PointerSensor));
+  const handlePresetDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const presets = editCharacter?.userPresets || [];
+      const oldIndex = presets.findIndex(p => `preset-${p.id}` === active.id);
+      const newIndex = presets.findIndex(p => `preset-${p.id}` === over.id);
+      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+        const newOrder = [...presets];
+        const [removed] = newOrder.splice(oldIndex, 1);
+        newOrder.splice(newIndex, 0, removed);
+        setEditCharacter(prev => prev ? { ...prev, userPresets: newOrder } : prev);
+      }
     }
   };
 
@@ -450,10 +497,22 @@ export default function CharacterManager({
                               />
                             </label>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => setIsPresetSettingsOpen(true)}
+                            className="w-full flex items-center justify-center space-x-2 p-2 border rounded hover:bg-muted/80 text-foreground text-sm"
+                            style={{ backgroundColor: 'var(--color-muted)', color: 'var(--color-muted-foreground)' }}
+                          >
+                            <ListBulletIcon className="w-4 h-4" />
+                            <span>ユーザープリセット設定</span>
+                            <span className="text-xs text-muted-foreground">
+                              ({(editCharacter?.userPresets || []).length}件)
+                            </span>
+                          </button>
                           <div className="flex justify-end space-x-2">
                             <button
                               type="button"
-                              onClick={() => { setIsEditingId(null); setEditCharacter(null); }}
+                              onClick={() => { setIsEditingId(null); setEditCharacter(null); setIsPresetSettingsOpen(false); }}
                               className="px-3 py-1 text-sm text-muted-foreground hover:bg-accent rounded"
                             >
                               キャンセル
@@ -692,6 +751,97 @@ export default function CharacterManager({
             <div className="flex justify-end mt-6">
               <button
                 onClick={() => setIsGroupSettingsOpen(false)}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+              >
+                閉じる
+              </button>
+            </div>
+        </DialogFrame>
+      )}
+
+      {/* ユーザープリセット設定ダイアログ */}
+      {isPresetSettingsOpen && editCharacter && (
+        <DialogFrame
+          isOpen={isPresetSettingsOpen}
+          onCancel={() => { setIsPresetSettingsOpen(false); setNewPresetName(''); }}
+          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+          overlayClassName="bg-black/50"
+        >
+            <h3 className="text-lg font-semibold text-foreground mb-1">ユーザープリセット設定</h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              「{editCharacter.name}」のユーザープリセットを管理します。
+            </p>
+
+            {/* プリセット追加 */}
+            <div className="mb-4">
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={newPresetName}
+                  onChange={e => setNewPresetName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const trimmed = newPresetName.trim();
+                      if (trimmed && !(editCharacter.userPresets || []).some(p => p.name === trimmed)) {
+                        const newPreset: UserPreset = { id: Date.now().toString() + Math.random().toString(36).substr(2, 5), name: trimmed };
+                        setEditCharacter(prev => prev ? { ...prev, userPresets: [...(prev.userPresets || []), newPreset] } : prev);
+                        setNewPresetName('');
+                      }
+                    }
+                  }}
+                  placeholder="新しいプリセット名"
+                  className="flex-1 p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                  autoFocus
+                />
+                <button
+                  onClick={() => {
+                    const trimmed = newPresetName.trim();
+                    if (trimmed && !(editCharacter.userPresets || []).some(p => p.name === trimmed)) {
+                      const newPreset: UserPreset = { id: Date.now().toString() + Math.random().toString(36).substr(2, 5), name: trimmed };
+                      setEditCharacter(prev => prev ? { ...prev, userPresets: [...(prev.userPresets || []), newPreset] } : prev);
+                      setNewPresetName('');
+                    }
+                  }}
+                  className="px-3 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                >
+                  追加
+                </button>
+              </div>
+            </div>
+
+            {/* プリセット一覧 */}
+            <div className="space-y-2">
+              <h4 className="font-medium text-foreground">プリセット一覧</h4>
+              {(editCharacter.userPresets || []).length === 0 ? (
+                <p className="text-muted-foreground text-sm">プリセットがありません</p>
+              ) : (
+                <DndContext sensors={presetSensors} collisionDetection={closestCenter} onDragEnd={handlePresetDragEnd}>
+                  <SortableContext items={(editCharacter.userPresets || []).map(p => `preset-${p.id}`)} strategy={rectSortingStrategy}>
+                    {(editCharacter.userPresets || []).map(preset => (
+                      <SortablePreset key={preset.id} preset={preset}>
+                        <span className="text-foreground flex-1">{preset.name}</span>
+                        <button
+                          onClick={() => {
+                            setEditCharacter(prev => prev ? {
+                              ...prev,
+                              userPresets: (prev.userPresets || []).filter(p => p.id !== preset.id)
+                            } : prev);
+                          }}
+                          className="p-1 text-destructive hover:bg-destructive/10 rounded ml-2"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </SortablePreset>
+                    ))}
+                  </SortableContext>
+                </DndContext>
+              )}
+            </div>
+
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => { setIsPresetSettingsOpen(false); setNewPresetName(''); }}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
               >
                 閉じる

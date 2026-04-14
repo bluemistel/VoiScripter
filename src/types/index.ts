@@ -1,6 +1,11 @@
 
 export type Emotion = 'normal';
 
+export interface UserPreset {
+  id: string;
+  name: string;
+}
+
 export interface Character {
   id: string;
   name: string;
@@ -12,6 +17,7 @@ export interface Character {
   };
   backgroundColor?: string; // アイコン背景色
   disabledProjects?: string[]; // 無効なプロジェクトIDの配列（未設定の場合は全プロジェクトで有効）
+  userPresets?: UserPreset[]; // ユーザープリセット
 }
 
 export interface ScriptBlock {
@@ -19,6 +25,7 @@ export interface ScriptBlock {
   characterId: string;
   emotion: Emotion;
   text: string;
+  userPresetId?: string; // ユーザープリセットID
 }
 
 export interface StorySeparatorImage {

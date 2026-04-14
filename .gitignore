@@ -57,3 +57,5 @@ yarn-error.log*
 
 # Cloudflare Wrangler
 .wrangler
+CLAUDE.md
+.claude/settings.local.json

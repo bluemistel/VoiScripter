@@ -363,21 +363,40 @@ function SortableBlock({
               </div>
             </div>
           </div>
-          
+
         ) : (
           <div className="flex items-start space-x-2">
-            {isMobileView ? (
-              <button
-                type="button"
-                className="rounded-full p-0.5"
-                onClick={() => setIsMobileCharacterPickerOpen(true)}
-                title="話者を選択"
-              >
-                {renderCharacterVisual()}
-              </button>
-            ) : (
-              renderCharacterVisual()
-            )}
+            {/* 左列: キャラアイコン + プリセット選択（デスクトップのみ） */}
+            <div className="flex flex-col items-center shrink-0">
+              {isMobileView ? (
+                <button
+                  type="button"
+                  className="rounded-full p-0.5"
+                  onClick={() => setIsMobileCharacterPickerOpen(true)}
+                  title="話者を選択"
+                >
+                  {renderCharacterVisual()}
+                </button>
+              ) : (
+                renderCharacterVisual()
+              )}
+              {!isMobileView && character?.userPresets && character.userPresets.length > 0 && (
+                <select
+                  value={block.userPresetId || ''}
+                  onChange={e => onUpdate({ userPresetId: e.target.value || undefined })}
+                  className="mt-0.5 border rounded-sm bg-background text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 truncate"
+                  style={{ width: '4rem', height: '1.375rem', fontSize: '9px', padding: '0 2px' }}
+                  title="Alt+Shift+↑↓:プリセットを切り替え"
+                  onPointerDown={e => e.stopPropagation()}
+                  onMouseDown={e => e.stopPropagation()}
+                >
+                  <option value="">-</option>
+                  {character.userPresets.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
             <div className="relative flex-1 pl-2">
               <textarea
                 ref={textareaRef}
@@ -434,9 +453,10 @@ function SortableBlock({
               {!isMobileView && (
                 <select
                   value={block.characterId}
-                  onChange={e => onUpdate({ characterId: e.target.value })}
+                  onChange={e => onUpdate({ characterId: e.target.value, userPresetId: undefined })}
                   className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-24 sm:w-28 md:w-32 lg:w-36 mb-1"
                   style={{ height: '2.5rem' }}
+                  title="Alt+↑↓:話者を切り替え"
                 >
                   <option value="">ト書きを入力</option>
                   {selectableCharacters.map(c => (
