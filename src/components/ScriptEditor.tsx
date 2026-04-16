@@ -187,7 +187,7 @@ function SortableBlock({
   };
 
   const handleSelectCharacter = (characterId: string) => {
-    onUpdate({ characterId });
+    onUpdate({ characterId, userPresetId: undefined });
     setIsMobileCharacterPickerOpen(false);
   };
 
@@ -366,8 +366,8 @@ function SortableBlock({
 
         ) : (
           <div className="flex items-start space-x-2">
-            {/* 左列: キャラアイコン + プリセット選択（デスクトップのみ） */}
-            <div className="flex flex-col items-center shrink-0">
+            {/* 左列: キャラアイコン */}
+            <div className="shrink-0">
               {isMobileView ? (
                 <button
                   type="button"
@@ -379,22 +379,6 @@ function SortableBlock({
                 </button>
               ) : (
                 renderCharacterVisual()
-              )}
-              {!isMobileView && character?.userPresets && character.userPresets.length > 0 && (
-                <select
-                  value={block.userPresetId || ''}
-                  onChange={e => onUpdate({ userPresetId: e.target.value || undefined })}
-                  className="mt-0.5 border rounded-sm bg-background text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 truncate"
-                  style={{ width: '4rem', height: '1.375rem', fontSize: '9px', padding: '0 2px' }}
-                  title="Alt+Shift+↑↓:プリセットを切り替え"
-                  onPointerDown={e => e.stopPropagation()}
-                  onMouseDown={e => e.stopPropagation()}
-                >
-                  <option value="">-</option>
-                  {character.userPresets.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
               )}
             </div>
             <div className="relative flex-1 pl-2">
@@ -411,10 +395,10 @@ function SortableBlock({
                     return;
                   }
                   // チェックボックスの状態に応じてEnter操作のみで切り替え
-                  const shouldAddBlock = enterOnlyBlockAdd 
+                  const shouldAddBlock = enterOnlyBlockAdd
                     ? (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey)  // Enter入力のみモード
                     : (e.key === 'Enter' && e.ctrlKey);                 // 従来のCtrl+Enterモード
-                  
+
                   if (shouldAddBlock) {
                     e.preventDefault();
                     const { characterId, emotion } = buildBlockFromLastSpeaker();
@@ -430,7 +414,7 @@ function SortableBlock({
                   }
                 }}
                 placeholder="セリフを入力"
-                className="rounded-2xl p-2 bg-card/95 shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20 min-h-[60px] text-sm w-full text-foreground focus:ring-1 focus:ring-primary/40 focus:outline-none resize-none overflow-hidden"
+                className={`rounded-2xl p-2 bg-card/95 shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20 min-h-[60px] text-sm w-full text-foreground focus:ring-1 focus:ring-primary/40 focus:outline-none resize-none overflow-hidden${!isMobileView && character?.userPresets?.length ? ' pr-[7.5rem]' : ''}`}
                 rows={1}
                 style={{ height: 'auto', borderRadius: '20px 20px 20px 0' }}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -447,6 +431,23 @@ function SortableBlock({
               />
               {/* フキダシの三角形 */}
               <div className="absolute left-[-4px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-400 dark:border-r-gray-500"></div>
+              {/* プリセット選択（デスクトップ: テキストエリア内右上に絶対配置） */}
+              {!isMobileView && character?.userPresets && character.userPresets.length > 0 && (
+                <select
+                  value={block.userPresetId || ''}
+                  onChange={e => onUpdate({ userPresetId: e.target.value || undefined })}
+                  className="absolute top-2 right-2 border rounded-lg bg-background/90 text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 text-xs truncate"
+                  style={{ width: '7rem', height: '1.625rem', padding: '0 4px' }}
+                  title="Alt+Shift+↑↓:プリセットを切り替え"
+                  onPointerDown={e => e.stopPropagation()}
+                  onMouseDown={e => e.stopPropagation()}
+                >
+                  <option value="">プリセット</option>
+                  {character.userPresets.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
             {/* キャラ選択リストとアイコン群を横並びに */}
             <div className="flex flex-col justify-between items-center h-16 mr-0.5 sm:mr-1 md:mr-2 mt-0">
@@ -514,7 +515,7 @@ function SortableBlock({
     {isMobileView && isMobileCharacterPickerOpen && (
       <div className="fixed inset-0 z-50 bg-black/40 flex items-end" onClick={() => setIsMobileCharacterPickerOpen(false)}>
         <div
-          className="w-full max-h-[70vh] bg-background border-t rounded-t-xl p-4 overflow-y-auto"
+          className="w-full bg-background border-t rounded-t-xl p-4"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-3">
@@ -527,7 +528,33 @@ function SortableBlock({
               閉じる
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          {/* プリセット選択（横スクロール） */}
+          {character?.userPresets && character.userPresets.length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs text-muted-foreground mb-1.5">プリセット</p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                <button
+                  type="button"
+                  className={`shrink-0 px-3 py-1 rounded-full border text-xs ${!block.userPresetId ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border text-muted-foreground'}`}
+                  onClick={() => onUpdate({ userPresetId: undefined })}
+                >
+                  -
+                </button>
+                {character.userPresets.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={`shrink-0 px-3 py-1 rounded-full border text-xs ${block.userPresetId === p.id ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border text-muted-foreground'}`}
+                    onClick={() => onUpdate({ userPresetId: p.id })}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* 話者グリッド（最大4段≒8体表示） */}
+          <div className="grid grid-cols-2 gap-2 overflow-y-auto max-h-[260px]">
             <button
               type="button"
               className={`p-2 border rounded text-left text-xs flex items-center gap-2 ${!block.characterId ? 'border-primary bg-primary/5' : ''}`}
