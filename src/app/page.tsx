@@ -29,6 +29,7 @@ import { useBlockOperations } from '@/hooks/useBlockOperations';
 import { useScriptManagement } from '@/hooks/useScriptManagement';
 import { useSettings } from '@/hooks/useSettings';
 import { useAppUpdate } from '@/hooks/useAppUpdate';
+import { useShortcutConfig } from '@/hooks/useShortcutConfig';
 import { useUIState } from '@/hooks/useUIState';
 import { useDataProcessing } from '@/hooks/useDataProcessing';
 import { useDataSync } from '@/hooks/useDataSync';
@@ -178,6 +179,7 @@ export default function Home() {
   // 設定フック
   const settings = useSettings(dataManagement);
   const appUpdate = useAppUpdate(dataManagement);
+  const shortcutConfig = useShortcutConfig();
 
   useEffect(() => {
     if (!dataManagement.isInitialized) return;
@@ -283,7 +285,8 @@ export default function Home() {
         setIsCtrlEnterBlockRef.current(isCtrlEnter);
         // console.log('page.tsx - Set isCtrlEnterBlock to:', isCtrlEnter);
       }
-    }
+    },
+    shortcutConfig.shortcuts
   );
 
   // 初期化処理は useProjectManagement フック内で行われるため、ここでは不要
@@ -908,6 +911,9 @@ export default function Home() {
         onReverseToolbarOrderChange={settings.handleReverseToolbarOrderChange}
         showLatestDownloadMenu={appUpdate.isUpdateSkipped}
         onOpenLatestDownload={handleOpenLatestDownload}
+        shortcuts={shortcutConfig.shortcuts}
+        onUpdateShortcut={shortcutConfig.updateShortcut}
+        onResetShortcuts={shortcutConfig.resetShortcuts}
       />
 
       {/* SearchDialog */}

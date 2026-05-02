@@ -313,14 +313,15 @@ export const useExportImport = (
   // キャラクター設定のCSVエクスポート
   const handleExportCharacterCSV = () => {
     const rows = [
-      ['ID', '名前', 'アイコン', 'グループ', '背景色', '無効プロジェクト'],
+      ['ID', '名前', 'アイコン', 'グループ', '背景色', '無効プロジェクト', 'ユーザープリセット'],
       ...characters.map(char => [
         char.id,
         char.name,
         char.emotions.normal.iconUrl,
         char.group,
         char.backgroundColor || '#e5e7eb',
-        char.disabledProjects ? char.disabledProjects.join(';') : ''
+        char.disabledProjects ? char.disabledProjects.join(';') : '',
+        char.userPresets && char.userPresets.length > 0 ? JSON.stringify(char.userPresets) : ''
       ])
     ];
     
@@ -575,22 +576,36 @@ export const useExportImport = (
           const characterGroup = row[3]?.trim() || 'なし';
           const backgroundColor = row[4]?.trim() || '#e5e7eb';
           const disabledProjectsStr = row[5]?.trim() || '';
+          const userPresetsStr = row[6]?.trim() || '';
+
+          let userPresets: { id: string; name: string }[] | undefined;
+          if (userPresetsStr) {
+            try {
+              const parsed = JSON.parse(userPresetsStr);
+              if (Array.isArray(parsed)) {
+                userPresets = parsed.filter(p => p && typeof p.id === 'string' && typeof p.name === 'string');
+              }
+            } catch {
+              // 旧形式またはパース失敗時はプリセットなしとして扱う
+            }
+          }
 
           if (characterName) {
             const existingCharacter = characters.find(c => c.name === characterName);
-            
+
             if (existingCharacter) {
               const disabledProjects = disabledProjectsStr ? disabledProjectsStr.split(';').filter(p => p.trim() !== '') : [];
               if (existingCharacter.group !== characterGroup || existingCharacter.emotions.normal.iconUrl !== iconUrl || existingCharacter.backgroundColor !== backgroundColor || existingCharacter.id !== characterId || JSON.stringify(existingCharacter.disabledProjects || []) !== JSON.stringify(disabledProjects)) {
-                const updatedCharacter = { 
-                  ...existingCharacter, 
+                const updatedCharacter = {
+                  ...existingCharacter,
                   id: characterId,
-                  group: characterGroup, 
+                  group: characterGroup,
                   emotions: { ...existingCharacter.emotions, normal: { iconUrl } },
                   backgroundColor,
-                  disabledProjects: disabledProjects
+                  disabledProjects: disabledProjects,
+                  ...(userPresets !== undefined ? { userPresets } : {})
                 };
-                onCharactersUpdate(characters.map(char => 
+                onCharactersUpdate(characters.map(char =>
                   char.name === characterName ? updatedCharacter : char
                 ));
                 //console.log(`「${characterName}」の設定を更新しました（characterId: ${existingCharacter.id}）`);
@@ -612,7 +627,8 @@ export const useExportImport = (
                 group: characterGroup,
                 emotions,
                 backgroundColor,
-                disabledProjects: disabledProjects
+                disabledProjects: disabledProjects,
+                ...(userPresets !== undefined ? { userPresets } : {})
               });
             }
           }
