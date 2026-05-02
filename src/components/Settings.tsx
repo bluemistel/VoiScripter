@@ -1,8 +1,187 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { XMarkIcon, Cog6ToothIcon, QuestionMarkCircleIcon, InformationCircleIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 import DialogFrame from '@/components/common/DialogFrame';
+import {
+  SHORTCUT_DEFS, ShortcutDef, ShortcutId, ShortcutBinding, ShortcutMap,
+  defaultShortcuts, formatBinding, bindingsEqual
+} from '@/types/shortcuts';
+
+// ===== キーボードショートカット編集UI =====
+
+const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta', 'CapsLock', 'NumLock', 'ScrollLock']);
+
+function ShortcutRow({
+  def,
+  binding,
+  allBindings,
+  onUpdate,
+  onReset,
+}: {
+  def: ShortcutDef;
+  binding: ShortcutBinding;
+  allBindings: ShortcutMap;
+  onUpdate: (id: ShortcutId, binding: ShortcutBinding) => void;
+  onReset: (id: ShortcutId) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [captured, setCaptured] = useState<ShortcutBinding | null>(null);
+  const captureRef = useRef<HTMLDivElement>(null);
+  const isDefault = bindingsEqual(binding, def.defaultBinding);
+
+  // 他のショートカットと競合するか検査
+  const conflict = captured
+    ? SHORTCUT_DEFS.find(d => d.id !== def.id && bindingsEqual(captured, allBindings[d.id]))
+    : null;
+
+  const startEditing = () => {
+    setIsEditing(true);
+    setCaptured(null);
+    setTimeout(() => captureRef.current?.focus(), 0);
+  };
+
+  const handleCaptureKeyDown = (e: React.KeyboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === 'Escape') { setIsEditing(false); setCaptured(null); return; }
+    if (MODIFIER_KEYS.has(e.key)) return;
+    setCaptured({
+      ctrl:  e.ctrlKey,
+      shift: e.shiftKey,
+      alt:   e.altKey,
+      key:   e.key.length === 1 ? e.key.toLowerCase() : e.key,
+    });
+  };
+
+  const handleConfirm = () => {
+    if (captured) onUpdate(def.id, captured);
+    setIsEditing(false);
+    setCaptured(null);
+  };
+
+  const handleCancel = () => { setIsEditing(false); setCaptured(null); };
+
+  return (
+    <div className="py-2 border-b last:border-b-0">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="text-sm text-foreground flex-1 min-w-0">{def.label}</span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <kbd className="px-2 py-0.5 bg-muted rounded text-xs text-muted-foreground min-w-[5.5rem] text-center whitespace-nowrap">
+            {formatBinding(binding)}
+          </kbd>
+          {!isDefault && (
+            <button
+              onClick={() => onReset(def.id)}
+              className="text-xs text-muted-foreground hover:text-foreground px-1"
+              title="デフォルトに戻す"
+            >
+              ↩
+            </button>
+          )}
+          <button
+            onClick={startEditing}
+            className="text-xs px-2 py-0.5 rounded border hover:bg-accent whitespace-nowrap"
+          >
+            変更
+          </button>
+        </div>
+      </div>
+      {isEditing && (
+        <div className="mt-2 p-2 bg-muted/50 rounded border space-y-2">
+          <div
+            ref={captureRef}
+            tabIndex={0}
+            className="p-2 rounded border bg-background text-center text-sm cursor-text select-none focus:ring-1 focus:ring-primary/40 focus:outline-none"
+            onKeyDown={handleCaptureKeyDown}
+          >
+            {captured
+              ? <span className="font-medium">{formatBinding(captured)}</span>
+              : <span className="text-muted-foreground text-xs">変更するキー操作を押してください（Escでキャンセル）</span>
+            }
+          </div>
+          {conflict && (
+            <p className="text-xs text-amber-600">⚠ 「{conflict.label}」と競合しています</p>
+          )}
+          <div className="flex justify-end gap-2">
+            <button onClick={handleCancel} className="text-xs px-2 py-1 rounded border">キャンセル</button>
+            <button
+              onClick={handleConfirm}
+              disabled={!captured}
+              className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground disabled:opacity-50"
+            >
+              確定
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ShortcutEditor({
+  shortcuts,
+  onUpdateShortcut,
+  onResetShortcuts,
+}: {
+  shortcuts: ShortcutMap;
+  onUpdateShortcut: (id: ShortcutId, binding: ShortcutBinding) => void;
+  onResetShortcuts: () => void;
+}) {
+  const globalDefs  = SHORTCUT_DEFS.filter(d => d.group === 'global');
+  const editorDefs  = SHORTCUT_DEFS.filter(d => d.group === 'editor');
+
+  const handleReset = (id: ShortcutId) => {
+    const def = SHORTCUT_DEFS.find(d => d.id === id);
+    if (def) onUpdateShortcut(id, { ...def.defaultBinding });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h4 className="font-medium text-foreground">キーボードショートカット</h4>
+        <button
+          onClick={onResetShortcuts}
+          className="text-xs px-2 py-1 rounded border hover:bg-accent text-muted-foreground"
+        >
+          すべてデフォルトに戻す
+        </button>
+      </div>
+
+      <div>
+        <p className="text-xs text-muted-foreground mb-1">グローバル（常時有効）</p>
+        <div className="border rounded">
+          {globalDefs.map(def => (
+            <ShortcutRow
+              key={def.id}
+              def={def}
+              binding={shortcuts[def.id]}
+              allBindings={shortcuts}
+              onUpdate={onUpdateShortcut}
+              onReset={handleReset}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs text-muted-foreground mb-1">エディター（テキスト入力中に有効）</p>
+        <div className="border rounded">
+          {editorDefs.map(def => (
+            <ShortcutRow
+              key={def.id}
+              def={def}
+              binding={shortcuts[def.id]}
+              allBindings={shortcuts}
+              onUpdate={onUpdateShortcut}
+              onReset={handleReset}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface SettingsProps {
   isOpen: boolean;
@@ -15,6 +194,9 @@ interface SettingsProps {
   onReverseToolbarOrderChange?: (enabled: boolean) => void;
   showLatestDownloadMenu?: boolean;
   onOpenLatestDownload?: () => void;
+  shortcuts?: ShortcutMap;
+  onUpdateShortcut?: (id: ShortcutId, binding: ShortcutBinding) => void;
+  onResetShortcuts?: () => void;
 }
 
 export default function Settings({
@@ -27,7 +209,10 @@ export default function Settings({
   reverseToolbarOrder = false,
   onReverseToolbarOrderChange,
   showLatestDownloadMenu = false,
-  onOpenLatestDownload
+  onOpenLatestDownload,
+  shortcuts = defaultShortcuts,
+  onUpdateShortcut,
+  onResetShortcuts,
 }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<'settings' | 'help' | 'license' | 'changelog' | 'bugreport' | 'latestdownload'>('settings');
   const [isSelectingDirectory, setIsSelectingDirectory] = useState(false);
@@ -346,20 +531,22 @@ export default function Settings({
                   </div>
                   
                   <div>
-                    <h4 className="font-medium text-foreground mb-2">キーボードショートカット</h4>
-                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
-                    <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+Z</kbd> 元に戻す</li>
-                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+Y</kbd> やり直し</li>
-                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+Enter</kbd> 直下に新規ブロック追加</li>
-                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+B</kbd> 最下段に新規ブロック追加</li>
-                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+Alt+B</kbd> ト書きブロックを追加</li>
-                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Alt+B</kbd>選択ブロック削除</li>
-                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+↑/↓</kbd> ブロック移動</li>
-                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Alt+↑/↓</kbd> キャラクターを選択</li>
-                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+M</kbd> CSVエクスポートダイアログを開く</li>
-                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+,</kbd> 最下段へ移動する</li>
-                      <li>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+Alt+,</kbd> 最上段へ移動する</li>
-                    </ul>
+                    {onUpdateShortcut && onResetShortcuts ? (
+                      <ShortcutEditor
+                        shortcuts={shortcuts}
+                        onUpdateShortcut={onUpdateShortcut}
+                        onResetShortcuts={onResetShortcuts}
+                      />
+                    ) : (
+                      <>
+                        <h4 className="font-medium text-foreground mb-2">キーボードショートカット</h4>
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          {SHORTCUT_DEFS.map(def => (
+                            <li key={def.id}>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">{formatBinding(shortcuts[def.id])}</kbd> {def.label}</li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
                   </div>
                   
                   <div>
@@ -381,6 +568,15 @@ export default function Settings({
                   <div>
                     <h4 className="font-medium text-foreground mb-2">v0.2.8</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>
+                        • 感情プリセット機能を追加
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• セリフごとにキャラクターの感情プリセットを設定可能</li>
+                          <li>• A.I.VOICEなど向けに「感情プリセット＞」付きでのテキスト出力を可能に</li>
+                          <li>• CeVIO AIなど向けに感情プリセットを第3列に出力するオプションを追加</li>
+                        </ul>
+                      </li>
+                      <li>• ショートカットキーの変更機能を追加（設定 &gt; ヘルプ &gt; キーボードショートカット）</li>
                       <li>• キャラクター管理内の文字入力中にフォーカスが外れて連続入力できなくなる不具合を修正</li>
                     </ul>
                   </div>

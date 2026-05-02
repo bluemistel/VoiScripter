@@ -30,10 +30,13 @@ export default function DialogFrame({
   children
 }: DialogFrameProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const onCancelRef = useRef(onCancel);
-  onCancelRef.current = onCancel;
   const isTypingRef = useRef(false);
   const lastTypingAtRef = useRef(0);
+  // onCancel を ref で保持し、useEffect の依存配列から除外する
+  // （毎レンダーで新しい参照になるアロー関数が渡されても effect が再実行されないようにする）
+  const onCancelRef = useRef(onCancel);
+  useEffect(() => { onCancelRef.current = onCancel; });
+
   const isEditableElement = (el: HTMLElement | null) => {
     if (!el) return false;
     const tagName = el.tagName.toLowerCase();
@@ -140,7 +143,7 @@ export default function DialogFrame({
       isTypingRef.current = false;
       lastTypingAtRef.current = 0;
     };
-  }, [isOpen, enableEnterShortcut]);
+  }, [isOpen, enableEnterShortcut]); // onCancel は onCancelRef 経由で参照するため deps 不要
 
   if (!isOpen) return null;
 
@@ -164,7 +167,7 @@ export default function DialogFrame({
           ) {
             return;
           }
-          onCancel();
+          onCancelRef.current();
         }
       }}
     >

@@ -158,12 +158,13 @@ interface HeaderProps {
   onUpdateCharacter: (character: Character) => void;
   onDeleteCharacter: (id: string) => void;
   onThemeChange: (isDark: boolean) => void;
-  onExportCSV: (includeTogaki?: boolean, selectedOnly?: boolean, fileFormat?: 'csv' | 'txt') => void;
-  onExportSerifOnly: (selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeTogaki?: boolean) => void;
+  onExportCSV: (includeTogaki?: boolean, selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeUserPreset?: boolean) => void;
+  onExportSerifOnly: (selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeTogaki?: boolean, includeUserPreset?: boolean) => void;
   onExportCharacterCSV: () => void;
-  onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean, selectedOnly?: boolean, sceneIds?: string[], fileFormat?: 'csv' | 'txt') => void;
+  onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean, selectedOnly?: boolean, sceneIds?: string[], fileFormat?: 'csv' | 'txt', includeUserPreset?: boolean) => void;
   onExportToClipboard: (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean) => void;
   onExportProjectJson: () => void;
+  onExportPresetSeparator: (separator: string, includeTogaki: boolean, selectedOnly: boolean, fileFormat: 'csv' | 'txt', useGroupExport: boolean, selectedGroups: string[], useSceneExport: boolean, sceneIds: string[]) => void;
   onImportCSV: (file: File, options?: { mode: 'append' | 'new'; projectName?: string }) => void;
   onImportCharacterCSV: (file: File) => void;
   onImportJson: (file: File) => void;
@@ -185,7 +186,7 @@ interface HeaderProps {
   onDeleteScene: (sceneId: string) => void;
   onSelectScene: (sceneId: string) => void;
   onReorderScenes?: (newOrder: Scene[]) => void;
-  onExportSceneCSV: (sceneIds: string[], exportType: 'full' | 'serif-only', includeTogaki: boolean, selectedOnly: boolean, fileFormat?: 'csv' | 'txt') => void;
+  onExportSceneCSV: (sceneIds: string[], exportType: 'full' | 'serif-only', includeTogaki: boolean, selectedOnly: boolean, fileFormat?: 'csv' | 'txt', includeUserPreset?: boolean) => void;
   onNewProject: () => void;
   project: Project;
   onOpenSettings: () => void;
@@ -316,6 +317,7 @@ export default function Header(props: HeaderProps) {
     onSelectScene,
     onReorderScenes,
     onExportSceneCSV,
+    onExportPresetSeparator,
     onNewProject,
     project,
     onOpenSettings,
@@ -959,6 +961,7 @@ export default function Header(props: HeaderProps) {
         selectedSceneId={selectedSceneId}
         onExportSceneCSV={onExportSceneCSV}
         onExportProjectJson={onExportProjectJson}
+        onExportPresetSeparator={onExportPresetSeparator}
         project={project}
       />
       <ImportChoiceDialog

@@ -3,15 +3,16 @@ import { buildEmptyScript } from '@/utils/scriptDefaults';
 import { DataManagementHook } from './useDataManagement';
 
 export interface ExportImportHook {
-  handleExportCSV: (includeTogaki?: boolean, selectedOnly?: boolean, fileFormat?: 'csv' | 'txt') => Promise<void>;
-  handleExportSerifOnly: (selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeTogaki?: boolean) => Promise<void>;
+  handleExportCSV: (includeTogaki?: boolean, selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeUserPreset?: boolean) => Promise<void>;
+  handleExportSerifOnly: (selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeTogaki?: boolean, includeUserPreset?: boolean) => Promise<void>;
   handleExportByGroups: (
     selectedGroups: string[],
     exportType: 'full' | 'serif-only',
     includeTogaki?: boolean,
     selectedOnly?: boolean,
     sceneIds?: string[],
-    fileFormat?: 'csv' | 'txt'
+    fileFormat?: 'csv' | 'txt',
+    includeUserPreset?: boolean
   ) => Promise<void>;
   handleExportCharacterCSV: () => void;
   handleExportToClipboard: (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean) => Promise<void>;
@@ -24,7 +25,18 @@ export interface ExportImportHook {
     exportType: 'full' | 'serif-only',
     includeTogaki: boolean,
     selectedOnly: boolean,
-    fileFormat?: 'csv' | 'txt'
+    fileFormat?: 'csv' | 'txt',
+    includeUserPreset?: boolean
+  ) => Promise<void>;
+  handleExportPresetSeparator: (
+    separator: string,
+    includeTogaki: boolean,
+    selectedOnly: boolean,
+    fileFormat: 'csv' | 'txt',
+    useGroupExport: boolean,
+    selectedGroups: string[],
+    useSceneExport: boolean,
+    sceneIds: string[]
   ) => Promise<void>;
 }
 
@@ -46,7 +58,7 @@ export const useExportImport = (
 
   // CSVエンコード関数
   const encodeCSV = (rows: string[][]) => {
-    return rows.map(row => 
+    return rows.map(row =>
       row.map(cell => {
         if (cell.includes(',') || cell.includes('\n') || cell.includes('"')) {
           return `"${cell.replace(/"/g, '""')}"`;
@@ -56,8 +68,16 @@ export const useExportImport = (
     ).join('\r\n');
   };
 
+  // ブロックのユーザープリセット名を取得するヘルパー
+  const getPresetName = (block: { characterId: string; userPresetId?: string }): string => {
+    if (!block.characterId || !block.userPresetId) return '';
+    const char = characters.find(c => c.id === block.characterId);
+    if (!char?.userPresets) return '';
+    return char.userPresets.find(p => p.id === block.userPresetId)?.name || '';
+  };
+
   // CSVエクスポート（話者,セリフ）
-  const handleExportCSV = async (includeTogaki?: boolean, selectedOnly?: boolean, fileFormat?: 'csv' | 'txt') => {
+  const handleExportCSV = async (includeTogaki?: boolean, selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeUserPreset?: boolean) => {
     let allBlocks = project.scenes.flatMap(scene => scene.scripts[0]?.blocks || []);
     
     if (selectedOnly && selectedBlockIds.length > 0) {
@@ -68,10 +88,14 @@ export const useExportImport = (
       .filter(block => includeTogaki ? true : block.characterId)
       .map(block => {
         if (!block.characterId) {
-          return ['ト書き', block.text.replace(/\n/g, '\\n')];
+          const row = ['ト書き', block.text.replace(/\n/g, '\\n')];
+          if (includeUserPreset) row.push('');
+          return row;
         }
         const char = characters.find(c => c.id === block.characterId);
-        return [char ? char.name : '', block.text.replace(/\n/g, '\\n')];
+        const row = [char ? char.name : '', block.text.replace(/\n/g, '\\n')];
+        if (includeUserPreset) row.push(getPresetName(block));
+        return row;
       });
 
     const csv = encodeCSV(rows);
@@ -98,7 +122,7 @@ export const useExportImport = (
   };
 
   // セリフのみエクスポート（ト書きは含めない）
-  const handleExportSerifOnly = async (selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeTogaki?: boolean) => {
+  const handleExportSerifOnly = async (selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeTogaki?: boolean, includeUserPreset?: boolean) => {
     let allBlocks = project.scenes.flatMap(scene => scene.scripts[0]?.blocks || []);
     
     if (selectedOnly && selectedBlockIds.length > 0) {
@@ -139,7 +163,8 @@ export const useExportImport = (
     includeTogaki?: boolean,
     selectedOnly?: boolean,
     sceneIds?: string[],
-    fileFormat?: 'csv' | 'txt'
+    fileFormat?: 'csv' | 'txt',
+    includeUserPreset?: boolean
   ) => {
     // 特定のシーンのみCSVを出力がONの場合はシーンごとに処理
     if (Array.isArray(sceneIds) && sceneIds.length > 0) {
@@ -175,15 +200,19 @@ export const useExportImport = (
           if (exportType === 'full') {
             rows = groupBlocks.map(block => {
               if (!block.characterId) {
-                return ['ト書き', block.text.replace(/\n/g, '\\n')];
+                const row = ['ト書き', block.text.replace(/\n/g, '\\n')];
+                if (includeUserPreset) row.push('');
+                return row;
               }
               const char = characters.find(c => c.id === block.characterId);
-              return [char ? char.name : '', block.text.replace(/\n/g, '\\n')];
+              const row = [char ? char.name : '', block.text.replace(/\n/g, '\\n')];
+              if (includeUserPreset) row.push(getPresetName(block));
+              return row;
             });
           } else {
             rows = groupBlocks.map(block => [block.text.replace(/\n/g, '\\n')]);
           }
-          
+
           const extension = fileFormat === 'txt' ? 'txt' : 'csv';
           filename = `${project.name || 'project'}_${scene.name}_${group}.${extension}`;
           const csv = encodeCSV(rows);
@@ -244,15 +273,19 @@ export const useExportImport = (
         if (exportType === 'full') {
           rows = allGroupBlocks.map(block => {
             if (!block.characterId) {
-              return ['ト書き', block.text.replace(/\n/g, '\\n')];
+              const row = ['ト書き', block.text.replace(/\n/g, '\\n')];
+              if (includeUserPreset) row.push('');
+              return row;
             }
             const char = characters.find(c => c.id === block.characterId);
-            return [char ? char.name : '', block.text.replace(/\n/g, '\\n')];
+            const row = [char ? char.name : '', block.text.replace(/\n/g, '\\n')];
+            if (includeUserPreset) row.push(getPresetName(block));
+            return row;
           });
         } else {
           rows = allGroupBlocks.map(block => [block.text.replace(/\n/g, '\\n')]);
         }
-        
+
         const extension = fileFormat === 'txt' ? 'txt' : 'csv';
         filename = `${project.name || 'project'}_all_scenes_${group}.${extension}`;
         const csv = encodeCSV(rows);
@@ -280,14 +313,15 @@ export const useExportImport = (
   // キャラクター設定のCSVエクスポート
   const handleExportCharacterCSV = () => {
     const rows = [
-      ['ID', '名前', 'アイコン', 'グループ', '背景色', '無効プロジェクト'],
+      ['ID', '名前', 'アイコン', 'グループ', '背景色', '無効プロジェクト', 'ユーザープリセット'],
       ...characters.map(char => [
         char.id,
         char.name,
         char.emotions.normal.iconUrl,
         char.group,
         char.backgroundColor || '#e5e7eb',
-        char.disabledProjects ? char.disabledProjects.join(';') : ''
+        char.disabledProjects ? char.disabledProjects.join(';') : '',
+        char.userPresets && char.userPresets.length > 0 ? JSON.stringify(char.userPresets) : ''
       ])
     ];
     
@@ -542,22 +576,36 @@ export const useExportImport = (
           const characterGroup = row[3]?.trim() || 'なし';
           const backgroundColor = row[4]?.trim() || '#e5e7eb';
           const disabledProjectsStr = row[5]?.trim() || '';
+          const userPresetsStr = row[6]?.trim() || '';
+
+          let userPresets: { id: string; name: string }[] | undefined;
+          if (userPresetsStr) {
+            try {
+              const parsed = JSON.parse(userPresetsStr);
+              if (Array.isArray(parsed)) {
+                userPresets = parsed.filter(p => p && typeof p.id === 'string' && typeof p.name === 'string');
+              }
+            } catch {
+              // 旧形式またはパース失敗時はプリセットなしとして扱う
+            }
+          }
 
           if (characterName) {
             const existingCharacter = characters.find(c => c.name === characterName);
-            
+
             if (existingCharacter) {
               const disabledProjects = disabledProjectsStr ? disabledProjectsStr.split(';').filter(p => p.trim() !== '') : [];
               if (existingCharacter.group !== characterGroup || existingCharacter.emotions.normal.iconUrl !== iconUrl || existingCharacter.backgroundColor !== backgroundColor || existingCharacter.id !== characterId || JSON.stringify(existingCharacter.disabledProjects || []) !== JSON.stringify(disabledProjects)) {
-                const updatedCharacter = { 
-                  ...existingCharacter, 
+                const updatedCharacter = {
+                  ...existingCharacter,
                   id: characterId,
-                  group: characterGroup, 
+                  group: characterGroup,
                   emotions: { ...existingCharacter.emotions, normal: { iconUrl } },
                   backgroundColor,
-                  disabledProjects: disabledProjects
+                  disabledProjects: disabledProjects,
+                  ...(userPresets !== undefined ? { userPresets } : {})
                 };
-                onCharactersUpdate(characters.map(char => 
+                onCharactersUpdate(characters.map(char =>
                   char.name === characterName ? updatedCharacter : char
                 ));
                 //console.log(`「${characterName}」の設定を更新しました（characterId: ${existingCharacter.id}）`);
@@ -579,7 +627,8 @@ export const useExportImport = (
                 group: characterGroup,
                 emotions,
                 backgroundColor,
-                disabledProjects: disabledProjects
+                disabledProjects: disabledProjects,
+                ...(userPresets !== undefined ? { userPresets } : {})
               });
             }
           }
@@ -691,7 +740,8 @@ export const useExportImport = (
     exportType: 'full' | 'serif-only',
     includeTogaki: boolean,
     selectedOnly: boolean,
-    fileFormat?: 'csv' | 'txt'
+    fileFormat?: 'csv' | 'txt',
+    includeUserPreset?: boolean
   ) => {
     sceneIds.forEach(async (sceneId) => {
       const scene = project.scenes.find(s => s.id === sceneId);
@@ -699,28 +749,32 @@ export const useExportImport = (
         onNotification('シーンが見つかりません', 'error');
         return;
       }
-      
+
       const script = scene.scripts[0];
       let targetBlocks = script.blocks;
       if (selectedOnly && selectedBlockIds.length > 0) {
         targetBlocks = script.blocks.filter(block => selectedBlockIds.includes(block.id));
       }
-      
+
       if (!targetBlocks || targetBlocks.length === 0) {
         onNotification('エクスポート対象のブロックがありません', 'info');
         return;
       }
-      
+
       let rows: string[][] = [];
       if (exportType === 'full') {
         rows = targetBlocks
           .filter(block => includeTogaki ? true : block.characterId)
           .map(block => {
             if (!block.characterId) {
-              return ['ト書き', block.text.replace(/\n/g, '\\n')];
+              const row = ['ト書き', block.text.replace(/\n/g, '\\n')];
+              if (includeUserPreset) row.push('');
+              return row;
             }
             const char = characters.find(c => c.id === block.characterId);
-            return [char ? char.name : '', block.text.replace(/\n/g, '\\n')];
+            const row = [char ? char.name : '', block.text.replace(/\n/g, '\\n')];
+            if (includeUserPreset) row.push(getPresetName(block));
+            return row;
           });
       } else if (exportType === 'serif-only') {
         rows = targetBlocks
@@ -758,6 +812,99 @@ export const useExportImport = (
     });
   };
 
+  // プリセット名+区切り文字形式エクスポート（VOICEROID・A.I.VOICE向け）
+  const handleExportPresetSeparator = async (
+    separator: string,
+    includeTogaki: boolean,
+    selectedOnly: boolean,
+    fileFormat: 'csv' | 'txt',
+    useGroupExport: boolean,
+    selectedGroups: string[],
+    useSceneExport: boolean,
+    sceneIds: string[]
+  ) => {
+    const sep = separator || '＞';
+
+    const buildLines = (blocks: typeof project.scenes[0]['scripts'][0]['blocks']): string[] => {
+      let targetBlocks = blocks;
+      if (selectedOnly && selectedBlockIds.length > 0) {
+        targetBlocks = blocks.filter(block => selectedBlockIds.includes(block.id));
+      }
+      return targetBlocks
+        .filter(block => includeTogaki ? true : block.characterId)
+        .map(block => {
+          const text = block.text.replace(/\n/g, '\\n');
+          if (!block.characterId) {
+            return text;
+          }
+          const presetName = getPresetName(block);
+          if (presetName) {
+            return `${presetName}${sep}${text}`;
+          }
+          const char = characters.find(c => c.id === block.characterId);
+          return char ? `${char.name}${sep}${text}` : text;
+        });
+    };
+
+    const saveFile = async (filename: string, content: string) => {
+      const extension = fileFormat === 'csv' ? 'csv' : 'txt';
+      const finalName = filename.endsWith(`.${extension}`) ? filename : `${filename}.${extension}`;
+      if (window.electronAPI) {
+        try {
+          await window.electronAPI.saveCSVFile(finalName, content);
+        } catch (error) {
+          onNotification('ファイルの保存に失敗しました。', 'error');
+        }
+      } else {
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = finalName;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    };
+
+    const extension = fileFormat === 'csv' ? 'csv' : 'txt';
+
+    if (useSceneExport && sceneIds.length > 0) {
+      // シーン単位エクスポート
+      if (useGroupExport && selectedGroups.length > 0) {
+        for (const scene of project.scenes.filter(s => sceneIds.includes(s.id))) {
+          for (const group of selectedGroups) {
+            const groupCharIds = characters.filter(c => c.group === group).map(c => c.id);
+            const blocks = scene.scripts[0]?.blocks.filter(b => b.characterId && groupCharIds.includes(b.characterId)) || [];
+            const lines = buildLines(blocks);
+            if (lines.length === 0) continue;
+            await saveFile(`${project.name || 'project'}_${scene.name}_${group}.${extension}`, lines.join('\r\n'));
+          }
+        }
+      } else {
+        for (const scene of project.scenes.filter(s => sceneIds.includes(s.id))) {
+          const blocks = scene.scripts[0]?.blocks || [];
+          const lines = buildLines(blocks);
+          if (lines.length === 0) continue;
+          await saveFile(`${project.name || 'project'}_${scene.name}.${extension}`, lines.join('\r\n'));
+        }
+      }
+    } else if (useGroupExport && selectedGroups.length > 0) {
+      // グループ単位エクスポート（全シーン）
+      for (const group of selectedGroups) {
+        const groupCharIds = characters.filter(c => c.group === group).map(c => c.id);
+        const blocks = project.scenes.flatMap(s => (s.scripts[0]?.blocks || []).filter(b => b.characterId && groupCharIds.includes(b.characterId)));
+        const lines = buildLines(blocks);
+        if (lines.length === 0) continue;
+        await saveFile(`${project.name || 'project'}_all_scenes_${group}.${extension}`, lines.join('\r\n'));
+      }
+    } else {
+      // 全シーンまとめてエクスポート
+      const allBlocks = project.scenes.flatMap(scene => scene.scripts[0]?.blocks || []);
+      const lines = buildLines(allBlocks);
+      await saveFile(`${project.name || 'project'}_all_scenes.${extension}`, lines.join('\r\n'));
+    }
+  };
+
   return {
     handleExportCSV,
     handleExportSerifOnly,
@@ -768,6 +915,7 @@ export const useExportImport = (
     handleImportCharacterCSV,
     handleImportJson,
     handleExportProjectJson,
-    handleExportSceneCSV
+    handleExportSceneCSV,
+    handleExportPresetSeparator
   };
 };

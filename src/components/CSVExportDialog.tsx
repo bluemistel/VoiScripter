@@ -10,15 +10,16 @@ interface CSVExportDialogProps {
   characters: Character[];
   groups: string[];
   selectedBlockIds: string[];
-  onExportCSV: (includeTogaki?: boolean, selectedOnly?: boolean, fileFormat?: 'csv' | 'txt') => void;
-  onExportSerifOnly: (selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeTogaki?: boolean) => void;
-  onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean, selectedOnly?: boolean, sceneIds?: string[], fileFormat?: 'csv' | 'txt') => void;
+  onExportCSV: (includeTogaki?: boolean, selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeUserPreset?: boolean) => void;
+  onExportSerifOnly: (selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeTogaki?: boolean, includeUserPreset?: boolean) => void;
+  onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean, selectedOnly?: boolean, sceneIds?: string[], fileFormat?: 'csv' | 'txt', includeUserPreset?: boolean) => void;
   onExportCharacterCSV: () => void;
   onExportToClipboard: (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean) => void;
   scenes: Scene[];
   selectedSceneId: string | null;
-  onExportSceneCSV: (sceneIds: string[], exportType: 'full' | 'serif-only', includeTogaki: boolean, selectedOnly: boolean, fileFormat?: 'csv' | 'txt') => void;
+  onExportSceneCSV: (sceneIds: string[], exportType: 'full' | 'serif-only', includeTogaki: boolean, selectedOnly: boolean, fileFormat?: 'csv' | 'txt', includeUserPreset?: boolean) => void;
   onExportProjectJson: () => void;
+  onExportPresetSeparator: (separator: string, includeTogaki: boolean, selectedOnly: boolean, fileFormat: 'csv' | 'txt', useGroupExport: boolean, selectedGroups: string[], useSceneExport: boolean, sceneIds: string[]) => void;
   project: any; // プロジェクトデータ
 }
 
@@ -37,9 +38,10 @@ export default function CSVExportDialog({
   selectedSceneId,
   onExportSceneCSV,
   onExportProjectJson,
+  onExportPresetSeparator,
   project
 }: CSVExportDialogProps) {
-  type ExportType = 'full' | 'serif-only' | 'character-setting' | 'project';
+  type ExportType = 'full' | 'serif-only' | 'character-setting' | 'project' | 'preset-separator';
   const [exportType, setExportType] = useState<ExportType>('full');
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [useGroupExport, setUseGroupExport] = useState(false);
@@ -50,6 +52,8 @@ export default function CSVExportDialog({
   const [useSceneExport, setUseSceneExport] = useState(false);
   const [sceneCheckboxes, setSceneCheckboxes] = useState<string[]>([]);
   const [fileFormat, setFileFormat] = useState<'csv' | 'txt'>('csv');
+  const [presetSeparator, setPresetSeparator] = useState<string>('＞');
+  const [includeUserPreset, setIncludeUserPreset] = useState(false);
 
   // このuseEffectを削除して、ト書き含めるの切り替えでグループごとエクスポートがリセットされないようにする
 
@@ -137,20 +141,14 @@ export default function CSVExportDialog({
 
   const handleExport = (exportType: 'full' | 'serif-only', includeTogaki: boolean) => {
     if (exportToClipboard) {
-      //console.log('handleExport: exportToClipboard', { exportType, includeTogaki, exportSelectedOnly });
-      // プロジェクト全体のテキストをコピー
       onExportToClipboard(exportType === 'serif-only', exportSelectedOnly, includeTogaki);
     } else if (useGroupExport && selectedGroups.length > 0) {
-      // 特定のシーンのみCSVを出力が有効な場合はsceneCheckboxesを渡す
-      //console.log('handleExport: onExportByGroups', { selectedGroups, exportType, includeTogaki, exportSelectedOnly, sceneIds: useSceneExport ? sceneCheckboxes : undefined, fileFormat });
-      onExportByGroups(selectedGroups, exportType, includeTogaki, exportSelectedOnly, useSceneExport ? sceneCheckboxes : undefined, fileFormat);
+      onExportByGroups(selectedGroups, exportType, includeTogaki, exportSelectedOnly, useSceneExport ? sceneCheckboxes : undefined, fileFormat, includeUserPreset);
     } else if (!useGroupExport) {
       if (exportType === 'full') {
-        //console.log('handleExport: onExportCSV', { includeTogaki, exportSelectedOnly, fileFormat });
-        onExportCSV(includeTogaki, exportSelectedOnly, fileFormat);
+        onExportCSV(includeTogaki, exportSelectedOnly, fileFormat, includeUserPreset);
       } else {
-        //console.log('handleExport: onExportSerifOnly', { exportSelectedOnly, fileFormat, includeTogaki });
-        onExportSerifOnly(exportSelectedOnly, fileFormat, includeTogaki);
+        onExportSerifOnly(exportSelectedOnly, fileFormat, includeTogaki, includeUserPreset);
       }
     }
     onClose();
@@ -164,6 +162,8 @@ export default function CSVExportDialog({
     setExportToClipboard(false);
     setActiveTab('script');
     setFileFormat('csv');
+    setPresetSeparator('＞');
+    setIncludeUserPreset(false);
     onClose();
   };
 
@@ -277,6 +277,38 @@ export default function CSVExportDialog({
                    />
                    <span className="text-foreground">クリップボードにセリフをコピーする<br /><span className="text-xs text-muted-foreground">別のソフトへ貼り付ける場合に使用します。</span></span>
                  </label>
+                <label className="flex items-start space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="exportType"
+                    value="preset-separator"
+                    checked={exportType === 'preset-separator' && !exportToClipboard}
+                    onChange={(e) => {
+                      setExportType(e.target.value as ExportType);
+                      setExportToClipboard(false);
+                      setIncludeUserPreset(false);
+                    }}
+                    className="text-primary mt-0.5"
+                  />
+                  <span className="text-foreground">
+                    プリセット名とユーザー指定の区切り文字で出力
+                    <br /><span className="text-xs text-muted-foreground">※VOICEROID、A.I.VOICEのテキスト読み込みを想定した形式です</span>
+                    {exportType === 'preset-separator' && !exportToClipboard && (
+                      <span className="flex items-center space-x-2 mt-1" onClick={e => e.stopPropagation()}>
+                        <span className="text-xs text-foreground">区切り文字:</span>
+                        <input
+                          type="text"
+                          value={presetSeparator}
+                          onChange={e => setPresetSeparator(e.target.value)}
+                          onPointerDown={e => e.stopPropagation()}
+                          onMouseDown={e => e.stopPropagation()}
+                          className="w-16 p-1 border rounded bg-background text-foreground text-sm focus:ring-1 focus:ring-primary/50 focus:outline-none"
+                          maxLength={5}
+                        />
+                      </span>
+                    )}
+                  </span>
+                </label>
               </div>
             </div>
 
@@ -394,6 +426,26 @@ export default function CSVExportDialog({
 
 
 
+              {/* ユーザープリセット名をエクスポートに追加する */}
+              {!exportToClipboard && (
+                <label className={`flex items-start space-x-2 cursor-pointer mb-2 ${exportType === 'preset-separator' ? 'opacity-50' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={includeUserPreset}
+                    onChange={e => setIncludeUserPreset(e.target.checked)}
+                    className="text-primary mt-0.5"
+                    disabled={exportType === 'preset-separator'}
+                  />
+                  <span className={`font-medium ${exportType === 'preset-separator' ? 'text-muted-foreground' : 'text-foreground'}`}>
+                    ユーザープリセット名をエクスポートに追加する
+                    <br /><span className="text-xs text-muted-foreground font-normal">
+                      CSVの3列目にプリセット名を出力します。CeVIO AI等での読み込みを想定した形式です。
+                      {exportType === 'preset-separator' && '（区切り文字出力時は選択不可）'}
+                    </span>
+                  </span>
+                </label>
+              )}
+
               {/* グループごとにエクスポートオプション */}
               <label className={`flex items-center space-x-2 cursor-pointer mb-2 ${exportToClipboard ? 'opacity-50' : ''}`}>
                 <input
@@ -509,10 +561,22 @@ export default function CSVExportDialog({
               } else if (exportType === 'project') {
                 onExportProjectJson();
                 handleClose();
+              } else if (exportType === 'preset-separator' && !exportToClipboard) {
+                onExportPresetSeparator(
+                  presetSeparator || '＞',
+                  includeTogaki,
+                  exportSelectedOnly,
+                  fileFormat,
+                  useGroupExport,
+                  selectedGroups,
+                  useSceneExport,
+                  sceneCheckboxes
+                );
+                handleClose();
               } else if (useGroupExport && selectedGroups.length > 0) {
                 handleExport(exportType as 'full' | 'serif-only', includeTogaki);
               } else if (useSceneExport && sceneCheckboxes.length > 0 && !exportToClipboard) {
-                onExportSceneCSV(sceneCheckboxes, exportType as 'full' | 'serif-only', includeTogaki, exportSelectedOnly, fileFormat);
+                onExportSceneCSV(sceneCheckboxes, exportType as 'full' | 'serif-only', includeTogaki, exportSelectedOnly, fileFormat, includeUserPreset);
                 handleClose();
               } else if (exportType === 'full' || exportType === 'serif-only' || exportToClipboard) {
                 handleExport(exportType as 'full' | 'serif-only', includeTogaki);

@@ -29,6 +29,7 @@ import { useBlockOperations } from '@/hooks/useBlockOperations';
 import { useScriptManagement } from '@/hooks/useScriptManagement';
 import { useSettings } from '@/hooks/useSettings';
 import { useAppUpdate } from '@/hooks/useAppUpdate';
+import { useShortcutConfig } from '@/hooks/useShortcutConfig';
 import { useUIState } from '@/hooks/useUIState';
 import { useDataProcessing } from '@/hooks/useDataProcessing';
 import { useDataSync } from '@/hooks/useDataSync';
@@ -178,6 +179,7 @@ export default function Home() {
   // 設定フック
   const settings = useSettings(dataManagement);
   const appUpdate = useAppUpdate(dataManagement);
+  const shortcutConfig = useShortcutConfig();
 
   useEffect(() => {
     if (!dataManagement.isInitialized) return;
@@ -283,7 +285,8 @@ export default function Home() {
         setIsCtrlEnterBlockRef.current(isCtrlEnter);
         // console.log('page.tsx - Set isCtrlEnterBlock to:', isCtrlEnter);
       }
-    }
+    },
+    shortcutConfig.shortcuts
   );
 
   // 初期化処理は useProjectManagement フック内で行われるため、ここでは不要
@@ -641,6 +644,7 @@ export default function Home() {
         onExportByGroups={exportImport.handleExportByGroups}
         onExportToClipboard={exportImport.handleExportToClipboard}
         onExportProjectJson={exportImport.handleExportProjectJson}
+        onExportPresetSeparator={exportImport.handleExportPresetSeparator}
         onImportCSV={exportImport.handleImportCSV}
         onImportCharacterCSV={exportImport.handleImportCharacterCSV}
         onImportJson={exportImport.handleImportJson}
@@ -847,14 +851,14 @@ export default function Home() {
         characters={characters}
         groups={groups}
         selectedBlockIds={uiState.selectedBlockIds}
-        onExportCSV={(includeTogaki = false, selectedOnly = false, fileFormat = 'csv') => {
-          exportImport.handleExportCSV(includeTogaki, selectedOnly, fileFormat);
+        onExportCSV={(includeTogaki = false, selectedOnly = false, fileFormat = 'csv', includeUserPreset = false) => {
+          exportImport.handleExportCSV(includeTogaki, selectedOnly, fileFormat, includeUserPreset);
         }}
-        onExportSerifOnly={(selectedOnly = false, fileFormat = 'csv', includeTogaki = false) => {
-          exportImport.handleExportSerifOnly(selectedOnly, fileFormat, includeTogaki);
+        onExportSerifOnly={(selectedOnly = false, fileFormat = 'csv', includeTogaki = false, includeUserPreset = false) => {
+          exportImport.handleExportSerifOnly(selectedOnly, fileFormat, includeTogaki, includeUserPreset);
         }}
-        onExportByGroups={(selectedGroups, exportType, includeTogaki = false, selectedOnly = false, sceneIds, fileFormat = 'csv') => {
-          exportImport.handleExportByGroups(selectedGroups, exportType, includeTogaki, selectedOnly, sceneIds, fileFormat);
+        onExportByGroups={(selectedGroups, exportType, includeTogaki = false, selectedOnly = false, sceneIds, fileFormat = 'csv', includeUserPreset = false) => {
+          exportImport.handleExportByGroups(selectedGroups, exportType, includeTogaki, selectedOnly, sceneIds, fileFormat, includeUserPreset);
         }}
         onExportCharacterCSV={() => {
           exportImport.handleExportCharacterCSV();
@@ -864,11 +868,14 @@ export default function Home() {
         }}
         scenes={project.scenes}
         selectedSceneId={selectedSceneId}
-        onExportSceneCSV={(sceneIds, exportType, includeTogaki, selectedOnly, fileFormat = 'csv') => {
-          exportImport.handleExportSceneCSV(sceneIds, exportType, includeTogaki, selectedOnly, fileFormat);
+        onExportSceneCSV={(sceneIds, exportType, includeTogaki, selectedOnly, fileFormat = 'csv', includeUserPreset = false) => {
+          exportImport.handleExportSceneCSV(sceneIds, exportType, includeTogaki, selectedOnly, fileFormat, includeUserPreset);
         }}
         onExportProjectJson={() => {
           exportImport.handleExportProjectJson();
+        }}
+        onExportPresetSeparator={(separator, includeTogaki, selectedOnly, fileFormat, useGroupExport, selectedGroups, useSceneExport, sceneIds) => {
+          exportImport.handleExportPresetSeparator(separator, includeTogaki, selectedOnly, fileFormat, useGroupExport, selectedGroups, useSceneExport, sceneIds);
         }}
         project={project}
       />
@@ -904,6 +911,9 @@ export default function Home() {
         onReverseToolbarOrderChange={settings.handleReverseToolbarOrderChange}
         showLatestDownloadMenu={appUpdate.isUpdateSkipped}
         onOpenLatestDownload={handleOpenLatestDownload}
+        shortcuts={shortcutConfig.shortcuts}
+        onUpdateShortcut={shortcutConfig.updateShortcut}
+        onResetShortcuts={shortcutConfig.resetShortcuts}
       />
 
       {/* SearchDialog */}
