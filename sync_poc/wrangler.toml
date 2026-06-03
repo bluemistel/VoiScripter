@@ -21,3 +21,7 @@ id = "8579b723057f4a56bd2b0224062e916d"
 type = "Text"
 globs = ["**/*.html"]
 fallthrough = false
+
+[observability.logs]
+enabled = false
+invocation_logs = true

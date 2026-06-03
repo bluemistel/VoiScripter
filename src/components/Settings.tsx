@@ -566,6 +566,17 @@ export default function Settings({
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
                   <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.2.9</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• データ同期機能のセキュリティ強化
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• 同一IPからの過剰なアクセスを制限するレートリミットを追加</li>
+                          <li>• アプリバージョンの整合性チェックを追加（同期機能はアプリ版も最新版でないと同期が不可になりました）</li>
+                        </ul>
+                      </li>
+                    </ul>
+                  </div>
+                  <div>
                     <h4 className="font-medium text-foreground mb-2">v0.2.8</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                       <li>

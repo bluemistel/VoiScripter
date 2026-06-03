@@ -5,6 +5,7 @@
 
 import { useState, useCallback } from 'react';
 import { encrypt, decrypt } from '@/utils/crypto';
+import packageJson from '../../package.json';
 
 const SYNC_ENV = process.env.NEXT_PUBLIC_SYNC_ENV ||
     (process.env.NODE_ENV === 'development' ? 'dev' : 'prd');
@@ -69,6 +70,7 @@ export function useDataSync() {
                     body: encrypted,
                     headers: {
                         'Content-Type': 'text/plain',
+                        'X-App-Version': packageJson.version,
                     },
                 });
 
@@ -114,7 +116,11 @@ export function useDataSync() {
             try {
                 const url = `${SYNC_API_URL}/${credentials.uuid}`;
                 console.log('[DataSync] restoreFromCloud URL:', url);
-                const response = await fetch(url);
+                const response = await fetch(url, {
+                    headers: {
+                        'X-App-Version': packageJson.version,
+                    },
+                });
 
                 if (!response.ok) {
                     if (response.status === 404) {
