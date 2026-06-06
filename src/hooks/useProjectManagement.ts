@@ -732,14 +732,29 @@ export const useProjectManagement = (
     if (!name.trim()) return;
     if (project.scenes.length >= 30) return;
     if (project.scenes.some(s => s.name === name.trim())) return;
-    
+
     const newSceneId = Date.now().toString();
+    const emptyScript = buildEmptyScript({ title: name.trim() });
+
+    // 直前のシーンから最後の話者ブロックを探して初期ブロックを作成
+    const currentScene = project.scenes.find(s => s.id === selectedSceneId);
+    const currentBlocks = currentScene?.scripts[0]?.blocks || [];
+    const lastSpeaker = [...currentBlocks].reverse().find(b => b.characterId);
+    if (lastSpeaker) {
+      emptyScript.blocks = [{
+        id: Date.now().toString() + Math.random().toString(36).slice(2, 9),
+        characterId: lastSpeaker.characterId,
+        emotion: lastSpeaker.emotion || 'normal',
+        text: ''
+      }];
+    }
+
     const newScene = {
       id: newSceneId,
       name: name.trim(),
-      scripts: [buildEmptyScript({ title: name.trim() })]
+      scripts: [emptyScript]
     };
-    
+
     setProject(prev => ({ ...prev, scenes: [...prev.scenes, newScene] }));
     setSelectedSceneId(newSceneId);
   };

@@ -46,6 +46,8 @@ export default function Home() {
   const [blockDropTargetSceneId, setBlockDropTargetSceneId] = useState<string | null>(null);
   const blockDropHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blockDropPrevSceneIdRef = useRef<string | null>(null);
+  const projectRef = useRef<Project | null>(null);
+  const selectedSceneIdRef = useRef<string | null>(null);
 
   // ローディング状態
   const [isLoading, setIsLoading] = useState(true);
@@ -90,6 +92,10 @@ export default function Home() {
     setProjectList,
     handleCreateProject
   } = projectManagement;
+
+  // クロスシーンDnD用: クロージャから最新値を参照するためのref同期
+  projectRef.current = project;
+  selectedSceneIdRef.current = selectedSceneId;
 
   // ローディング状態の管理：データ管理とプロジェクトの初期化が完了するまで待つ
   useEffect(() => {
@@ -859,23 +865,23 @@ export default function Home() {
                 }
                 blockDropPrevSceneIdRef.current = hoveredSceneId;
 
-                if (hoveredSceneId && hoveredSceneId !== selectedSceneId) {
+                if (hoveredSceneId && hoveredSceneId !== selectedSceneIdRef.current) {
                   setBlockDropTargetSceneId(hoveredSceneId);
                   // 500ms ホバーでシーン切り替え＋ブロック移動
                   blockDropHoverTimerRef.current = setTimeout(() => {
                     const blockIdsToMove = [...draggingBlockIdsRef.current];
-                    if (!selectedSceneId || blockIdsToMove.length === 0) return;
+                    const currentProject = projectRef.current;
+                    const currentSceneId = selectedSceneIdRef.current;
+                    if (!currentProject || !currentSceneId || blockIdsToMove.length === 0) return;
                     const newProject = blockOperations.handleMoveBlocksToScene(
-                      project, selectedSceneId, hoveredSceneId, blockIdsToMove,
-                      project.scenes.find(s => s.id === hoveredSceneId)?.scripts[0]?.blocks.length || 0
+                      currentProject, currentSceneId, hoveredSceneId, blockIdsToMove,
+                      currentProject.scenes.find(s => s.id === hoveredSceneId)?.scripts[0]?.blocks.length || 0
                     );
                     setProject(newProject);
-                    sceneSelectionMemoryRef.current[selectedSceneId] = [];
+                    sceneSelectionMemoryRef.current[currentSceneId] = [];
                     sceneSelectionMemoryRef.current[hoveredSceneId] = blockIdsToMove;
                     projectManagement.handleSelectScene(hoveredSceneId);
                     setSelectedBlockIds(blockIdsToMove);
-                    draggingBlockIdsRef.current = [];
-                    setIsDraggingBlocks(false);
                     setBlockDropTargetSceneId(null);
                     blockDropPrevSceneIdRef.current = null;
                   }, 500);

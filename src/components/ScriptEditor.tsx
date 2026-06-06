@@ -275,9 +275,9 @@ function SortableBlock({
               value={block.text}
               onChange={e => onUpdate({ text: e.target.value })}
               placeholder="ト書きを入力"
-              className={`w-full ${simpleMode ? 'p-1 rounded-lg bg-transparent' : 'p-2 pt-2 rounded-2xl min-h-[40px] bg-muted/70 shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20'} text-foreground focus:ring-1 focus:ring-primary/40 italic focus:outline-none resize-none overflow-hidden`}
+              className={`w-full ${simpleMode ? 'p-1 rounded-lg bg-transparent' : 'p-2 pt-2 rounded-2xl min-h-[40px] bg-muted/70 shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20'} text-foreground ${simpleMode ? '' : 'focus:ring-1 focus:ring-primary/40'} italic focus:outline-none resize-none overflow-hidden`}
               rows={1}
-              style={{ height: 'auto', borderRadius: simpleMode ? '8px' : '20px 20px 20px 0', fontSize: 'var(--editor-font-size, 14px)', lineHeight: simpleMode ? '1.4' : undefined }}
+              style={{ height: 'auto', borderRadius: simpleMode ? '8px' : '20px 20px 20px 0', fontSize: 'var(--editor-font-size, 14px)', lineHeight: simpleMode ? '1.4' : undefined, minHeight: simpleMode ? 'calc(var(--editor-font-size, 14px) * 1.4 + 8px)' : undefined }}
               onPointerDown={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
               onTouchStart={(e) => e.stopPropagation()}
@@ -430,9 +430,9 @@ function SortableBlock({
                   }
                 }}
                 placeholder="セリフを入力"
-                className={`${simpleMode ? 'rounded-lg p-1 bg-transparent' : 'rounded-2xl p-2 bg-card/95 shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20 min-h-[60px]'} w-full text-foreground focus:ring-1 focus:ring-primary/40 focus:outline-none resize-none overflow-hidden${!simpleMode && !isMobileView && character?.userPresets?.length ? ' pr-[7.5rem]' : ''}`}
+                className={`${simpleMode ? 'rounded-lg p-1 bg-transparent' : 'rounded-2xl p-2 bg-card/95 shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20 min-h-[60px]'} w-full text-foreground ${simpleMode ? '' : 'focus:ring-1 focus:ring-primary/40'} focus:outline-none resize-none overflow-hidden${!simpleMode && !isMobileView && character?.userPresets?.length ? ' pr-[7.5rem]' : ''}`}
                 rows={1}
-                style={{ height: 'auto', borderRadius: simpleMode ? '8px' : '20px 20px 20px 0', fontSize: 'var(--editor-font-size, 14px)', lineHeight: simpleMode ? '1.4' : undefined }}
+                style={{ height: 'auto', borderRadius: simpleMode ? '8px' : '20px 20px 20px 0', fontSize: 'var(--editor-font-size, 14px)', lineHeight: simpleMode ? '1.4' : undefined, minHeight: simpleMode ? 'calc(var(--editor-font-size, 14px) * 1.4 + 8px)' : undefined }}
                 onPointerDown={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}
@@ -449,6 +449,15 @@ function SortableBlock({
               {!simpleMode && (
                 <div className="absolute left-[-4px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-400 dark:border-r-gray-500"></div>
               )}
+              {/* プリセット名表示（シンプルモード: 選択時のみテキスト表示） */}
+              {simpleMode && block.userPresetId && character?.userPresets && character.userPresets.length > 0 && (() => {
+                const preset = character.userPresets.find(p => p.id === block.userPresetId);
+                return preset ? (
+                  <span className="absolute top-0.5 right-1 text-[10px] text-muted-foreground/70 pointer-events-none select-none truncate max-w-[6rem]">
+                    {preset.name}
+                  </span>
+                ) : null;
+              })()}
               {/* プリセット選択（デスクトップ: テキストエリア内右上に絶対配置） */}
               {!simpleMode && !isMobileView && character?.userPresets && character.userPresets.length > 0 && (
                 <select
@@ -2050,7 +2059,7 @@ export default function ScriptEditor({
       {!isMobileLayout && (
         <button
           type="button"
-          className="fixed z-50 p-2 rounded-full shadow-lg hover:bg-muted/90 transition-all"
+          className="fixed z-30 p-2 rounded-full shadow-lg hover:bg-muted/90 transition-all"
           style={{
             top: '118px',
             left: isStoryPanelOpen ? `${panelWidth + 8}px` : '8px',
