@@ -638,6 +638,7 @@ export default function Settings({
                       </li>
                       <li>• Ctrl+D でブロック複製のショートカットを追加</li>
                       <li>• シーンタブ切り替え時にブロックの選択状態をタブごとに保持するよう改善</li>
+                      <li>• アップデート通知が機能してなかったのを修正(きっと次回から…)</li>
                       <li>
                         • ストーリーパネルの改善
                         <ul className="text-sm text-muted-foreground space-y-1 ml-4">
