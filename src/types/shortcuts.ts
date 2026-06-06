@@ -14,7 +14,8 @@ export type ShortcutId =
   | 'prevCharacter'
   | 'nextCharacter'
   | 'prevPreset'
-  | 'nextPreset';
+  | 'nextPreset'
+  | 'duplicateBlock';
 
 export interface ShortcutBinding {
   ctrl: boolean;
@@ -47,6 +48,7 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
   { id: 'nextCharacter',     label: 'キャラクターを次に切り替え',  group: 'editor', defaultBinding: { ctrl: false, shift: false, alt: true,  key: 'ArrowDown' } },
   { id: 'prevPreset',        label: '前のプリセットを選択',        group: 'editor', defaultBinding: { ctrl: false, shift: true,  alt: true,  key: 'ArrowUp' } },
   { id: 'nextPreset',        label: '次のプリセットを選択',        group: 'editor', defaultBinding: { ctrl: false, shift: true,  alt: true,  key: 'ArrowDown' } },
+  { id: 'duplicateBlock',    label: 'ブロックを複製',              group: 'editor', defaultBinding: { ctrl: true,  shift: false, alt: false, key: 'd' } },
 ];
 
 export type ShortcutMap = Record<ShortcutId, ShortcutBinding>;

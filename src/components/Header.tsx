@@ -54,19 +54,21 @@ const useLogoPath = () => {
 };
 
 // ソート可能なシーンタブコンポーネント
-function SortableSceneTab({ 
-  scene, 
-  isSelected, 
-  onSelect, 
-  onRename, 
-  onDelete, 
-  children 
+function SortableSceneTab({
+  scene,
+  isSelected,
+  onSelect,
+  onRename,
+  onDelete,
+  isBlockDropTarget = false,
+  children
 }: {
   scene: Scene;
   isSelected: boolean;
   onSelect: () => void;
   onRename: () => void;
   onDelete: () => void;
+  isBlockDropTarget?: boolean;
   children?: ReactNode;
 }) {
   const {
@@ -96,12 +98,12 @@ function SortableSceneTab({
   const handleMouseUp = (e: React.MouseEvent | React.TouchEvent) => {
     const currentTime = Date.now();
     const timeDiff = mouseDownTime ? currentTime - mouseDownTime : 0;
-    
+
     // ドラッグが開始されていない、かつ短時間のクリック/タップの場合のみシーン切り替え
     if (!isDragStarted && timeDiff < 200) {
       onSelect();
     }
-    
+
     setMouseDownTime(null);
     setIsDragStarted(false);
   };
@@ -114,7 +116,8 @@ function SortableSceneTab({
     <div
       ref={setNodeRef}
       style={{ ...style, minWidth: 100, maxWidth: 120 }}
-      className={`relative rounded text-foreground text-sm font-medium mr-1 whitespace-nowrap group ${isSelected ? 'bg-secondary/70 text-secondary-foreground' : 'bg-muted hover:bg-accent'}`}
+      data-scene-id={scene.id}
+      className={`relative rounded text-foreground text-sm font-medium mr-1 whitespace-nowrap group ${isSelected ? 'bg-secondary/70 text-secondary-foreground' : 'bg-muted hover:bg-accent'} ${isBlockDropTarget ? 'ring-2 ring-primary/60 bg-primary/10' : ''}`}
     >
       {/* ドラッグ可能なメイン領域 */}
       <div
@@ -199,6 +202,7 @@ interface HeaderProps {
   onOpenDataSync: () => void;
   showLatestDownloadMenu?: boolean;
   onOpenLatestDownload?: () => void;
+  blockDropTargetSceneId?: string | null;
 }
 
 // CSVインポート時の選択ダイアログ
@@ -329,7 +333,8 @@ export default function Header(props: HeaderProps) {
     onOpenSearch,
     onOpenDataSync,
     showLatestDownloadMenu = false,
-    onOpenLatestDownload
+    onOpenLatestDownload,
+    blockDropTargetSceneId = null
   } = props;
   const logoPath = useLogoPath();
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
@@ -881,6 +886,7 @@ export default function Header(props: HeaderProps) {
                     onSelect={() => onSelectScene(scene.id)}
                     onRename={() => openRenameSceneDialog(scene.id, scene.name)}
                     onDelete={() => openDeleteSceneDialog(scene.id, scene.name)}
+                    isBlockDropTarget={blockDropTargetSceneId === scene.id}
                   >
                     {/* childrenは空でOK */}
                   </SortableSceneTab>

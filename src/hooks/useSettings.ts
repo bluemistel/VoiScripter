@@ -12,6 +12,12 @@ export interface SettingsHook {
   reverseToolbarOrder: boolean;
   setReverseToolbarOrder: (enabled: boolean) => void;
   handleReverseToolbarOrderChange: (enabled: boolean) => void;
+  fontSize: number;
+  setFontSize: (size: number) => void;
+  handleFontSizeChange: (size: number) => void;
+  simpleMode: boolean;
+  setSimpleMode: (enabled: boolean) => void;
+  handleSimpleModeChange: (enabled: boolean) => void;
 }
 
 export const useSettings = (dataManagement: DataManagementHook): SettingsHook => {
@@ -19,6 +25,8 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
   const { saveDirectory, setSaveDirectory } = dataManagement;
   const [enterOnlyBlockAdd, setEnterOnlyBlockAdd] = useState<boolean>(false);
   const [reverseToolbarOrder, setReverseToolbarOrder] = useState<boolean>(false);
+  const [fontSize, setFontSize] = useState<number>(16);
+  const [simpleMode, setSimpleMode] = useState<boolean>(false);
 
   // 初回マウント時に設定を読み込み
   useEffect(() => {
@@ -31,6 +39,18 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
         const savedToolbarOrder = await dataManagement.loadData('voiscripter_reverseToolbarOrder');
         if (savedToolbarOrder !== null) {
           setReverseToolbarOrder(savedToolbarOrder === 'true');
+        }
+        const savedFontSize = await dataManagement.loadData('voiscripter_fontSize');
+        if (savedFontSize !== null) {
+          const parsed = parseInt(savedFontSize, 10);
+          if (!isNaN(parsed)) {
+            setFontSize(parsed);
+            document.documentElement.style.setProperty('--editor-font-size', `${parsed}px`);
+          }
+        }
+        const savedSimpleMode = await dataManagement.loadData('voiscripter_simpleMode');
+        if (savedSimpleMode !== null) {
+          setSimpleMode(savedSimpleMode === 'true');
         }
       }
     };
@@ -46,6 +66,17 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
   const handleReverseToolbarOrderChange = (enabled: boolean) => {
     setReverseToolbarOrder(enabled);
     dataManagement.saveData('voiscripter_reverseToolbarOrder', enabled.toString());
+  };
+
+  const handleFontSizeChange = (size: number) => {
+    setFontSize(size);
+    document.documentElement.style.setProperty('--editor-font-size', `${size}px`);
+    dataManagement.saveData('voiscripter_fontSize', size.toString());
+  };
+
+  const handleSimpleModeChange = (enabled: boolean) => {
+    setSimpleMode(enabled);
+    dataManagement.saveData('voiscripter_simpleMode', enabled.toString());
   };
 
   // データ保存先変更
@@ -123,6 +154,12 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
     handleEnterOnlyBlockAddChange,
     reverseToolbarOrder,
     setReverseToolbarOrder,
-    handleReverseToolbarOrderChange
+    handleReverseToolbarOrderChange,
+    fontSize,
+    setFontSize,
+    handleFontSizeChange,
+    simpleMode,
+    setSimpleMode,
+    handleSimpleModeChange
   };
 };

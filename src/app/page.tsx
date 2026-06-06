@@ -40,6 +40,12 @@ export default function Home() {
   const setIsUndoRedoOperationRef = useRef<((isUndoRedo: boolean) => void) | null>(null);
   const setIsCtrlEnterBlockRef = useRef<((isCtrlEnter: boolean) => void) | null>(null);
   const storyAssetMigrationDoneRef = useRef(false);
+  const sceneSelectionMemoryRef = useRef<Record<string, string[]>>({});
+  const [isDraggingBlocks, setIsDraggingBlocks] = useState(false);
+  const draggingBlockIdsRef = useRef<string[]>([]);
+  const [blockDropTargetSceneId, setBlockDropTargetSceneId] = useState<string | null>(null);
+  const blockDropHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blockDropPrevSceneIdRef = useRef<string | null>(null);
 
   // ローディング状態
   const [isLoading, setIsLoading] = useState(true);
@@ -663,8 +669,21 @@ export default function Home() {
         selectedSceneId={selectedSceneId}
         onAddScene={projectManagement.handleAddScene}
         onRenameScene={projectManagement.handleRenameScene}
-        onDeleteScene={projectManagement.handleDeleteScene}
-        onSelectScene={projectManagement.handleSelectScene}
+        onDeleteScene={(sceneId: string) => {
+          delete sceneSelectionMemoryRef.current[sceneId];
+          projectManagement.handleDeleteScene(sceneId);
+        }}
+        onSelectScene={(sceneId: string) => {
+          // 現在のシーンの選択状態を保存
+          if (selectedSceneId) {
+            sceneSelectionMemoryRef.current[selectedSceneId] = selectedBlockIds;
+          }
+          // シーン切り替え
+          projectManagement.handleSelectScene(sceneId);
+          // 保存された選択状態を復元（なければ空配列）
+          const savedSelection = sceneSelectionMemoryRef.current[sceneId] || [];
+          setSelectedBlockIds(savedSelection);
+        }}
         onReorderScenes={projectManagement.handleReorderScenes}
         onExportSceneCSV={exportImport.handleExportSceneCSV}
         onNewProject={handleNewProject}
@@ -688,8 +707,9 @@ export default function Home() {
         }}
         getCharacterProjectStates={characterManagement.getCharacterProjectStates}
         saveCharacterProjectStates={characterManagement.saveCharacterProjectStates}
+        blockDropTargetSceneId={blockDropTargetSceneId}
       />
-      
+
       <main className="w-full max-w-none px-[clamp(0.5rem,1.6vw,1rem)] py-[clamp(1rem,2.2vw,2rem)] relative">
         {/* ローディング画面 */}
         <div 
@@ -729,6 +749,12 @@ export default function Home() {
                 setProject(newProject);
               }
             }}
+            onDeleteBlocks={(blockIds) => {
+              if (project && selectedSceneId) {
+                const newProject = blockOperations.handleDeleteBlocks(project, selectedSceneId, blockIds);
+                setProject(newProject);
+              }
+            }}
             onInsertBlock={(block, index) => {
               if (project && selectedSceneId) {
                 const newProject = blockOperations.handleInsertBlock(project, selectedSceneId, block, index);
@@ -739,6 +765,25 @@ export default function Home() {
               if (project && selectedSceneId) {
                 const newProject = blockOperations.handleMoveBlockByIndex(project, selectedSceneId, fromIndex, toIndex);
                 setProject(newProject);
+              }
+            }}
+            onMoveBlocks={(blockIds, direction) => {
+              if (project && selectedSceneId) {
+                const newProject = blockOperations.handleMoveBlocks(project, selectedSceneId, blockIds, direction);
+                setProject(newProject);
+              }
+            }}
+            onMoveBlocksByIndex={(blockIds, toIndex) => {
+              if (project && selectedSceneId) {
+                const newProject = blockOperations.handleMoveBlocksByIndex(project, selectedSceneId, blockIds, toIndex);
+                setProject(newProject);
+              }
+            }}
+            onDuplicateBlocks={(blockIds) => {
+              if (project && selectedSceneId) {
+                const { project: newProject, newBlockIds } = blockOperations.handleDuplicateBlocks(project, selectedSceneId, blockIds);
+                setProject(newProject);
+                uiState.setSelectedBlockIds(newBlockIds);
               }
             }}
             selectedBlockIds={uiState.selectedBlockIds}
@@ -775,12 +820,70 @@ export default function Home() {
             }}
             enterOnlyBlockAdd={settings.enterOnlyBlockAdd}
             reverseToolbarOrder={settings.reverseToolbarOrder}
+            simpleMode={settings.simpleMode}
             currentProjectId={projectId}
             onUpdateScript={handleScriptUpdate}
             onUndo={handleUndoAction}
             onRedo={handleRedoAction}
             canUndo={undoRedo.canUndo}
             canRedo={undoRedo.canRedo}
+            onBlockDragStateChange={(isDragging, blockIds) => {
+              setIsDraggingBlocks(isDragging);
+              draggingBlockIdsRef.current = blockIds;
+              if (!isDragging) {
+                // ドラッグ終了時: ターゲットシーンが確定していれば移動実行
+                const targetId = blockDropPrevSceneIdRef.current;
+                if (targetId && selectedSceneId && targetId !== selectedSceneId && draggingBlockIdsRef.current.length > 0) {
+                  // blockIdsは既にクリアされている可能性があるのでrefから取得済みの値を使う
+                }
+                // クリーンアップ
+                setBlockDropTargetSceneId(null);
+                blockDropPrevSceneIdRef.current = null;
+                if (blockDropHoverTimerRef.current) {
+                  clearTimeout(blockDropHoverTimerRef.current);
+                  blockDropHoverTimerRef.current = null;
+                }
+              }
+            }}
+            onDragMovePosition={(x, y) => {
+              // ドラッグ中のカーソル位置からシーンタブを検出
+              const elements = document.elementsFromPoint(x, y);
+              const sceneTab = elements.find(el => el.hasAttribute('data-scene-id'));
+              const hoveredSceneId = sceneTab?.getAttribute('data-scene-id') || null;
+
+              if (hoveredSceneId !== blockDropPrevSceneIdRef.current) {
+                // ホバー先が変わった: タイマーリセット
+                if (blockDropHoverTimerRef.current) {
+                  clearTimeout(blockDropHoverTimerRef.current);
+                  blockDropHoverTimerRef.current = null;
+                }
+                blockDropPrevSceneIdRef.current = hoveredSceneId;
+
+                if (hoveredSceneId && hoveredSceneId !== selectedSceneId) {
+                  setBlockDropTargetSceneId(hoveredSceneId);
+                  // 500ms ホバーでシーン切り替え＋ブロック移動
+                  blockDropHoverTimerRef.current = setTimeout(() => {
+                    const blockIdsToMove = [...draggingBlockIdsRef.current];
+                    if (!selectedSceneId || blockIdsToMove.length === 0) return;
+                    const newProject = blockOperations.handleMoveBlocksToScene(
+                      project, selectedSceneId, hoveredSceneId, blockIdsToMove,
+                      project.scenes.find(s => s.id === hoveredSceneId)?.scripts[0]?.blocks.length || 0
+                    );
+                    setProject(newProject);
+                    sceneSelectionMemoryRef.current[selectedSceneId] = [];
+                    sceneSelectionMemoryRef.current[hoveredSceneId] = blockIdsToMove;
+                    projectManagement.handleSelectScene(hoveredSceneId);
+                    setSelectedBlockIds(blockIdsToMove);
+                    draggingBlockIdsRef.current = [];
+                    setIsDraggingBlocks(false);
+                    setBlockDropTargetSceneId(null);
+                    blockDropPrevSceneIdRef.current = null;
+                  }, 500);
+                } else {
+                  setBlockDropTargetSceneId(null);
+                }
+              }
+            }}
           />
         ) : (
           // 現在開いているプロジェクトが存在しない、かつ、シーンがひとつもない場合
@@ -909,6 +1012,10 @@ export default function Home() {
         onEnterOnlyBlockAddChange={settings.handleEnterOnlyBlockAddChange}
         reverseToolbarOrder={settings.reverseToolbarOrder}
         onReverseToolbarOrderChange={settings.handleReverseToolbarOrderChange}
+        fontSize={settings.fontSize}
+        onFontSizeChange={settings.handleFontSizeChange}
+        simpleMode={settings.simpleMode}
+        onSimpleModeChange={settings.handleSimpleModeChange}
         showLatestDownloadMenu={appUpdate.isUpdateSkipped}
         onOpenLatestDownload={handleOpenLatestDownload}
         shortcuts={shortcutConfig.shortcuts}

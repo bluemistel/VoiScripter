@@ -1,6 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@400;700&family=Noto+Sans+JP:wght@400;700&family=Sawarabi+Gothic&display=swap');
 @import "tailwindcss";
 
+@property --editor-font-size {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 16px;
+}
+
 @theme {
   --color-background: oklch(100% 0% 220);
   --color-foreground: oklch(0.3211 0 0);

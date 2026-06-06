@@ -8,7 +8,10 @@ import {
   TouchSensor,
   useSensor,
   useSensors,
-  DragEndEvent
+  DragStartEvent,
+  DragEndEvent,
+  DragMoveEvent,
+  DragOverlay
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -39,8 +42,12 @@ interface ScriptEditorProps {
   onUpdateBlock: (blockId: string, updates: Partial<ScriptBlock>) => void;
   onAddBlock: () => void;
   onDeleteBlock: (blockId: string) => void;
+  onDeleteBlocks?: (blockIds: string[]) => void;
   onInsertBlock: (block: ScriptBlock, index: number) => void;
   onMoveBlock: (fromIndex: number, toIndex: number) => void;
+  onMoveBlocks?: (blockIds: string[], direction: 'up' | 'down') => void;
+  onMoveBlocksByIndex?: (blockIds: string[], toIndex: number) => void;
+  onDuplicateBlocks?: (blockIds: string[]) => void;
   selectedBlockIds: string[];
   onSelectedBlockIdsChange: (selectedBlockIds: string[]) => void;
   onOpenCSVExport: () => void;
@@ -55,12 +62,15 @@ interface ScriptEditorProps {
   setIsUndoRedoOperation?: (setIsUndoRedoOperationFn: (isUndoRedo: boolean) => void) => void;
   enterOnlyBlockAdd?: boolean;
   reverseToolbarOrder?: boolean;
+  simpleMode?: boolean;
   currentProjectId?: string;
   onUpdateScript?: (updates: Partial<Script>) => void;
   onUndo?: () => void;
   onRedo?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
+  onBlockDragStateChange?: (isDragging: boolean, blockIds: string[]) => void;
+  onDragMovePosition?: (x: number, y: number) => void;
 }
 
 interface SortableBlockProps {
@@ -74,6 +84,7 @@ interface SortableBlockProps {
   onMoveDown: () => void;
   onClick: (event: React.MouseEvent) => void;
   enterOnlyBlockAdd?: boolean;
+  simpleMode?: boolean;
   currentProjectId?: string;
   script: Script;
   onInsertBlock: (block: ScriptBlock, index: number) => void;
@@ -92,12 +103,14 @@ function SortableBlock({
   onClick,
   textareaRef,
   isSelected,
+  isMultiDragGhost = false,
   enterOnlyBlockAdd = false,
+  simpleMode = false,
   currentProjectId,
   script,
   onInsertBlock,
   insertIdx
-}: SortableBlockProps & { textareaRef: (el: HTMLTextAreaElement | null) => void; isSelected: boolean }) {
+}: SortableBlockProps & { textareaRef: (el: HTMLTextAreaElement | null) => void; isSelected: boolean; isMultiDragGhost?: boolean }) {
   const {
     attributes,
     listeners,
@@ -110,7 +123,7 @@ function SortableBlock({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1
+    opacity: isDragging ? 0.5 : isMultiDragGhost ? 0.3 : 1
   };
 
   // ト書き判定
@@ -155,25 +168,26 @@ function SortableBlock({
 
   const renderCharacterVisual = () => {
     if (!character) return null;
+    const sizeClass = simpleMode ? 'w-8 h-8' : 'w-16 h-16 sm:w-16 sm:h-16 md:w-16 md:h-16';
     if (character.emotions[block.emotion]?.iconUrl) {
       return (
         <img
           src={character.emotions[block.emotion]?.iconUrl}
           alt={character.name}
-          className={`w-16 h-16 sm:w-16 sm:h-16 md:w-16 md:h-16 rounded-full object-cover mt-0 mr-2 transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
+          className={`${sizeClass} rounded-full object-cover mt-0 ${simpleMode ? 'mr-1' : 'mr-2'} transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
         />
       );
     }
     return (
       <div
-        className={`w-16 h-16 sm:w-16 sm:h-16 md:w-16 md:h-16 rounded-full flex items-center justify-center text-center mt-0 mr-2 overflow-hidden transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
+        className={`${sizeClass} rounded-full flex items-center justify-center text-center mt-0 ${simpleMode ? 'mr-1' : 'mr-2'} overflow-hidden transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
         style={{ backgroundColor: character.backgroundColor || '#e5e7eb' }}
       >
         <span
-          className={`text-xs sm:text-xs md:text-xs font-bold text-foreground px-1 max-w-[60px] sm:max-w-[70px] md:max-w-[80px] whitespace-no-wrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}
+          className={`${simpleMode ? 'text-[8px]' : 'text-xs sm:text-xs md:text-xs'} font-bold text-foreground px-1 ${simpleMode ? 'max-w-[30px]' : 'max-w-[60px] sm:max-w-[70px] md:max-w-[80px]'} whitespace-no-wrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}
           style={{
             textShadow: `
-              -1px -1px 0 var(--color-background),  
+              -1px -1px 0 var(--color-background),
                1px -1px 0 var(--color-background),
               -1px  1px 0 var(--color-background),
                1px  1px 0 var(--color-background)
@@ -249,7 +263,7 @@ function SortableBlock({
       {...attributes}
       {...listeners}
       style={style}
-      className={`flex items-start space-x-1 sm:space-x-2 p-1 sm:p-2 rounded-xl bg-card/80 shadow-(--separator-shadow-block) mb-2 transition-colors cursor-grab touch-manipulation ${isSelected || isTextareaFocused ? 'ring-2 ring-primary/50' : 'ring-[0.5px] ring-foreground/10 dark:ring-white/15'}`}
+      className={`flex items-start ${simpleMode ? 'space-x-1 p-0.5 rounded-lg' : 'space-x-1 sm:space-x-2 p-1 sm:p-2 rounded-xl bg-card/80 shadow-(--separator-shadow-block)'} mb-${simpleMode ? '0' : '2'} transition-colors cursor-grab touch-manipulation ${simpleMode ? (isSelected || isTextareaFocused ? 'ring-1 ring-primary/30' : '') : (isSelected || isTextareaFocused ? 'ring-2 ring-primary/50' : 'ring-[0.5px] ring-foreground/10 dark:ring-white/15')}`}
       onClick={onClick}
       data-block-index={script.blocks.findIndex(b => b.id === block.id)}
     >
@@ -261,9 +275,9 @@ function SortableBlock({
               value={block.text}
               onChange={e => onUpdate({ text: e.target.value })}
               placeholder="ト書きを入力"
-              className="w-full p-2 pt-2 rounded-2xl min-h-[40px] bg-muted/70 text-foreground shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20 focus:ring-1 focus:ring-primary/40 text-sm italic focus:outline-none resize-none overflow-hidden"
+              className={`w-full ${simpleMode ? 'p-1 rounded-lg bg-transparent' : 'p-2 pt-2 rounded-2xl min-h-[40px] bg-muted/70 shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20'} text-foreground focus:ring-1 focus:ring-primary/40 italic focus:outline-none resize-none overflow-hidden`}
               rows={1}
-              style={{ height: 'auto', borderRadius: '20px 20px 20px 0' }}
+              style={{ height: 'auto', borderRadius: simpleMode ? '8px' : '20px 20px 20px 0', fontSize: 'var(--editor-font-size, 14px)', lineHeight: simpleMode ? '1.4' : undefined }}
               onPointerDown={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
               onTouchStart={(e) => e.stopPropagation()}
@@ -305,6 +319,7 @@ function SortableBlock({
             />
 
             {/* キャラ選択リストとアイコン群を横並びに */}
+            {!simpleMode && (
             <div className="flex flex-col justify-between items-center h-16 mr-0.5 sm:mr-1 md:mr-2 mt-0">
               {!isMobileView && (
                 <select
@@ -362,6 +377,7 @@ function SortableBlock({
                 )}
               </div>
             </div>
+            )}
           </div>
 
         ) : (
@@ -414,9 +430,9 @@ function SortableBlock({
                   }
                 }}
                 placeholder="セリフを入力"
-                className={`rounded-2xl p-2 bg-card/95 shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20 min-h-[60px] text-sm w-full text-foreground focus:ring-1 focus:ring-primary/40 focus:outline-none resize-none overflow-hidden${!isMobileView && character?.userPresets?.length ? ' pr-[7.5rem]' : ''}`}
+                className={`${simpleMode ? 'rounded-lg p-1 bg-transparent' : 'rounded-2xl p-2 bg-card/95 shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20 min-h-[60px]'} w-full text-foreground focus:ring-1 focus:ring-primary/40 focus:outline-none resize-none overflow-hidden${!simpleMode && !isMobileView && character?.userPresets?.length ? ' pr-[7.5rem]' : ''}`}
                 rows={1}
-                style={{ height: 'auto', borderRadius: '20px 20px 20px 0' }}
+                style={{ height: 'auto', borderRadius: simpleMode ? '8px' : '20px 20px 20px 0', fontSize: 'var(--editor-font-size, 14px)', lineHeight: simpleMode ? '1.4' : undefined }}
                 onPointerDown={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}
@@ -430,9 +446,11 @@ function SortableBlock({
                 }}
               />
               {/* フキダシの三角形 */}
-              <div className="absolute left-[-4px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-400 dark:border-r-gray-500"></div>
+              {!simpleMode && (
+                <div className="absolute left-[-4px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-400 dark:border-r-gray-500"></div>
+              )}
               {/* プリセット選択（デスクトップ: テキストエリア内右上に絶対配置） */}
-              {!isMobileView && character?.userPresets && character.userPresets.length > 0 && (
+              {!simpleMode && !isMobileView && character?.userPresets && character.userPresets.length > 0 && (
                 <select
                   value={block.userPresetId || ''}
                   onChange={e => onUpdate({ userPresetId: e.target.value || undefined })}
@@ -450,6 +468,7 @@ function SortableBlock({
               )}
             </div>
             {/* キャラ選択リストとアイコン群を横並びに */}
+            {!simpleMode && (
             <div className="flex flex-col justify-between items-center h-16 mr-0.5 sm:mr-1 md:mr-2 mt-0">
               {!isMobileView && (
                 <select
@@ -508,6 +527,7 @@ function SortableBlock({
                 )}
               </div>
             </div>
+            )}
           </div>
         )}
       </div>
@@ -593,8 +613,12 @@ export default function ScriptEditor({
   onUpdateBlock,
   onAddBlock,
   onDeleteBlock,
+  onDeleteBlocks,
   onInsertBlock,
   onMoveBlock,
+  onMoveBlocks,
+  onMoveBlocksByIndex,
+  onDuplicateBlocks,
   selectedBlockIds,
   onSelectedBlockIdsChange,
   onOpenCSVExport,
@@ -609,12 +633,15 @@ export default function ScriptEditor({
   setIsUndoRedoOperation: externalSetIsUndoRedoOperation,
   enterOnlyBlockAdd = false,
   reverseToolbarOrder = false,
+  simpleMode = false,
   currentProjectId,
   onUpdateScript,
   onUndo,
   onRedo,
   canUndo = false,
-  canRedo = false
+  canRedo = false,
+  onBlockDragStateChange,
+  onDragMovePosition
 }: ScriptEditorProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1243,7 +1270,7 @@ export default function ScriptEditor({
         setCurrentDisplayedSegmentId(firstSegment?.id ?? null);
         return;
       }
-      const threshold = 120;
+      const threshold = Math.round(window.innerHeight * 0.25);
       const nearBottom =
         window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 8;
       let currentIndex = 0;
@@ -1254,7 +1281,7 @@ export default function ScriptEditor({
           const element = document.querySelector(`[data-block-index="${index}"]`) as HTMLElement | null;
           if (!element) return;
           const rect = element.getBoundingClientRect();
-          if (rect.top - threshold <= 0) {
+          if (rect.top <= threshold) {
             currentIndex = index;
           }
         });
@@ -1475,11 +1502,18 @@ export default function ScriptEditor({
 
   // 最後に追加されたブロックに自動フォーカス
   const prevBlockCount = useRef(script.blocks.length);
+  const prevScriptId = useRef(script.id);
   const insertIdx = useRef<number>(-1);
   const isCtrlEnterBlock = useRef<boolean>(false); // Ctrl+Enterで追加されたブロックかどうかのフラグ
   const isUndoRedoOperation = useRef<boolean>(false); // アンドゥ・リドゥ操作かどうかのフラグ
-  
+
   useEffect(() => {
+    // シーン切り替えの場合は自動フォーカスをスキップ
+    if (script.id !== prevScriptId.current) {
+      prevScriptId.current = script.id;
+      prevBlockCount.current = script.blocks.length;
+      return;
+    }
     if (script.blocks.length > prevBlockCount.current) {
       // 手動フォーカスターゲットがある場合は自動フォーカスをスキップ
       if (manualFocusTarget) {
@@ -1563,6 +1597,18 @@ export default function ScriptEditor({
       });
     };
   }, [script.blocks]);
+
+  // simpleModeやfontSize変更時にtextarea高さを再計算
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      textareaRefs.current.forEach(ref => {
+        if (ref) {
+          ref.style.height = 'auto';
+          ref.style.height = ref.scrollHeight + 'px';
+        }
+      });
+    });
+  }, [simpleMode]);
 
   // 手動フォーカスターゲットの処理
   useEffect(() => {
@@ -1824,13 +1870,42 @@ export default function ScriptEditor({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [script.blocks]);
 
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const activeId = event.active.id as string;
+    setActiveDragId(activeId);
+    const draggedIds = selectedBlockIds.includes(activeId) ? selectedBlockIds : [activeId];
+    onBlockDragStateChange?.(true, draggedIds);
+  };
+
+  const handleDragMove = (event: DragMoveEvent) => {
+    if (onDragMovePosition && event.activatorEvent) {
+      const activatorEvent = event.activatorEvent as PointerEvent;
+      const x = activatorEvent.clientX + (event.delta?.x || 0);
+      const y = activatorEvent.clientY + (event.delta?.y || 0);
+      onDragMovePosition(x, y);
+    }
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragId(null);
+    // 注意: ここではIDsをクリアしない。シーンタブへのドロップがonPointerUpで発火するため、
+    // IDsは少し遅延してクリアする必要がある
+    setTimeout(() => onBlockDragStateChange?.(false, []), 100);
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      const oldIndex = script.blocks.findIndex(block => block.id === active.id);
+      const activeId = active.id as string;
       const newIndex = script.blocks.findIndex(block => block.id === over.id);
-      onMoveBlock(oldIndex, newIndex);
-      
+
+      // 複数選択ドラッグ：ドラッグされたブロックが選択中の場合、全選択ブロックをまとめて移動
+      if (selectedBlockIds.length > 1 && selectedBlockIds.includes(activeId) && onMoveBlocksByIndex) {
+        onMoveBlocksByIndex(selectedBlockIds, newIndex);
+      } else {
+        const oldIndex = script.blocks.findIndex(block => block.id === activeId);
+        onMoveBlock(oldIndex, newIndex);
+      }
+
       // ドラッグ&ドロップ後のスクロール位置補正
       setTimeout(() => {
         const targetRef = textareaRefs.current[newIndex];
@@ -1871,6 +1946,10 @@ export default function ScriptEditor({
   }, [characters, script.blocks]);
 
   const handleMoveSelectedBlock = useCallback((direction: 'up' | 'down') => {
+    if (selectedBlockIds.length > 1 && onMoveBlocks) {
+      onMoveBlocks(selectedBlockIds, direction);
+      return;
+    }
     const currentIndex = getPrimarySelectedIndex();
     if (currentIndex < 0) return;
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
@@ -1883,7 +1962,7 @@ export default function ScriptEditor({
       }
       ensureBlockVisible(targetIndex, 30);
     }, 30);
-  }, [getPrimarySelectedIndex, onMoveBlock, onSelectedBlockIdsChange, script.blocks]);
+  }, [getPrimarySelectedIndex, onMoveBlock, onMoveBlocks, onSelectedBlockIdsChange, script.blocks, selectedBlockIds]);
 
   const handleAddBlockBelowSelected = useCallback(() => {
     const currentIndex = getPrimarySelectedIndex();
@@ -1914,11 +1993,19 @@ export default function ScriptEditor({
     if (!primarySelectedBlockId) return -1;
     return script.blocks.findIndex((block) => block.id === primarySelectedBlockId);
   }, [primarySelectedBlockId, script.blocks]);
-  const canMoveSelectedUp = primarySelectedIndex > 0;
-  const canMoveSelectedDown = primarySelectedIndex >= 0 && primarySelectedIndex < script.blocks.length - 1;
-  const canOperateSelectedBlock = primarySelectedIndex >= 0 && !!primarySelectedBlockId;
+  const selectedIndices = useMemo(() => {
+    const idSet = new Set(selectedBlockIds);
+    return script.blocks.map((b, i) => idSet.has(b.id) ? i : -1).filter(i => i >= 0).sort((a, b) => a - b);
+  }, [selectedBlockIds, script.blocks]);
+  const canMoveSelectedUp = selectedIndices.length > 0 && selectedIndices[0] > 0;
+  const canMoveSelectedDown = selectedIndices.length > 0 && selectedIndices[selectedIndices.length - 1] < script.blocks.length - 1;
+  const canOperateSelectedBlock = selectedBlockIds.length > 0;
 
   const handleDuplicateSelectedBlock = useCallback(() => {
+    if (selectedBlockIds.length > 1 && onDuplicateBlocks) {
+      onDuplicateBlocks(selectedBlockIds);
+      return;
+    }
     if (!primarySelectedBlockId || primarySelectedIndex < 0) return;
     const sourceBlock = script.blocks[primarySelectedIndex];
     if (!sourceBlock) return;
@@ -1934,9 +2021,16 @@ export default function ScriptEditor({
     setTimeout(() => {
       setManualFocusTargetFn({ index: insertIndex, id: duplicatedBlock.id });
     }, 10);
-  }, [onInsertBlock, primarySelectedBlockId, primarySelectedIndex, script.blocks, setManualFocusTargetFn]);
+  }, [onInsertBlock, onDuplicateBlocks, primarySelectedBlockId, primarySelectedIndex, script.blocks, selectedBlockIds, setManualFocusTargetFn]);
 
   const handleDeleteSelectedBlock = useCallback(() => {
+    if (selectedBlockIds.length > 1 && onDeleteBlocks) {
+      const minIndex = selectedIndices.length > 0 ? selectedIndices[0] : 0;
+      pendingFocusIndexAfterDelete.current = minIndex;
+      onDeleteBlocks(selectedBlockIds);
+      onSelectedBlockIdsChange([]);
+      return;
+    }
     if (!primarySelectedBlockId) return;
     if (primarySelectedIndex >= 0) {
       pendingFocusIndexAfterDelete.current = primarySelectedIndex;
@@ -2015,15 +2109,20 @@ export default function ScriptEditor({
                       
                       return (
                         <div className="relative w-full" style={{ height: `${imageHeight + 80}px` }}>
-                          {prevImage && (
+                          {prevImage && prevSegment && (
                             <div
-                              className="absolute left-0 right-0 mx-auto rounded-lg overflow-hidden border opacity-40 pointer-events-none"
+                              className="absolute left-0 right-0 mx-auto rounded-lg overflow-hidden border opacity-40 cursor-pointer hover:opacity-60 transition-opacity"
                               style={{
                                 width: `${imageWidth * 0.85}px`,
                                 top: '-30%',
                                 left: '50%',
                                 transform: 'translateX(-50%)',
                                 zIndex: 1,
+                              }}
+                              onClick={() => {
+                                const anchorIndex = getAnchorIndex(prevSegment.anchorBlockId);
+                                const el = document.querySelector(`[data-block-index="${anchorIndex}"]`) as HTMLElement | null;
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                               }}
                             >
                               <img src={prevImage.dataUrl} alt={prevImage.name} className="w-full object-cover" style={{ height: `${imageHeight * 0.85}px` }} />
@@ -2087,15 +2186,20 @@ export default function ScriptEditor({
                             )}
                           </div>
                           
-                          {nextImage && (
+                          {nextImage && nextSegment && (
                             <div
-                              className="absolute left-0 right-0 mx-auto rounded-lg overflow-hidden border opacity-40 pointer-events-none"
+                              className="absolute left-0 right-0 mx-auto rounded-lg overflow-hidden border opacity-40 cursor-pointer hover:opacity-60 transition-opacity"
                               style={{
                                 width: `${imageWidth * 0.85}px`,
                                 bottom: '-30%',
                                 left: '50%',
                                 transform: 'translateX(-50%)',
                                 zIndex: 1,
+                              }}
+                              onClick={() => {
+                                const anchorIndex = getAnchorIndex(nextSegment.anchorBlockId);
+                                const el = document.querySelector(`[data-block-index="${anchorIndex}"]`) as HTMLElement | null;
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                               }}
                             >
                               <img src={nextImage.dataUrl} alt={nextImage.name} className="w-full object-cover" style={{ height: `${imageHeight * 0.85}px` }} />
@@ -2120,6 +2224,8 @@ export default function ScriptEditor({
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
+                  onDragStart={handleDragStart}
+                  onDragMove={handleDragMove}
                   onDragEnd={handleDragEnd}
                 >
                   <SortableContext
@@ -2248,8 +2354,10 @@ export default function ScriptEditor({
                             }}
                             textareaRef={el => textareaRefs.current[index] = el}
                             isSelected={selectedBlockIds.includes(block.id)}
+                            isMultiDragGhost={!!activeDragId && activeDragId !== block.id && selectedBlockIds.length > 1 && selectedBlockIds.includes(block.id)}
                             onClick={(event) => handleBlockClick(block.id, index, event)}
                             enterOnlyBlockAdd={enterOnlyBlockAdd}
+                            simpleMode={simpleMode}
                             currentProjectId={currentProjectId}
                             script={script}
                             onInsertBlock={onInsertBlock}
@@ -2366,6 +2474,36 @@ export default function ScriptEditor({
                       );
                     })}
                   </SortableContext>
+                  <DragOverlay dropAnimation={null}>
+                    {activeDragId && selectedBlockIds.length > 1 && selectedBlockIds.includes(activeDragId) && (() => {
+                      const dragBlocks = script.blocks.filter(b => selectedBlockIds.includes(b.id));
+                      return (
+                        <div className="bg-card rounded-lg shadow-lg border border-primary/30 p-2 max-w-[600px] opacity-90">
+                          {dragBlocks.slice(0, 5).map((b, i) => {
+                            const char = characters.find(c => c.id === b.characterId);
+                            return (
+                              <div key={b.id} className={`flex items-center gap-2 px-2 py-1 ${i > 0 ? 'border-t border-border/50' : ''}`}>
+                                {char ? (
+                                  <span className="text-xs font-medium text-muted-foreground shrink-0 w-16 truncate">{char.name}</span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground/60 shrink-0 w-16">ト書き</span>
+                                )}
+                                <span className="text-sm text-foreground truncate">{b.text || '(空)'}</span>
+                              </div>
+                            );
+                          })}
+                          {dragBlocks.length > 5 && (
+                            <div className="text-xs text-muted-foreground text-center py-1">
+                              ...他 {dragBlocks.length - 5} ブロック
+                            </div>
+                          )}
+                          <div className="text-xs text-primary font-medium text-center mt-1">
+                            {dragBlocks.length} ブロック選択中
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </DragOverlay>
                 </DndContext>
               </div>
             </div>

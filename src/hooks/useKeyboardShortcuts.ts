@@ -212,6 +212,13 @@ export const useKeyboardShortcuts = (
         return;
       }
 
+      // ブロック複製
+      if (matchesShortcut(event, shortcuts.duplicateBlock)) {
+        event.preventDefault();
+        onDuplicateSelectedBlocks();
+        return;
+      }
+
       // 選択ブロック削除
       if (matchesShortcut(event, shortcuts.deleteBlock)) {
         if (activeIdx >= 0 && activeIdx < scriptBlocks.length) {

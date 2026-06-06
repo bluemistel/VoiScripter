@@ -192,6 +192,10 @@ interface SettingsProps {
   onEnterOnlyBlockAddChange?: (enabled: boolean) => void;
   reverseToolbarOrder?: boolean;
   onReverseToolbarOrderChange?: (enabled: boolean) => void;
+  fontSize?: number;
+  onFontSizeChange?: (size: number) => void;
+  simpleMode?: boolean;
+  onSimpleModeChange?: (enabled: boolean) => void;
   showLatestDownloadMenu?: boolean;
   onOpenLatestDownload?: () => void;
   shortcuts?: ShortcutMap;
@@ -208,6 +212,10 @@ export default function Settings({
   onEnterOnlyBlockAddChange,
   reverseToolbarOrder = false,
   onReverseToolbarOrderChange,
+  fontSize = 16,
+  onFontSizeChange,
+  simpleMode = false,
+  onSimpleModeChange,
   showLatestDownloadMenu = false,
   onOpenLatestDownload,
   shortcuts = defaultShortcuts,
@@ -404,6 +412,21 @@ export default function Settings({
                       <option value="sawarabi">Sawarabi Gothic</option>
                     </select>
                   </div>
+                  <div className="space-y-2 mt-4">
+                    <label className="block text-sm font-medium text-foreground mb-2">フォントサイズ</label>
+                    <select
+                      className="p-2 border rounded bg-background text-foreground"
+                      value={fontSize}
+                      onChange={e => onFontSizeChange?.(parseInt(e.target.value, 10))}
+                    >
+                      <option value={12}>12px</option>
+                      <option value={14}>14px</option>
+                      <option value={16}>16px（デフォルト）</option>
+                      <option value={18}>18px</option>
+                      <option value={20}>20px</option>
+                      <option value={22}>22px</option>
+                    </select>
+                  </div>
                 </div>
                 {/* データの保存先セクション */}
                 <div>
@@ -479,6 +502,22 @@ export default function Settings({
                     </div>
                     <div className="text-sm text-muted-foreground ml-7">
                       <p>• チェックをONにすると、1段ツールバー内のボタン順序を左右反転します</p>
+                    </div>
+                    <div className="flex items-center space-x-3 pt-2">
+                      <input
+                        type="checkbox"
+                        id="simpleMode"
+                        checked={simpleMode}
+                        onChange={(e) => onSimpleModeChange?.(e.target.checked)}
+                        className="w-4 h-4 text-primary bg-background border-gray-300 rounded focus:ring-primary focus:ring-2"
+                      />
+                      <label htmlFor="simpleMode" className="text-sm font-medium text-foreground">
+                        シンプルモード
+                      </label>
+                    </div>
+                    <div className="text-sm text-muted-foreground ml-7">
+                      <p>• ブロック内の操作ボタンを非表示にし、行間を縮小したアウトライナー風の表示になります</p>
+                      <p>• 各種操作はショートカットキーまたは下部ツールバーから行えます</p>
                     </div>
                   </div>
                 </div>
@@ -565,6 +604,49 @@ export default function Settings({
               <div className="flex flex-col max-h-[60vh] pr-2">
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.3.0</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>
+                        • フォントサイズ設定を追加
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• エディターのフォントサイズを12〜22pxの範囲で変更可能</li>
+                          <li>• 設定は保存され次回起動時に復元されます</li>
+                        </ul>
+                      </li>
+                      <li>
+                        • シンプルモードを追加
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• 操作ボタンを非表示にし、行間を縮小したアウトライナー風の表示モード</li>
+                          <li>• 操作はショートカットキーとフローティングツールバーで行えます</li>
+                        </ul>
+                      </li>
+                      <li>
+                        • 複数ブロック選択操作の拡張
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• 複数ブロックの一括削除・一括上下移動・一括複製に対応</li>
+                          <li>• 複数ブロックのドラッグ移動に対応（選択ブロックがまとめて移動します）</li>
+                          <li>• ドラッグ中に全選択ブロックのプレビューを表示</li>
+                        </ul>
+                      </li>
+                      <li>
+                        • クロスシーンブロック移動を追加
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• ブロックをドラッグしてシーンタブ上に500msホバーすると、対象シーンへブロックを移動</li>
+                          <li>• 複数選択状態のまま別シーンへ移動可能</li>
+                        </ul>
+                      </li>
+                      <li>• Ctrl+D でブロック複製のショートカットを追加</li>
+                      <li>• シーンタブ切り替え時にブロックの選択状態をタブごとに保持するよう改善</li>
+                      <li>
+                        • ストーリーパネルの改善
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• セパレートラインの検出位置を画面上端から画面の1/4の位置に変更</li>
+                          <li>• 前/次の画像クリックで該当セグメントへジャンプする機能を追加</li>
+                        </ul>
+                      </li>
+                    </ul>
+                  </div>
                   <div>
                     <h4 className="font-medium text-foreground mb-2">v0.2.9</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
