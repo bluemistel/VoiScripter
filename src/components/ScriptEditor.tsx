@@ -1523,6 +1523,28 @@ export default function ScriptEditor({
       prevBlockCount.current = script.blocks.length;
       return;
     }
+
+    // アンドゥ・リドゥ操作の場合
+    if (isUndoRedoOperation.current) {
+      isUndoRedoOperation.current = false;
+
+      // ブロック数が減った場合（ブロック追加のアンドゥなど）、追加前のブロックにフォーカス
+      if (script.blocks.length < prevBlockCount.current && script.blocks.length > 0) {
+        const focusIdx = Math.min(prevBlockCount.current - 1, script.blocks.length - 1);
+        setTimeout(() => {
+          const targetRef = textareaRefs.current[focusIdx];
+          if (targetRef) {
+            targetRef.focus({ preventScroll: true });
+            onSelectedBlockIdsChange([script.blocks[focusIdx]?.id || '']);
+            ensureBlockVisible(focusIdx, 10);
+          }
+        }, 50);
+      }
+
+      prevBlockCount.current = script.blocks.length;
+      return;
+    }
+
     if (script.blocks.length > prevBlockCount.current) {
       // 手動フォーカスターゲットがある場合は自動フォーカスをスキップ
       if (manualFocusTarget) {
@@ -1531,7 +1553,7 @@ export default function ScriptEditor({
         prevBlockCount.current = script.blocks.length;
         return;
       }
-      
+
       // Ctrl+Enterで追加されたブロックの場合は自動フォーカスをスキップ
       if (isCtrlEnterBlock.current) {
         //console.log('Skipping auto focus due to Ctrl+Enter block');
@@ -1539,15 +1561,7 @@ export default function ScriptEditor({
         prevBlockCount.current = script.blocks.length;
         return;
       }
-      
-      // アンドゥ・リドゥ操作の場合は自動フォーカスをスキップ
-      if (isUndoRedoOperation.current) {
-        //console.log('Skipping auto focus due to undo/redo operation');
-        isUndoRedoOperation.current = false;
-        prevBlockCount.current = script.blocks.length;
-        return;
-      }
-      
+
       // 挿入されたインデックスがある場合はそのインデックスにフォーカス
       if (insertIdx.current >= 0) {
         //console.log(`Auto focusing inserted block at index: ${insertIdx.current}`);
@@ -1561,7 +1575,7 @@ export default function ScriptEditor({
         prevBlockCount.current = script.blocks.length;
         return;
       }
-      
+
       // 通常の最後のブロックへの自動フォーカス
       //console.log('Auto focusing last block');
       setTimeout(() => {
