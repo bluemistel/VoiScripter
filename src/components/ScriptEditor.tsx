@@ -1511,6 +1511,7 @@ export default function ScriptEditor({
 
   // 最後に追加されたブロックに自動フォーカス
   const prevBlockCount = useRef(script.blocks.length);
+  const prevBlocksRef = useRef(script.blocks);
   const prevScriptId = useRef(script.id);
   const insertIdx = useRef<number>(-1);
   const isCtrlEnterBlock = useRef<boolean>(false); // Ctrl+Enterで追加されたブロックかどうかのフラグ
@@ -1521,6 +1522,7 @@ export default function ScriptEditor({
     if (script.id !== prevScriptId.current) {
       prevScriptId.current = script.id;
       prevBlockCount.current = script.blocks.length;
+      prevBlocksRef.current = script.blocks;
       return;
     }
 
@@ -1530,7 +1532,20 @@ export default function ScriptEditor({
 
       // ブロック数が減った場合（ブロック追加のアンドゥなど）、追加前のブロックにフォーカス
       if (script.blocks.length < prevBlockCount.current && script.blocks.length > 0) {
-        const focusIdx = Math.min(prevBlockCount.current - 1, script.blocks.length - 1);
+        // 選択中のブロックが新しいブロックリストに存在するか確認
+        const currentSelectedId = selectedBlockIds[0];
+        const newBlockIds = new Set(script.blocks.map(b => b.id));
+        let focusIdx: number;
+
+        if (currentSelectedId && newBlockIds.has(currentSelectedId)) {
+          // 選択ブロックがまだ存在する場合はそのままフォーカス
+          focusIdx = script.blocks.findIndex(b => b.id === currentSelectedId);
+        } else {
+          // 選択ブロックが削除された場合、旧ブロックリストでの位置を元に直前のブロックにフォーカス
+          const oldIndex = prevBlocksRef.current.findIndex(b => b.id === currentSelectedId);
+          focusIdx = oldIndex > 0 ? Math.min(oldIndex - 1, script.blocks.length - 1) : 0;
+        }
+
         setTimeout(() => {
           const targetRef = textareaRefs.current[focusIdx];
           if (targetRef) {
@@ -1542,6 +1557,7 @@ export default function ScriptEditor({
       }
 
       prevBlockCount.current = script.blocks.length;
+      prevBlocksRef.current = script.blocks;
       return;
     }
 
@@ -1586,6 +1602,7 @@ export default function ScriptEditor({
       }, 10); // タイミングを調整
     }
     prevBlockCount.current = script.blocks.length;
+    prevBlocksRef.current = script.blocks;
   }, [script.blocks.length, manualFocusTarget]);
 
   // フォーカス時に選択状態を更新

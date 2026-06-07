@@ -164,6 +164,10 @@ export default function Home() {
     setSelectedSceneId(result.selectedSceneId);
     setTimeout(() => {
       undoRedo.isUndoRedoOperation.current = false;
+      // ScriptEditor側のフラグもリセット（ブロック数が変わらないアンドゥ時にuseEffectが発火しないため）
+      if (setIsUndoRedoOperationRef.current) {
+        setIsUndoRedoOperationRef.current(false);
+      }
     }, 100);
   }, [setProject, setSelectedSceneId, undoRedo.isUndoRedoOperation]);
 
