@@ -227,7 +227,12 @@ function SortableBlock({
   };
 
   const buildBlockFromLastSpeaker = () => {
-    const lastSpeakerBlock = [...script.blocks].reverse().find((b) => b.characterId);
+    // 新規ブロックは現在ブロックの直後に挿入されるため、話者は「現在ブロック以前」の
+    // 直近の話者ブロックから引き継ぐ。これにより Alt+↑/↓ で現在ブロックの話者を
+    // 切り替えた直後でも、末尾ブロックではなく切り替え後の話者が反映される。
+    const currentIndex = script.blocks.findIndex((b) => b.id === block.id);
+    const scope = currentIndex >= 0 ? script.blocks.slice(0, currentIndex + 1) : script.blocks;
+    const lastSpeakerBlock = [...scope].reverse().find((b) => b.characterId);
     const fallbackCharacterId = characters.find((c) => c.id)?.id || '';
     return {
       characterId: lastSpeakerBlock?.characterId || fallbackCharacterId,
@@ -1976,8 +1981,13 @@ export default function ScriptEditor({
     return script.blocks.findIndex((block) => block.id === selectedBlockIds[0]);
   }, [selectedBlockIds, script.blocks]);
 
-  const getLastSpeakerTemplate = useCallback(() => {
-    const lastSpeakerBlock = [...script.blocks].reverse().find((block) => block.characterId);
+  // anchorIndex 指定時はそのブロック以前から直近の話者を探す（直後への挿入用）。
+  // 未指定（末尾追加）の場合はスクリプト全体の末尾話者を使う。
+  const getLastSpeakerTemplate = useCallback((anchorIndex?: number) => {
+    const scope = anchorIndex !== undefined && anchorIndex >= 0
+      ? script.blocks.slice(0, anchorIndex + 1)
+      : script.blocks;
+    const lastSpeakerBlock = [...scope].reverse().find((block) => block.characterId);
     const fallbackCharacterId = characters.find((c) => c.id)?.id || '';
     return {
       characterId: lastSpeakerBlock?.characterId || fallbackCharacterId,
@@ -2007,7 +2017,7 @@ export default function ScriptEditor({
   const handleAddBlockBelowSelected = useCallback(() => {
     const currentIndex = getPrimarySelectedIndex();
     const insertIndex = currentIndex >= 0 ? currentIndex + 1 : script.blocks.length;
-    const { characterId, emotion } = getLastSpeakerTemplate();
+    const { characterId, emotion } = getLastSpeakerTemplate(currentIndex);
 
     const newBlock: ScriptBlock = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),

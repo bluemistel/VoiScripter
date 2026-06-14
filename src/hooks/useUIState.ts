@@ -4,6 +4,8 @@ import { SearchResult } from '@/components/SearchDialog';
 export interface UIStateHook {
   isProjectDialogOpen: boolean;
   setIsProjectDialogOpen: (open: boolean) => void;
+  isProjectExplorerOpen: boolean;
+  setIsProjectExplorerOpen: (open: boolean) => void;
   isCSVExportDialogOpen: boolean;
   setIsCSVExportDialogOpen: (open: boolean) => void;
   isCharacterManagerOpen: boolean;
@@ -12,8 +14,6 @@ export interface UIStateHook {
   setIsSettingsOpen: (open: boolean) => void;
   notification: { message: string; type: 'success' | 'error' | 'info' } | null;
   showNotification: (message: string, type?: 'success' | 'error' | 'info') => void;
-  deleteConfirmation: { projectId: string; confirmed: boolean | null } | null;
-  setDeleteConfirmation: (confirmation: { projectId: string; confirmed: boolean | null } | null) => void;
   selectedBlockIds: string[];
   setSelectedBlockIds: (ids: string[]) => void;
   setIsSearchDialogOpen: (open: boolean) => void;
@@ -33,11 +33,11 @@ export interface UIStateHook {
 
 export const useUIState = (): UIStateHook => {
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
+  const [isProjectExplorerOpen, setIsProjectExplorerOpen] = useState(false);
   const [isCSVExportDialogOpen, setIsCSVExportDialogOpen] = useState(false);
   const [isCharacterManagerOpen, setIsCharacterManagerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{ projectId: string; confirmed: boolean | null } | null>(null);
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -73,6 +73,8 @@ export const useUIState = (): UIStateHook => {
   return {
     isProjectDialogOpen,
     setIsProjectDialogOpen,
+    isProjectExplorerOpen,
+    setIsProjectExplorerOpen,
     isCSVExportDialogOpen,
     setIsCSVExportDialogOpen,
     isCharacterManagerOpen,
@@ -81,8 +83,6 @@ export const useUIState = (): UIStateHook => {
     setIsSettingsOpen,
     notification,
     showNotification,
-    deleteConfirmation,
-    setDeleteConfirmation,
     selectedBlockIds,
     setSelectedBlockIds,
     handleSelectAllBlocks,

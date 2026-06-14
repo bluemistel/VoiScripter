@@ -153,7 +153,10 @@ export const useKeyboardShortcuts = (
           const currentBlock = scriptBlocks[activeIdx];
           if (currentBlock) {
             event.preventDefault();
-            const lastSpeakerBlock = [...scriptBlocks].reverse().find(block => block.characterId);
+            // 新規ブロックは現在ブロックの直後に挿入されるため、話者は「現在ブロック以前」の
+            // 直近の話者ブロックから引き継ぐ（末尾ではなく、Alt+↑/↓ で切り替えた現在ブロックの話者）。
+            const precedingBlocks = scriptBlocks.slice(0, activeIdx + 1);
+            const lastSpeakerBlock = [...precedingBlocks].reverse().find(block => block.characterId);
             const fallbackCharacterId = characters.find(c => c.id)?.id || '';
             const newBlock: ScriptBlock = {
               id: Date.now().toString() + Math.random().toString(36).substr(2, 9),

@@ -521,7 +521,6 @@ export default function Settings({
                     </div>
                   </div>
                 </div>
-
                 {/* アプリ初期化セクション */}
                 <div>
                   <h3 className="text-lg font-medium text-foreground mb-4">アプリ初期化</h3>
@@ -637,13 +636,21 @@ export default function Settings({
                         </ul>
                       </li>
                       <li>• Ctrl+D でブロック複製のショートカットを追加</li>
-                      <li>• シーンタブ切り替え時にブロックの選択状態をタブごとに保持するよう改善</li>
                       <li>• アップデート通知が機能してなかったのを修正(きっと次回から…)</li>
+                      <li>• 最後に選択された話者のテキストブロックが作成されない不具合を修正</li>
+                      <li>• シーン作成時にテキストブロックを作成するように仕様を変更</li>
                       <li>
                         • ストーリーパネルの改善
                         <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                           <li>• セパレートラインの検出位置を画面上端から画面の1/4の位置に変更</li>
                           <li>• 前/次の画像クリックで該当セグメントへジャンプする機能を追加</li>
+                        </ul>
+                      </li>
+                      <li>
+                        • プロジェクトエクスプローラーを追加
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• プロジェクト名をクリックするとエクスプローラーが表示され、台本が開けます。</li>
+                          <li>• エクスプローラー内ではプロジェクト名の右端から削除や名称の変更が行えます。(ヘッダー領域から移動)</li>
                         </ul>
                       </li>
                     </ul>

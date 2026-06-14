@@ -9,13 +9,13 @@ import {
   SunIcon, 
   MoonIcon, 
   Cog6ToothIcon,
-  PencilIcon,
   Bars3Icon,
   PlusIcon,
-  TrashIcon,
   DocumentTextIcon,
   MagnifyingGlassIcon,
-  CloudArrowUpIcon
+  CloudArrowUpIcon,
+  FolderIcon,
+  ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import {
   DndContext,
@@ -180,7 +180,7 @@ interface HeaderProps {
   onReorderCharacters?: (newOrder: Character[]) => void;
   onReorderGroups?: (newOrder: string[]) => void;
   projectName: string;
-  onRenameProject: (newName: string) => void;
+  onOpenProjectExplorer: () => void;
   selectedBlockIds: string[];
   scenes: Scene[];
   selectedSceneId: string | null;
@@ -194,8 +194,6 @@ interface HeaderProps {
   project: Project;
   onOpenSettings: () => void;
   projectList: string[];
-  onProjectChange: (projectId: string) => void;
-  onDeleteProject: () => void;
   getCharacterProjectStates: (currentProjectId: string, projectList?: string[]) => {[characterId: string]: boolean};
   saveCharacterProjectStates: (currentProjectId: string, characterStates: {[characterId: string]: boolean}, projectList?: string[]) => void;
   onOpenSearch: () => void;
@@ -244,48 +242,6 @@ function ImportChoiceDialog({ isOpen, onClose, onImportToCurrent, onImportToNew 
   );
 }
 
-// プロジェクト名変更ダイアログ
-function ProjectRenameDialog({ isOpen, onClose, currentName, onRename }: { isOpen: boolean, onClose: () => void, currentName: string, onRename: (newName: string) => void }) {
-  const [newName, setNewName] = useState(currentName);
-  const inputRef = useRef<HTMLInputElement>(null);
-  
-  useEffect(() => { 
-    setNewName(currentName); 
-  }, [currentName, isOpen]);
-  
-  useEffect(() => {
-    if (isOpen && inputRef.current) {
-      // ダイアログが開いた時にフォーカスを設定
-      setTimeout(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      }, 100);
-    }
-  }, [isOpen]);
-  
-  if (!isOpen) return null;
-  return (
-    <DialogFrame
-      isOpen={isOpen}
-      onCancel={onClose}
-      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
-    >
-        <h3 className="text-lg font-semibold text-foreground mb-4">プロジェクト名の変更</h3>
-        <input 
-          ref={inputRef}
-          type="text" 
-          value={newName} 
-          onChange={e => setNewName(e.target.value)} 
-          className="w-full p-2 border rounded mb-4" 
-        />
-        <div className="flex justify-end space-x-2">
-          <button onClick={onClose} className="px-4 py-2 text-muted-foreground hover:bg-accent rounded">キャンセル</button>
-          <button onClick={() => { onRename(newName); onClose(); }} disabled={!newName.trim()} className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold disabled:opacity-50">変更</button>
-        </div>
-    </DialogFrame>
-  );
-}
-
 export default function Header(props: HeaderProps) {
   const {
     characters,
@@ -311,7 +267,7 @@ export default function Header(props: HeaderProps) {
     onReorderCharacters,
     onReorderGroups,
     projectName,
-    onRenameProject,
+    onOpenProjectExplorer,
     selectedBlockIds,
     scenes,
     selectedSceneId,
@@ -326,8 +282,6 @@ export default function Header(props: HeaderProps) {
     project,
     onOpenSettings,
     projectList,
-    onProjectChange,
-    onDeleteProject,
     getCharacterProjectStates,
     saveCharacterProjectStates,
     onOpenSearch,
@@ -345,7 +299,6 @@ export default function Header(props: HeaderProps) {
   const [isImportChoiceDialogOpen, setIsImportChoiceDialogOpen] = useState(false);
   const [pendingImportFile, setPendingImportFile] = useState<File|null>(null);
   const [pendingImportType, setPendingImportType] = useState<'script'|'character'|null>(null);
-  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   
   const importMenuRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
@@ -562,42 +515,25 @@ export default function Header(props: HeaderProps) {
       <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-16">
         <h1 className="text-2xl font-bold text-primary tracking-tight flex items-center">
           <img src={logoPath} alt="VoiScripter" className="hidden sm:block h-8 mr-2" />
-          <div className="ml-2 text-lg font-normal text-foreground align-middle group relative">
-            <select
-              value={projectName}
-              onChange={(e) => onProjectChange(e.target.value)}
-              className="bg-background border-none text-foreground cursor-pointer hover:bg-accent rounded px-2 py-1 focus:bg-background focus:outline-none max-w-[200px] truncate"
-              title={projectName}
+          <div className="ml-2 text-lg font-normal text-foreground align-middle">
+            <button
+              onClick={onOpenProjectExplorer}
+              className="flex items-center gap-1.5 text-foreground cursor-pointer hover:bg-accent rounded px-2 py-1 transition"
+              title="プロジェクトを開く"
             >
-              {projectList.filter(projectId => projectId !== 'default').map(projectId => (
-                <option key={projectId} value={projectId}>
-                  {projectId}
-                </option>
-              ))}
-            </select>
+              <FolderIcon className="w-5 h-5 shrink-0 text-secondary" />
+              <span className="max-w-[200px] truncate">{projectName}</span>
+              <ChevronDownIcon className="w-3.5 h-3.5 shrink-0 opacity-60" />
+            </button>
           </div>
           {/* プロジェクト操作ボタン */}
           <div className="flex items-center space-x-1 ml-2">
-            <button
-              onClick={() => setIsRenameDialogOpen(true)}
-              className="p-1 text-primary hover:bg-accent rounded-lg transition"
-              title="プロジェクト名を変更"
-            >
-              <PencilIcon className="w-7 h-7" />
-            </button>
             <button
               onClick={onNewProject}
               className="p-1 text-primary hover:bg-accent rounded-lg transition"
               title="新しいプロジェクト"
             >
               <DocumentTextIcon className="w-7 h-7"/>
-            </button>
-            <button
-              onClick={onDeleteProject}
-              className="p-1 text-destructive hover:bg-destructive/10 rounded-lg transition"
-              title="プロジェクトを削除"
-            >
-              <TrashIcon className="w-7 h-7" />
             </button>
           </div>
         </h1>
@@ -998,12 +934,6 @@ export default function Header(props: HeaderProps) {
            setPendingImportType(null);
          }}
        />
-      <ProjectRenameDialog
-        isOpen={isRenameDialogOpen}
-        onClose={() => setIsRenameDialogOpen(false)}
-        currentName={projectName}
-        onRename={onRenameProject}
-      />
       {/* シーン名変更ダイアログ */}
       {isRenameSceneDialogOpen && (
         <DialogFrame

@@ -11,8 +11,10 @@ import SearchDialog, { SearchResult } from '@/components/SearchDialog';
 import DataSyncDialog from '@/components/DataSyncDialog';
 import UpdateDialog from '@/components/UpdateDialog';
 import DialogFrame from '@/components/common/DialogFrame';
+import ProjectExplorer from '@/components/ProjectExplorer/ProjectExplorer';
 import { Project, Character, ScriptBlock } from '@/types';
 import { buildEmptyScript } from '@/utils/scriptDefaults';
+import { collectFolderContents } from '@/utils/explorerTree';
 import { buildSyncProjectPayload } from '@/utils/storyPanelAssets';
 import { migrateLegacyStoryPanelAssets } from '@/utils/storyPanelAssets';
 import { buildCharacterSyncPayload, restoreCharactersFromSyncPayload, LightweightCharacterSyncPayload } from '@/utils/characterSync';
@@ -33,6 +35,7 @@ import { useShortcutConfig } from '@/hooks/useShortcutConfig';
 import { useUIState } from '@/hooks/useUIState';
 import { useDataProcessing } from '@/hooks/useDataProcessing';
 import { useDataSync } from '@/hooks/useDataSync';
+import { useProjectExplorer } from '@/hooks/useProjectExplorer';
 
 export default function Home() {
   // テキストエリアref配列（ScriptEditorとuseKeyboardShortcutsで共有）
@@ -65,8 +68,6 @@ export default function Home() {
     setIsProjectDialogOpen,
     notification,
     showNotification,
-    deleteConfirmation,
-    setDeleteConfirmation,
     selectedBlockIds,
     setSelectedBlockIds,
     isSearchDialogOpen,
@@ -92,6 +93,16 @@ export default function Home() {
     setProjectList,
     handleCreateProject
   } = projectManagement;
+
+  // プロジェクトエクスプローラーのツリーメタデータ管理フック
+  const projectExplorer = useProjectExplorer(dataManagement, projectManagement.projectList);
+
+  // プロジェクト切り替え（ヘッダー・エクスプローラー共通）
+  const handleSelectProject = (id: string) => {
+    setProjectId(id);
+    // 最後に開いたプロジェクトを保存（読み込みは既存のuseEffectで実行される）
+    dataManagement.saveData('voiscripter_lastProject', id);
+  };
 
   // クロスシーンDnD用: クロージャから最新値を参照するためのref同期
   projectRef.current = project;
@@ -673,7 +684,7 @@ export default function Home() {
         onReorderCharacters={characterManagement.handleReorderCharacters}
         onReorderGroups={characterManagement.handleReorderGroups}
         projectName={project.name}
-        onRenameProject={projectManagement.handleRenameProject}
+        onOpenProjectExplorer={() => uiState.setIsProjectExplorerOpen(true)}
         selectedBlockIds={uiState.selectedBlockIds}
         scenes={project.scenes}
         selectedSceneId={selectedSceneId}
@@ -704,17 +715,6 @@ export default function Home() {
         showLatestDownloadMenu={appUpdate.isUpdateSkipped}
         onOpenLatestDownload={handleOpenLatestDownload}
         projectList={projectManagement.projectList}
-        onProjectChange={(projectId) => {
-          setProjectId(projectId);
-          // 最後に開いたプロジェクトを保存
-          dataManagement.saveData('voiscripter_lastProject', projectId);
-          //console.log('💾 プロジェクト変更: 最後のプロジェクトを保存:', projectId);
-          // プロジェクトを読み込む処理は既存のuseEffectで実行される
-        }}
-        onDeleteProject={() => {
-          // プロジェクト削除の確認ダイアログを表示
-          setDeleteConfirmation({ projectId: project.id, confirmed: null });
-        }}
         getCharacterProjectStates={characterManagement.getCharacterProjectStates}
         saveCharacterProjectStates={characterManagement.saveCharacterProjectStates}
         blockDropTargetSceneId={blockDropTargetSceneId}
@@ -936,6 +936,62 @@ export default function Home() {
         )}
         </div>
       </main>
+
+      {/* プロジェクトエクスプローラー */}
+      <ProjectExplorer
+        isOpen={uiState.isProjectExplorerOpen}
+        onClose={() => uiState.setIsProjectExplorerOpen(false)}
+        projectList={projectManagement.projectList}
+        currentProjectId={projectId}
+        explorer={projectExplorer}
+        onSelectProject={(id) => {
+          if (id !== projectId) {
+            handleSelectProject(id);
+          }
+          uiState.setIsProjectExplorerOpen(false);
+        }}
+        onCreateProject={(name, folderId) => {
+          try {
+            projectManagement.handleNewProject(name);
+            if (folderId) {
+              projectExplorer.moveProject(name, folderId);
+            }
+            showNotification(`プロジェクト「${name}」を作成しました`, 'success');
+            uiState.setIsProjectExplorerOpen(false);
+          } catch (error) {
+            showNotification('プロジェクトの作成に失敗しました', 'error');
+          }
+        }}
+        onRenameProject={async (oldId, newName) => {
+          await projectManagement.renameProjectById(oldId, newName);
+          projectExplorer.notifyProjectRenamed(oldId, newName);
+        }}
+        onDeleteProject={async (id) => {
+          try {
+            await projectManagement.deleteProjectById(id);
+            projectExplorer.notifyProjectDeleted(id);
+          } catch (error) {
+            // 通知はdeleteProjectById内で表示済み
+          }
+        }}
+        onDeleteFolderRecursive={async (folderId) => {
+          const { projectIds } = collectFolderContents(projectExplorer.tree, folderId, projectManagement.projectList);
+          try {
+            for (const pid of projectIds) {
+              await projectManagement.deleteProjectById(pid, { silent: true });
+            }
+            projectExplorer.removeFolder(folderId);
+            showNotification(
+              projectIds.length > 0
+                ? `フォルダと${projectIds.length}個のプロジェクトを削除しました`
+                : 'フォルダを削除しました',
+              'success'
+            );
+          } catch (error) {
+            showNotification('フォルダの削除に失敗しました', 'error');
+          }
+        }}
+      />
 
       {/* ProjectDialog */}
       <ProjectDialog
@@ -1162,41 +1218,6 @@ export default function Home() {
 
       {/* 通知 */}
       {renderNotification()}
-
-      {/* 削除確認ダイアログ */}
-      {deleteConfirmation && (
-        <DialogFrame
-          isOpen={!!deleteConfirmation}
-          onCancel={() => setDeleteConfirmation(null)}
-          panelClassName="bg-background rounded-lg p-6 max-w-md w-full mx-4"
-          overlayClassName="transition-opacity duration-300 p-4"
-        >
-            <h3 className="text-lg font-bold mb-4">プロジェクトの削除</h3>
-            <p className="mb-6">このプロジェクトを削除しますか？この操作は元に戻せません。</p>
-            <div className="flex space-x-4">
-                              <button
-                  onClick={() => setDeleteConfirmation(null)}
-                  className="px-4 py-2 text-muted-foreground hover:bg-accent rounded"
-                >
-                  キャンセル
-                </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      await projectManagement.handleDeleteProject();
-                      showNotification('プロジェクトを削除しました', 'success');
-                      setDeleteConfirmation(null);
-                    } catch (error) {
-                      showNotification('プロジェクトの削除に失敗しました', 'error');
-                    }
-                  }}
-                  className="px-4 py-2 bg-destructive text-destructive-foreground rounded hover:bg-destructive/80"
-                >
-                  削除
-                </button>
-            </div>
-        </DialogFrame>
-      )}
     </div>
   );
 }

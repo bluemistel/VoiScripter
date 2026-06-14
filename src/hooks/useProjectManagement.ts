@@ -1,7 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { Project, Scene } from '@/types';
 import { buildEmptyScript } from '@/utils/scriptDefaults';
+import { PROJECT_KEY_SUFFIXES } from '@/utils/explorerTree';
 import { DataManagementHook } from './useDataManagement';
+
+// 全ストレージキーからプロジェクト本体キーだけを抽出してプロジェクトIDに変換
+const filterProjectKeys = (keys: string[]): string[] =>
+  keys
+    .filter(k => k.startsWith('voiscripter_project_') && !PROJECT_KEY_SUFFIXES.some(suffix => k.endsWith(suffix)))
+    .map(k => k.replace('voiscripter_project_', ''));
 
 export interface ProjectManagementHook {
   project: Project;
@@ -18,6 +25,8 @@ export interface ProjectManagementHook {
   handleNewProject: (name: string) => Project;
   handleDeleteProject: () => void;
   handleRenameProject: (newName: string) => void;
+  deleteProjectById: (id: string, options?: { silent?: boolean }) => Promise<void>;
+  renameProjectById: (oldId: string, newName: string) => Promise<void>;
   refreshProjectList: () => Promise<void>;
   handleAddScene: (name: string) => void;
   handleRenameScene: (sceneId: string, newName: string) => void;
@@ -68,40 +77,10 @@ export const useProjectManagement = (
       isInitialized.current = true;
       // プロジェクトリストを先に取得（存在チェック用）
       let availableProjects: string[] = [];
-      if (dataManagement.saveDirectory === '') {
-        //console.log('📦 初期化: データストレージからプロジェクトリストを取得');
+      if (dataManagement.saveDirectory === '' || window.electronAPI) {
         try {
           const keys = await dataManagement.listDataKeys();
-          availableProjects = keys
-            .filter(k => k.startsWith('voiscripter_project_') &&
-              !k.endsWith('_lastScene') &&
-              !k.endsWith('_undo') &&
-              !k.endsWith('_redo') &&
-              !k.endsWith('_characters') &&
-              !k.endsWith('_groups') &&
-              !k.endsWith('_lastSaved'))
-            .map(k => k.replace('voiscripter_project_', ''));
-          //console.log('📦 初期化: データストレージのキー:', keys);
-          //console.log('📦 初期化: 利用可能なプロジェクト:', availableProjects);
-        } catch (error) {
-          console.error('プロジェクトリスト取得エラー:', error);
-          availableProjects = [];
-        }
-      } else if (window.electronAPI) {
-        try {
-          //console.log('📁 初期化: ディレクトリからプロジェクトリストを取得');
-          const keys = await dataManagement.listDataKeys();
-          //console.log('📁 初期化: ディレクトリ内の全キー:', keys);
-          availableProjects = keys.filter(k => k.startsWith('voiscripter_project_') &&
-            !k.endsWith('_lastScene') &&
-            !k.endsWith('_undo') &&
-            !k.endsWith('_redo') &&
-            !k.endsWith('_characters') &&
-            !k.endsWith('_groups') &&
-            !k.endsWith('_lastSaved'));
-          availableProjects = availableProjects.map(k => k.replace('voiscripter_project_', ''));
-          //console.log('📁 初期化: プロジェクトキー:', keys.filter(k => k.startsWith('voiscripter_project_')));
-          //console.log('📁 初期化: 利用可能なプロジェクト:', availableProjects);
+          availableProjects = filterProjectKeys(keys);
         } catch (error) {
           console.error('プロジェクトリスト取得エラー:', error);
           availableProjects = [];
@@ -562,33 +541,12 @@ export const useProjectManagement = (
 
   // プロジェクトリスト再取得関数
   const refreshProjectList = async () => {
-    if (dataManagement.saveDirectory === '') {
+    if (dataManagement.saveDirectory === '' || window.electronAPI) {
       try {
         const keys = await dataManagement.listDataKeys();
-        const projectKeys = keys
-          .filter(k => k.startsWith('voiscripter_project_') &&
-            !k.endsWith('_lastScene') &&
-            !k.endsWith('_undo') &&
-            !k.endsWith('_redo') &&
-            !k.endsWith('_characters') &&
-            !k.endsWith('_groups') &&
-            !k.endsWith('_lastSaved'))
-          .map(k => k.replace('voiscripter_project_', ''));
-        setProjectList(projectKeys);
+        setProjectList(filterProjectKeys(keys));
       } catch (error) {
         console.error('プロジェクトリスト取得エラー:', error);
-        setProjectList([]);
-      }
-    } else if (window.electronAPI) {
-      try {
-        const keys = await dataManagement.listDataKeys();
-        const projectKeys = keys.filter(k => k.startsWith('voiscripter_project_') &&
-          !k.endsWith('_lastScene') &&
-          !k.endsWith('_undo') &&
-          !k.endsWith('_redo'));
-        const projectNames = projectKeys.map(k => k.replace('voiscripter_project_', ''));
-        setProjectList(projectNames);
-      } catch (error) {
         setProjectList([]);
       }
     }
@@ -620,40 +578,45 @@ export const useProjectManagement = (
     setTimeout(refreshProjectList, 200);
   };
 
-  // プロジェクト削除
-  const handleDeleteProject = async () => {
-    if (projectId === 'default') {
+  // プロジェクト削除（開いていないプロジェクトも削除可能）
+  const deleteProjectById = async (id: string, options?: { silent?: boolean }) => {
+    if (id === 'default') {
       onNotification('デフォルトプロジェクトは削除できません', 'error');
       return;
     }
-    
+
     try {
-      // プロジェクトデータを削除
-      await dataManagement.deleteData(`voiscripter_project_${projectId}`);
-      await dataManagement.deleteData(`voiscripter_project_${projectId}_lastScene`);
-      await dataManagement.deleteData(`voiscripter_project_${projectId}_undo`);
-      await dataManagement.deleteData(`voiscripter_project_${projectId}_redo`);
-      await dataManagement.deleteData(`voiscripter_project_${projectId}_characters`);
-      await dataManagement.deleteData(`voiscripter_project_${projectId}_groups`);
-      await dataManagement.deleteData(`voiscripter_project_${projectId}_lastSaved`);
-      
+      // プロジェクトデータと関連キーを削除
+      await dataManagement.deleteData(`voiscripter_project_${id}`);
+      for (const suffix of PROJECT_KEY_SUFFIXES) {
+        await dataManagement.deleteData(`voiscripter_project_${id}${suffix}`);
+      }
+
       // localStorageからも削除（SSR対応のため）
       if (typeof window !== 'undefined') {
-        localStorage.removeItem(`voiscripter_project_${projectId}_undo_lastSaved`);
-        localStorage.removeItem(`voiscripter_project_${projectId}_redo_lastSaved`);
-        localStorage.removeItem(`voiscripter_project_${projectId}_lastSaved`);
+        localStorage.removeItem(`voiscripter_project_${id}_undo_lastSaved`);
+        localStorage.removeItem(`voiscripter_project_${id}_redo_lastSaved`);
+        localStorage.removeItem(`voiscripter_project_${id}_lastSaved`);
       }
-      
+
       // プロジェクトリストから削除
-      setProjectList(prev => prev.filter(p => p !== projectId));
-      
-      // デフォルトプロジェクトに切り替え
-      setProjectId('default');
-      
-      // 最後に開いていたプロジェクトを更新
-      await dataManagement.saveData('voiscripter_lastProject', 'default');
-      
-      onNotification(`プロジェクト「${projectId}」を削除しました`, 'success');
+      setProjectList(prev => prev.filter(p => p !== id));
+
+      if (id === projectId) {
+        // 開いているプロジェクトを削除した場合はデフォルトに切り替え
+        setProjectId('default');
+        await dataManagement.saveData('voiscripter_lastProject', 'default');
+      } else {
+        // lastProjectが削除対象を指していたら現在のプロジェクトに付け替え
+        const lastProject = await dataManagement.loadData('voiscripter_lastProject');
+        if (lastProject === id) {
+          await dataManagement.saveData('voiscripter_lastProject', projectId);
+        }
+      }
+
+      if (!options?.silent) {
+        onNotification(`プロジェクト「${id}」を削除しました`, 'success');
+      }
     } catch (error) {
       console.error('プロジェクト削除エラー:', error);
       onNotification('プロジェクトの削除に失敗しました', 'error');
@@ -661,46 +624,106 @@ export const useProjectManagement = (
     }
   };
 
-  // プロジェクト名変更
-  const handleRenameProject = (newName: string) => {
-    if (!newName.trim() || newName === project.name) return;
-    
-    const oldProjectId = project.id;
-    setProject(prev => {
-      const updatedScenes = prev.scenes.map((scene, idx) => {
-        if (idx === 0 && scene.name === prev.name) {
-          return {
-            ...scene,
-            name: newName,
-            scripts: scene.scripts.map((script, sidx) =>
-              sidx === 0 && script.title === prev.name ? { ...script, title: newName } : script
-            )
-          };
+  const handleDeleteProject = () => deleteProjectById(projectId);
+
+  // リネーム時に移行するサフィックスキー（undo/redoは現行どおり破棄）
+  const migrateProjectSiblingKeys = async (oldId: string, newId: string) => {
+    for (const suffix of ['_lastScene', '_characters', '_groups', '_lastSaved']) {
+      try {
+        const value = await dataManagement.loadData(`voiscripter_project_${oldId}${suffix}`);
+        if (value !== null) {
+          await dataManagement.saveData(`voiscripter_project_${newId}${suffix}`, value);
         }
-        return scene;
+      } catch (error) {
+        console.error(`関連データの移行エラー (${suffix}):`, error);
+      }
+      await dataManagement.deleteData(`voiscripter_project_${oldId}${suffix}`);
+    }
+    await dataManagement.deleteData(`voiscripter_project_${oldId}_undo`);
+    await dataManagement.deleteData(`voiscripter_project_${oldId}_redo`);
+  };
+
+  // プロジェクト名変更（開いていないプロジェクトも変更可能）
+  const renameProjectById = async (oldId: string, newName: string) => {
+    if (!newName.trim() || newName === oldId) return;
+    if (oldId === 'default') {
+      onNotification('デフォルトプロジェクトの名前は変更できません', 'error');
+      return;
+    }
+
+    if (oldId === projectId) {
+      // 開いているプロジェクト: メモリ上の状態を更新してから保存
+      setProject(prev => {
+        const updatedScenes = prev.scenes.map((scene, idx) => {
+          if (idx === 0 && scene.name === prev.name) {
+            return {
+              ...scene,
+              name: newName,
+              scripts: scene.scripts.map((script, sidx) =>
+                sidx === 0 && script.title === prev.name ? { ...script, title: newName } : script
+              )
+            };
+          }
+          return scene;
+        });
+        return {
+          ...prev,
+          id: newName,
+          name: newName,
+          scenes: updatedScenes
+        };
       });
-      return {
-        ...prev,
-        id: newName,
-        name: newName,
-        scenes: updatedScenes
-      };
-    });
-    
-    setProjectList(prev => prev.map(p => p === oldProjectId ? newName : p));
-    setProjectId(newName);
-    
-    dataManagement.saveData(`voiscripter_project_${newName}`, JSON.stringify({ ...project, id: newName, name: newName }));
-    dataManagement.saveData('voiscripter_lastProject', newName);
-    
-    // 古いプロジェクトデータ削除
-    dataManagement.deleteData(`voiscripter_project_${oldProjectId}`);
-    dataManagement.deleteData(`voiscripter_project_${oldProjectId}_lastScene`);
-    dataManagement.deleteData(`voiscripter_project_${oldProjectId}_undo`);
-    dataManagement.deleteData(`voiscripter_project_${oldProjectId}_redo`);
-    
+
+      setProjectList(prev => prev.map(p => p === oldId ? newName : p));
+      setProjectId(newName);
+
+      await dataManagement.saveData(`voiscripter_project_${newName}`, JSON.stringify({ ...project, id: newName, name: newName }));
+      await dataManagement.saveData('voiscripter_lastProject', newName);
+
+      await migrateProjectSiblingKeys(oldId, newName);
+      await dataManagement.deleteData(`voiscripter_project_${oldId}`);
+    } else {
+      // 開いていないプロジェクト: ストレージ上で直接リネーム
+      const raw = await dataManagement.loadData(`voiscripter_project_${oldId}`);
+      if (raw === null) {
+        onNotification('プロジェクトデータが見つかりません', 'error');
+        return;
+      }
+      try {
+        const parsed = JSON.parse(raw) as Project;
+        const updatedScenes = (parsed.scenes ?? []).map((scene, idx) => {
+          if (idx === 0 && scene.name === parsed.name) {
+            return {
+              ...scene,
+              name: newName,
+              scripts: scene.scripts.map((script, sidx) =>
+                sidx === 0 && script.title === parsed.name ? { ...script, title: newName } : script
+              )
+            };
+          }
+          return scene;
+        });
+        const updated = { ...parsed, id: newName, name: newName, scenes: updatedScenes };
+        await dataManagement.saveData(`voiscripter_project_${newName}`, JSON.stringify(updated));
+        await migrateProjectSiblingKeys(oldId, newName);
+        await dataManagement.deleteData(`voiscripter_project_${oldId}`);
+        setProjectList(prev => prev.map(p => p === oldId ? newName : p));
+
+        const lastProject = await dataManagement.loadData('voiscripter_lastProject');
+        if (lastProject === oldId) {
+          await dataManagement.saveData('voiscripter_lastProject', newName);
+        }
+      } catch (error) {
+        console.error('プロジェクト名変更エラー:', error);
+        onNotification('プロジェクト名の変更に失敗しました', 'error');
+        return;
+      }
+    }
+
     onNotification(`プロジェクト名を「${newName}」に変更しました`, 'success');
   };
+
+  const handleRenameProject = (newName: string) => { renameProjectById(project.id, newName); };
 
   // 新しいプロジェクト作成
   const handleNewProject = (name: string): Project => {
@@ -807,6 +830,8 @@ export const useProjectManagement = (
     handleNewProject,
     handleDeleteProject,
     handleRenameProject,
+    deleteProjectById,
+    renameProjectById,
     refreshProjectList,
     handleAddScene,
     handleRenameScene,

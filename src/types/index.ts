@@ -81,6 +81,26 @@ export interface Project {
   // プロジェクト全体の設定やメタ情報を追加可能
 }
 
+// プロジェクトエクスプローラーのフォルダ
+export interface ExplorerFolder {
+  id: string;
+  name: string;
+  parentId: string | null; // null はルート直下
+}
+
+// プロジェクトエクスプローラーのツリーメタデータ（voiscripter_explorer_tree に保存）
+export interface ExplorerTreeData {
+  version: 1;
+  folders: ExplorerFolder[];
+  projectLocations: Record<string, string>; // projectId -> folderId（エントリなし = ルート）
+  updatedAt: number;
+}
+
+// ツリー描画用ノード
+export type ExplorerNode =
+  | { type: 'folder'; folder: ExplorerFolder; children: ExplorerNode[] }
+  | { type: 'project'; projectId: string };
+
 // Electron API型定義
 declare global {
   interface Window {
