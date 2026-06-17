@@ -94,13 +94,27 @@ export function leadingZeroBits(hexStr: string): number {
     return bits;
 }
 
+/** Thrown by solvePow when the search exceeds its time budget. */
+export class PowTimeoutError extends Error {
+    constructor() {
+        super('PoW solving exceeded the time budget');
+        this.name = 'PowTimeoutError';
+    }
+}
+
 /**
  * Solve a PoW challenge: find a counter whose SHA-256("<token>:<counter>") has
  * at least `difficulty` leading zero bits. Yields to the event loop periodically
- * so the UI stays responsive during the (sub-second) search.
+ * so the UI stays responsive during the search.
+ *
+ * If `budgetMs` is exceeded, throws PowTimeoutError instead of running for
+ * minutes/hours. This happens when adaptive difficulty has escalated the UUID
+ * (i.e. the caller is being throttled), so we bail early rather than submit a
+ * solution that would already be expired server-side.
  */
-export async function solvePow(token: string, difficulty: number): Promise<number> {
+export async function solvePow(token: string, difficulty: number, budgetMs = Infinity): Promise<number> {
     const CHUNK = 4096;
+    const start = Date.now();
     let counter = 0;
     for (;;) {
         for (let i = 0; i < CHUNK; i++) {
@@ -109,6 +123,7 @@ export async function solvePow(token: string, difficulty: number): Promise<numbe
             }
             counter++;
         }
+        if (Date.now() - start > budgetMs) throw new PowTimeoutError();
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
     }
 }

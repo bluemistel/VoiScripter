@@ -11,6 +11,75 @@ const POW_DIFFICULTY = parseInt(process.env.POW_DIFFICULTY ?? '12', 10) || 0;
 const POW_SECRET = process.env.POW_SECRET || 'dev-secret';
 const POW_TTL_SECONDS = 120;
 
+// Adaptive difficulty (mirror of worker.js). In-memory per-UUID meter.
+const ADAPT = {
+    SHORT_WINDOW_MIN: parseInt(process.env.POW_SHORT_WINDOW_MIN ?? '10', 10),
+    SHORT_THRESHOLD: parseInt(process.env.POW_SHORT_THRESHOLD ?? '3', 10),
+    SHORT_BITS: parseInt(process.env.POW_SHORT_BITS ?? '4', 10),
+    PENALTY_STEP_MIN: parseInt(process.env.POW_PENALTY_STEP_MIN ?? '15', 10),
+    MAX_PENALTY: parseInt(process.env.POW_MAX_PENALTY ?? '8', 10),
+    PENALTY_DECAY_MIN: parseInt(process.env.POW_PENALTY_DECAY_MIN ?? '60', 10),
+    ESC_THRESHOLD: parseInt(process.env.POW_ESC_THRESHOLD ?? '50', 10),
+    ESC_STEP: parseInt(process.env.POW_ESC_STEP ?? '10', 10),
+    ESC_BITS: parseInt(process.env.POW_ESC_BITS ?? '2', 10),
+    MAX_DIFFICULTY: parseInt(process.env.POW_MAX_DIFFICULTY ?? '30', 10),
+    NEW_UUID_DIFFICULTY: parseInt(process.env.POW_NEW_UUID_DIFFICULTY ?? '22', 10),
+};
+const uuidMeter = new Map(); // uuid -> { firstSeen, events:[ms], penaltyLevel, lastPenaltyAt }
+
+const meterUuid = (uuid) => {
+    const now = Date.now();
+    const MIN = 60 * 1000;
+    const EVENTS_CAP = 2000;
+    const meta = uuidMeter.get(uuid) || {};
+    const isNew = !meta.firstSeen;
+    const firstSeen = meta.firstSeen || now;
+    let events = Array.isArray(meta.events) ? meta.events : [];
+    let penaltyLevel = meta.penaltyLevel || 0;
+    let lastPenaltyAt = meta.lastPenaltyAt || 0;
+
+    if (penaltyLevel > 0 && lastPenaltyAt) {
+        const drops = Math.floor((now - lastPenaltyAt) / (ADAPT.PENALTY_DECAY_MIN * MIN));
+        if (drops > 0) {
+            penaltyLevel = Math.max(0, penaltyLevel - drops);
+            lastPenaltyAt = penaltyLevel > 0 ? lastPenaltyAt + drops * ADAPT.PENALTY_DECAY_MIN * MIN : 0;
+        }
+    }
+
+    const effWindowMin = Math.max(ADAPT.SHORT_WINDOW_MIN, penaltyLevel * ADAPT.PENALTY_STEP_MIN);
+
+    events.push(now);
+    const dayAgo = now - 24 * 60 * MIN;
+    events = events.filter((t) => t >= dayAgo);
+    if (events.length > EVENTS_CAP) events = events.slice(events.length - EVENTS_CAP);
+
+    const winStart = now - effWindowMin * MIN;
+    let countShort = 0;
+    for (const t of events) if (t >= winStart) countShort++;
+    const count24h = events.length;
+
+    if (countShort > ADAPT.SHORT_THRESHOLD && (now - lastPenaltyAt) > effWindowMin * MIN) {
+        penaltyLevel = Math.min(ADAPT.MAX_PENALTY, penaltyLevel + 1);
+        lastPenaltyAt = now;
+    }
+
+    uuidMeter.set(uuid, { firstSeen, events, penaltyLevel, lastPenaltyAt });
+    return { isNew, count24h, countShort, penaltyLevel, effWindowMin };
+};
+
+const computeAdaptiveDifficulty = (base, isNew, count24h, countShort) => {
+    let escalation = 0;
+    if (countShort > ADAPT.SHORT_THRESHOLD) {
+        escalation = Math.max(escalation, (countShort - ADAPT.SHORT_THRESHOLD) * ADAPT.SHORT_BITS);
+    }
+    if (count24h > ADAPT.ESC_THRESHOLD) {
+        escalation = Math.max(escalation, Math.ceil((count24h - ADAPT.ESC_THRESHOLD) / Math.max(1, ADAPT.ESC_STEP)) * ADAPT.ESC_BITS);
+    }
+    let d = base + escalation;
+    if (isNew) d = Math.max(d, ADAPT.NEW_UUID_DIFFICULTY);
+    return Math.min(d, ADAPT.MAX_DIFFICULTY);
+};
+
 // --- PoW helpers (mirror worker.js) ---
 
 const b64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -33,15 +102,21 @@ const leadingZeroBits = (hexStr) => {
 };
 
 const issueChallenge = (uuid, hash) => {
+    // POW_DIFFICULTY=0 means full dev bypass; skip adaptation in that case.
+    let difficulty = 0;
+    if (POW_DIFFICULTY !== 0) {
+        const { isNew, count24h, countShort } = meterUuid(uuid);
+        difficulty = computeAdaptiveDifficulty(POW_DIFFICULTY, isNew, count24h, countShort);
+    }
     const payload = {
         n: b64url(crypto.randomBytes(12)),
         u: uuid,
         h: hash,
-        d: POW_DIFFICULTY,
+        d: difficulty,
         e: Math.floor(Date.now() / 1000) + POW_TTL_SECONDS,
     };
     const payloadStr = b64url(Buffer.from(JSON.stringify(payload)));
-    return { token: `${payloadStr}.${hmacSign(payloadStr)}`, difficulty: POW_DIFFICULTY };
+    return { token: `${payloadStr}.${hmacSign(payloadStr)}`, difficulty };
 };
 
 const verifyPow = (token, solution, uuid, body) => {

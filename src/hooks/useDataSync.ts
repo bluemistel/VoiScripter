@@ -5,8 +5,28 @@
 
 import { useState, useCallback } from 'react';
 import { encrypt, decrypt } from '@/utils/crypto';
-import { sha256Hex, solvePow } from '@/utils/pow';
+import { sha256Hex, solvePow, PowTimeoutError } from '@/utils/pow';
 import packageJson from '../../package.json';
+
+// Max time the client spends solving a PoW challenge. The server challenge TTL
+// is 120s; once adaptive difficulty escalates a UUID (throttling), solving would
+// exceed this and the submission would expire anyway, so we bail early and show
+// a "please wait a while" message instead of hanging or wasting the round trip.
+const POW_SOLVE_BUDGET_MS = 90_000;
+
+// Shown when the user is being throttled by the anti-abuse mechanism (PoW solve
+// budget exceeded, or the server rejected the PoW). Deliberately vague about the
+// exact thresholds/timing so attackers can't infer the limits.
+const THROTTLE_MESSAGE =
+    'しばらく待ってからもう一度お試しください。※短時間にアクセスが集中した場合、一定時間同期機能をご利用いただけないことがあるため、ご注意ください。';
+
+/** Error carrying the user-facing throttle guidance. */
+class SyncThrottleError extends Error {
+    constructor() {
+        super(THROTTLE_MESSAGE);
+        this.name = 'SyncThrottleError';
+    }
+}
 
 const SYNC_ENV = process.env.NEXT_PUBLIC_SYNC_ENV ||
     (process.env.NODE_ENV === 'development' ? 'dev' : 'prd');
@@ -41,7 +61,13 @@ async function obtainPowHeaders(uuid: string, encrypted: string): Promise<Record
         throw new Error(`認証チャレンジの取得に失敗しました: ${detail}`);
     }
     const challenge = (await res.json()) as PowChallenge;
-    const solution = await solvePow(challenge.token, challenge.difficulty);
+    let solution: number;
+    try {
+        solution = await solvePow(challenge.token, challenge.difficulty, POW_SOLVE_BUDGET_MS);
+    } catch (e) {
+        if (e instanceof PowTimeoutError) throw new SyncThrottleError();
+        throw e;
+    }
     return {
         'X-PoW-Challenge': challenge.token,
         'X-PoW-Solution': String(solution),
@@ -119,6 +145,11 @@ export function useDataSync() {
                         const body = await response.json();
                         if (body.error) detail = body.error;
                     } catch { /* ignore */ }
+                    // A PoW rejection (e.g. expired because solving took too long)
+                    // means the anti-abuse mechanism is throttling this UUID.
+                    if (response.status === 403 && detail.includes('Proof-of-Work')) {
+                        throw new SyncThrottleError();
+                    }
                     throw new Error(`サーバーエラー: ${detail}`);
                 }
                 const remoteUpdatedAt = response.headers.get('X-Sync-Updated-At') || undefined;
@@ -132,7 +163,10 @@ export function useDataSync() {
             } catch (error) {
                 const url = `${SYNC_API_URL}/${credentials.uuid}`;
                 const detail = error instanceof Error ? error.message : '不明なエラー';
-                const errorMsg = `同期に失敗しました: ${detail} (URL: ${url})`;
+                // Throttle guidance is already user-facing; show it as-is (no URL/prefix noise).
+                const errorMsg = error instanceof SyncThrottleError
+                    ? detail
+                    : `同期に失敗しました: ${detail} (URL: ${url})`;
                 console.error('[DataSync] syncToCloud error:', error, 'URL:', url);
                 setState({
                     isLoading: false,

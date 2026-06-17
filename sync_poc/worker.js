@@ -27,7 +27,81 @@ const MIN_APP_VERSION = '0.3.1';
 const POW_DEFAULT_DIFFICULTY = 20; // leading zero bits required
 const POW_TTL_SECONDS = 120;       // challenge validity window
 
+// Adaptive difficulty defaults (overridable via [vars] in wrangler.toml).
+// Difficulty is in leading-zero bits; solve time ≈ 2^difficulty, so each +1 bit
+// doubles the cost. A UUID that writes far more than a human would within 24h
+// gets an escalating difficulty until its write cadence becomes infeasible.
+const ADAPT_DEFAULTS = {
+    // Short burst window: catches parallel/rapid writes to one UUID within minutes.
+    // Normal use is ~2 consecutive syncs per session, then quiet for tens of
+    // minutes to hours, so >3 within the window is abnormal. Steep curve: the
+    // 4th request escalates, the 5th-6th reach the practically-infeasible range.
+    SHORT_WINDOW_MIN: 10,  // base rolling short window (minutes)
+    SHORT_THRESHOLD: 3,    // requests in the window above which escalation starts
+    SHORT_BITS: 4,         // bits added per request above SHORT_THRESHOLD (steep)
+    // Progressive penalty: each time a UUID keeps breaching, its window (memory)
+    // lengthens (15 → 30 → 45 ... minutes), so it cannot reset difficulty by
+    // briefly pausing. Penalty decays by one level per DECAY_MIN of quiet.
+    PENALTY_STEP_MIN: 15,  // window length per penalty level (max(base, level*step))
+    MAX_PENALTY: 8,        // cap penalty level (window up to ~2h)
+    PENALTY_DECAY_MIN: 60, // minutes of quiet to drop one penalty level
+    // 24h window: backstop for slow-but-sustained abuse that stays under the burst limit.
+    ESC_THRESHOLD: 50,     // 24h request count below which no escalation applies
+    ESC_STEP: 10,          // every STEP requests above the threshold...
+    ESC_BITS: 2,           // ...adds this many difficulty bits
+    MAX_DIFFICULTY: 30,    // hard cap (~hours to solve)
+    NEW_UUID_DIFFICULTY: 22, // one-time cost for the first ever write to a UUID
+};
+
 const encoder = new TextEncoder();
+
+function envInt(value, fallback) {
+    const n = parseInt(value, 10);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+/**
+ * Compute the PoW difficulty for a UUID from its recent activity.
+ * - Normal, low-frequency use stays at the base difficulty (fast).
+ * - A brand-new UUID pays a one-time higher cost (taxes UUID rotation).
+ * - A UUID exceeding the 24h threshold escalates steeply (chokes hammering).
+ */
+function computeAdaptiveDifficulty(env, base, isNew, count24h, countShort) {
+    const ST = envInt(env.POW_SHORT_THRESHOLD, ADAPT_DEFAULTS.SHORT_THRESHOLD);
+    const SBITS = envInt(env.POW_SHORT_BITS, ADAPT_DEFAULTS.SHORT_BITS);
+    const T = envInt(env.POW_ESC_THRESHOLD, ADAPT_DEFAULTS.ESC_THRESHOLD);
+    const STEP = envInt(env.POW_ESC_STEP, ADAPT_DEFAULTS.ESC_STEP);
+    const ESC = envInt(env.POW_ESC_BITS, ADAPT_DEFAULTS.ESC_BITS);
+    const MAX = envInt(env.POW_MAX_DIFFICULTY, ADAPT_DEFAULTS.MAX_DIFFICULTY);
+    const NEW = envInt(env.POW_NEW_UUID_DIFFICULTY, ADAPT_DEFAULTS.NEW_UUID_DIFFICULTY);
+
+    // Short-burst escalation (steep, per request) and 24h backstop; take the larger.
+    let escalation = 0;
+    if (countShort > ST) escalation = Math.max(escalation, (countShort - ST) * SBITS);
+    if (count24h > T) escalation = Math.max(escalation, Math.ceil((count24h - T) / Math.max(1, STEP)) * ESC);
+
+    let d = base + escalation;
+    if (isNew) d = Math.max(d, NEW);
+    return Math.min(d, MAX);
+}
+
+/**
+ * Ask the per-UUID Durable Object to record this request and return its recent
+ * activity. Falls back to non-adaptive (isNew=false, count24h=0) when the DO
+ * binding is unavailable (e.g. local dev) so sync never breaks.
+ */
+async function meterUuid(env, uuid) {
+    if (!env.UUID_METER || typeof env.UUID_METER.idFromName !== 'function') {
+        return { isNew: false, count24h: 0, countShort: 0 };
+    }
+    try {
+        const stub = env.UUID_METER.get(env.UUID_METER.idFromName(uuid));
+        const res = await stub.fetch('https://uuid-meter/record');
+        return await res.json();
+    } catch {
+        return { isNew: false, count24h: 0, countShort: 0 };
+    }
+}
 
 /**
  * Compare semver strings (e.g. "0.2.8" vs "0.2.9")
@@ -101,8 +175,7 @@ function getDifficulty(env) {
  * Issue a stateless, HMAC-signed PoW challenge bound to (uuid, bodyHash).
  * No KV access.
  */
-async function issueChallenge(uuid, bodyHash, env) {
-    const difficulty = getDifficulty(env);
+async function issueChallenge(uuid, bodyHash, difficulty, env) {
     const payload = {
         n: b64urlEncode(crypto.getRandomValues(new Uint8Array(12))),
         u: uuid,
@@ -206,7 +279,12 @@ export default {
                 if (!uuid || !hash) {
                     return jsonError(400, 'uuid と hash が必要です。');
                 }
-                const challenge = await issueChallenge(uuid, hash, env);
+                // Adaptive difficulty: per-UUID activity raises the cost so that an
+                // abusive UUID's write cadence becomes infeasible, while normal
+                // low-frequency users stay at the base difficulty.
+                const { isNew, count24h, countShort } = await meterUuid(env, uuid);
+                const difficulty = computeAdaptiveDifficulty(env, getDifficulty(env), isNew, count24h, countShort);
+                const challenge = await issueChallenge(uuid, hash, difficulty, env);
                 return new Response(JSON.stringify(challenge), {
                     status: 200,
                     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -294,3 +372,76 @@ export default {
         }
     }
 };
+
+/**
+ * Durable Object: per-UUID activity meter (SQLite-backed; see wrangler.toml
+ * migrations `new_sqlite_classes`). State here does NOT consume the KV write
+ * quota. One instance per UUID (addressed via idFromName(uuid)).
+ *
+ * Tracks per-UUID request timestamps (last 24h) plus a progressive `penaltyLevel`.
+ * The effective short window grows with the penalty level, so a UUID that keeps
+ * breaching cannot reset its difficulty by briefly pausing — it must stay quiet
+ * for progressively longer. Returns { isNew, count24h, countShort, penaltyLevel,
+ * effWindowMin }; the Worker turns count24h/countShort into the PoW difficulty.
+ */
+export class UuidMeter {
+    constructor(state, env) {
+        this.state = state;
+        this.env = env;
+    }
+
+    async fetch() {
+        const env = this.env;
+        const now = Date.now();
+        const MIN = 60 * 1000;
+        const EVENTS_CAP = 2000;
+
+        const shortWin = envInt(env.POW_SHORT_WINDOW_MIN, ADAPT_DEFAULTS.SHORT_WINDOW_MIN);
+        const penaltyStep = envInt(env.POW_PENALTY_STEP_MIN, ADAPT_DEFAULTS.PENALTY_STEP_MIN);
+        const maxPenalty = envInt(env.POW_MAX_PENALTY, ADAPT_DEFAULTS.MAX_PENALTY);
+        const decayMin = envInt(env.POW_PENALTY_DECAY_MIN, ADAPT_DEFAULTS.PENALTY_DECAY_MIN);
+        const shortThreshold = envInt(env.POW_SHORT_THRESHOLD, ADAPT_DEFAULTS.SHORT_THRESHOLD);
+
+        const meta = (await this.state.storage.get('meta')) || {};
+        const isNew = !meta.firstSeen;
+        const firstSeen = meta.firstSeen || now;
+        let events = Array.isArray(meta.events) ? meta.events : [];
+        let penaltyLevel = meta.penaltyLevel || 0;
+        let lastPenaltyAt = meta.lastPenaltyAt || 0;
+
+        // Decay the penalty during quiet time (one level per decayMin minutes).
+        if (penaltyLevel > 0 && lastPenaltyAt) {
+            const drops = Math.floor((now - lastPenaltyAt) / (decayMin * MIN));
+            if (drops > 0) {
+                penaltyLevel = Math.max(0, penaltyLevel - drops);
+                lastPenaltyAt = penaltyLevel > 0 ? lastPenaltyAt + drops * decayMin * MIN : 0;
+            }
+        }
+
+        // Effective short window grows with penalty level (e.g. 10, 15, 30, 45 ...).
+        const effWindowMin = Math.max(shortWin, penaltyLevel * penaltyStep);
+
+        // Record this event and keep the last 24h (capped to bound memory).
+        events.push(now);
+        const dayAgo = now - 24 * 60 * MIN;
+        events = events.filter((t) => t >= dayAgo);
+        if (events.length > EVENTS_CAP) events = events.slice(events.length - EVENTS_CAP);
+
+        const winStart = now - effWindowMin * MIN;
+        let countShort = 0;
+        for (const t of events) if (t >= winStart) countShort++;
+        const count24h = events.length;
+
+        // Keep breaching → lengthen the window (at most once per current window).
+        if (countShort > shortThreshold && (now - lastPenaltyAt) > effWindowMin * MIN) {
+            penaltyLevel = Math.min(maxPenalty, penaltyLevel + 1);
+            lastPenaltyAt = now;
+        }
+
+        await this.state.storage.put('meta', { firstSeen, events, penaltyLevel, lastPenaltyAt });
+
+        return new Response(JSON.stringify({ isNew, count24h, countShort, penaltyLevel, effWindowMin }), {
+            headers: { 'Content-Type': 'application/json' },
+        });
+    }
+}

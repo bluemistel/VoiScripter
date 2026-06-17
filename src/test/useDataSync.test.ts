@@ -86,11 +86,11 @@ describe('useDataSync', () => {
             expect(result.current.error).toContain('サーバーエラー');
         });
 
-        it('should fail when PoW is rejected (403)', async () => {
+        it('should show throttle guidance when PoW is rejected (403)', async () => {
             (global.fetch as any)
                 .mockResolvedValueOnce(challengeResponse())
                 .mockResolvedValueOnce(new Response(
-                    JSON.stringify({ error: 'Proof-of-Workの検証に失敗しました。' }),
+                    JSON.stringify({ error: 'Proof-of-Workの有効期限が切れています。もう一度お試しください。' }),
                     { status: 403, headers: { 'Content-Type': 'application/json' } }
                 ));
 
@@ -107,7 +107,10 @@ describe('useDataSync', () => {
                 }
             });
 
-            expect(result.current.error).toContain('Proof-of-Work');
+            // User sees the friendly "please wait" guidance, not the raw PoW error.
+            expect(result.current.error).toContain('しばらく待ってから');
+            expect(result.current.error).not.toContain('Proof-of-Work');
+            expect(result.current.error).not.toContain('サーバーエラー');
         });
     });
 
