@@ -5,6 +5,7 @@
 
 import { useState, useCallback } from 'react';
 import { encrypt, decrypt } from '@/utils/crypto';
+import { sha256Hex, solvePow } from '@/utils/pow';
 import packageJson from '../../package.json';
 
 const SYNC_ENV = process.env.NEXT_PUBLIC_SYNC_ENV ||
@@ -13,6 +14,39 @@ const SYNC_API_URL_DEV = process.env.NEXT_PUBLIC_SYNC_API_URL_DEV || 'http://loc
 const SYNC_API_URL_PRD = process.env.NEXT_PUBLIC_SYNC_API_URL_PRD || 'https://voiscripter-sync-prd.bluemist02.workers.dev/data';
 const SYNC_API_URL = process.env.NEXT_PUBLIC_SYNC_API_URL ||
     (SYNC_ENV === 'dev' ? SYNC_API_URL_DEV : SYNC_API_URL_PRD);
+// Base URL without the trailing `/data` segment (used for the /challenge endpoint).
+const SYNC_API_BASE = SYNC_API_URL.replace(/\/data$/, '');
+
+interface PowChallenge {
+    token: string;
+    difficulty: number;
+}
+
+/**
+ * Obtain a PoW challenge for (uuid, bodyHash) and solve it.
+ * Returns the headers to attach to the subsequent PUT request.
+ */
+async function obtainPowHeaders(uuid: string, encrypted: string): Promise<Record<string, string>> {
+    const bodyHash = sha256Hex(encrypted);
+    const challengeUrl = `${SYNC_API_BASE}/challenge?uuid=${encodeURIComponent(uuid)}&hash=${bodyHash}`;
+    const res = await fetch(challengeUrl, {
+        headers: { 'X-App-Version': packageJson.version },
+    });
+    if (!res.ok) {
+        let detail = `${res.status}`;
+        try {
+            const body = await res.json();
+            if (body.error) detail = body.error;
+        } catch { /* ignore */ }
+        throw new Error(`認証チャレンジの取得に失敗しました: ${detail}`);
+    }
+    const challenge = (await res.json()) as PowChallenge;
+    const solution = await solvePow(challenge.token, challenge.difficulty);
+    return {
+        'X-PoW-Challenge': challenge.token,
+        'X-PoW-Solution': String(solution),
+    };
+}
 
 interface SyncState {
     isLoading: boolean;
@@ -65,12 +99,17 @@ export function useDataSync() {
                     );
                 }
 
+                // Proof-of-Work: spend CPU before the write so automated tools
+                // cannot cheaply hammer the endpoint.
+                const powHeaders = await obtainPowHeaders(credentials.uuid, encrypted);
+
                 const response = await fetch(`${SYNC_API_URL}/${credentials.uuid}`, {
                     method: 'PUT',
                     body: encrypted,
                     headers: {
                         'Content-Type': 'text/plain',
                         'X-App-Version': packageJson.version,
+                        ...powHeaders,
                     },
                 });
 

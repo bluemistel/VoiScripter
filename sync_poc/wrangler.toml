@@ -8,6 +8,32 @@ workers_dev = true
 binding = "SYNC_KV"
 id = "8579b723057f4a56bd2b0224062e916d"
 
+# Proof-of-Work difficulty (leading zero bits). Tune for "~0.3-1s on a normal
+# device". Higher = harder for bots but slower UX. Override per env as needed.
+# NOTE: POW_SECRET is NOT stored here. Set it as a secret:
+#   wrangler secret put POW_SECRET
+#   wrangler secret put POW_SECRET --env prd
+[vars]
+POW_DIFFICULTY = "18"
+
+# Rate Limiting bindings (in-memory, free, do NOT consume KV write quota).
+# period must be 10 or 60 (seconds). namespace_id must be unique per binding.
+# Ref: https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
+[[ratelimits]]
+name = "RL_PUT"
+namespace_id = "1001"
+simple = { limit = 12, period = 60 }
+
+[[ratelimits]]
+name = "RL_GET"
+namespace_id = "1002"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "RL_CHALLENGE"
+namespace_id = "1003"
+simple = { limit = 30, period = 60 }
+
 [env.prd]
 name = "voiscripter-sync-prd"
 workers_dev = true
@@ -15,6 +41,24 @@ workers_dev = true
 [[env.prd.kv_namespaces]]
 binding = "SYNC_KV"
 id = "8579b723057f4a56bd2b0224062e916d"
+
+[env.prd.vars]
+POW_DIFFICULTY = "18"
+
+[[env.prd.ratelimits]]
+name = "RL_PUT"
+namespace_id = "1001"
+simple = { limit = 12, period = 60 }
+
+[[env.prd.ratelimits]]
+name = "RL_GET"
+namespace_id = "1002"
+simple = { limit = 60, period = 60 }
+
+[[env.prd.ratelimits]]
+name = "RL_CHALLENGE"
+namespace_id = "1003"
+simple = { limit = 30, period = 60 }
 
 # Import HTML as text module
 [[rules]]

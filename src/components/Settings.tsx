@@ -604,6 +604,16 @@ export default function Settings({
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
                   <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.3.1</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>• データ同期機能のセキュリティ強化(2回目)
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• データ同期にProof-of-Work保護を導入し、ツールによる書き込み濫用への恒久対策を実施</li>
+                        </ul>
+                      </li>
+                    </ul>
+                  </div>
+                  <div>
                     <h4 className="font-medium text-foreground mb-2">v0.3.0</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                       <li>

@@ -40,7 +40,17 @@ describe('Advanced Data Sync Tests', () => {
 
         it('should maintain state consistency even if multiple syncToCloud calls are made', async () => {
             const mockFetch = vi.mocked(fetch);
-            mockFetch.mockResolvedValue(new Response('OK', { status: 200 }));
+            // /challenge → PoW challenge (difficulty 0), everything else → OK
+            mockFetch.mockImplementation(async (input: any) => {
+                const urlStr = typeof input === 'string' ? input : input.url;
+                if (urlStr.includes('/challenge')) {
+                    return new Response(JSON.stringify({ token: 'test.token', difficulty: 0 }), {
+                        status: 200,
+                        headers: { 'Content-Type': 'application/json' },
+                    });
+                }
+                return new Response('OK', { status: 200 });
+            });
 
             const { result } = renderHook(() => useDataSync());
 

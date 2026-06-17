@@ -9,6 +9,13 @@ import { useDataSync } from '../hooks/useDataSync';
 // Mock fetch globally
 global.fetch = vi.fn();
 
+// A PoW challenge response with difficulty 0, so solvePow resolves instantly.
+const challengeResponse = () =>
+    new Response(JSON.stringify({ token: 'test.token', difficulty: 0 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+    });
+
 describe('useDataSync', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -34,8 +41,10 @@ describe('useDataSync', () => {
 
     describe('syncToCloud', () => {
         it('should successfully sync data', async () => {
-            const mockResponse = new Response('OK', { status: 200 });
-            (global.fetch as any).mockResolvedValue(mockResponse);
+            // 1st fetch: PoW challenge, 2nd fetch: PUT
+            (global.fetch as any)
+                .mockResolvedValueOnce(challengeResponse())
+                .mockResolvedValueOnce(new Response('OK', { status: 200 }));
 
             const { result } = renderHook(() => useDataSync());
 
@@ -48,11 +57,18 @@ describe('useDataSync', () => {
 
             expect(result.current.error).toBeNull();
             expect(result.current.lastSyncTime).toBeInstanceOf(Date);
+
+            // Verify the PUT carries the PoW headers
+            const putCall = (global.fetch as any).mock.calls[1];
+            expect(putCall[1].method).toBe('PUT');
+            expect(putCall[1].headers['X-PoW-Challenge']).toBe('test.token');
+            expect(putCall[1].headers['X-PoW-Solution']).toBe('0');
         });
 
-        it('should handle server errors', async () => {
-            const mockResponse = new Response('Server Error', { status: 500 });
-            (global.fetch as any).mockResolvedValue(mockResponse);
+        it('should handle server errors on PUT', async () => {
+            (global.fetch as any)
+                .mockResolvedValueOnce(challengeResponse())
+                .mockResolvedValueOnce(new Response('Server Error', { status: 500 }));
 
             const { result } = renderHook(() => useDataSync());
 
@@ -68,6 +84,30 @@ describe('useDataSync', () => {
             });
 
             expect(result.current.error).toContain('サーバーエラー');
+        });
+
+        it('should fail when PoW is rejected (403)', async () => {
+            (global.fetch as any)
+                .mockResolvedValueOnce(challengeResponse())
+                .mockResolvedValueOnce(new Response(
+                    JSON.stringify({ error: 'Proof-of-Workの検証に失敗しました。' }),
+                    { status: 403, headers: { 'Content-Type': 'application/json' } }
+                ));
+
+            const { result } = renderHook(() => useDataSync());
+
+            await act(async () => {
+                try {
+                    await result.current.syncToCloud('test data', {
+                        uuid: 'test-uuid',
+                        password: 'test-password'
+                    });
+                } catch (error) {
+                    // Expected to throw
+                }
+            });
+
+            expect(result.current.error).toContain('Proof-of-Work');
         });
     });
 
