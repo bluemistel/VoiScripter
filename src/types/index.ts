@@ -1,9 +1,34 @@
 
-export type Emotion = 'normal';
+// 感情ラベル。'normal' は既定で必ず存在し、ユーザー定義ラベル（喜・怒 等）を追加できる
+export type Emotion = string;
+export const DEFAULT_EMOTION: Emotion = 'normal';
+
+// 立ち絵の表示調整（上部中央起点の原寸表示が既定。ズームと位置をキャラ/表情ごとに補正）
+export interface StandingView {
+  scale: number;   // 1 = 原寸
+  offsetX: number; // px（右が正）
+  offsetY: number; // px（下が正）
+}
+
+// 感情ごとの設定（表情差分アイコン + 感情選択時に自動選択するプリセット + 立ち絵）
+export interface EmotionSetting {
+  iconUrl: string;
+  userPresetId?: string; // 連動するユーザープリセット（例: 「琴葉 茜（喜び）」）
+  standingAssetId?: string; // 立ち絵画像のアセットID（IndexedDB/ファイル保存。同期対象外）
+  standingView?: StandingView; // 立ち絵の表示調整
+}
 
 export interface UserPreset {
   id: string;
   name: string;
+}
+
+// 立ち絵などの素材クレジット情報（概要欄用のクレジット出力と制作時の確認に使用）
+export interface MaterialCredit {
+  url?: string;     // 配布ページURL（ニコニコ静画/コモンズ等）
+  id?: string;      // 素材ID（im/nc番号等）
+  creator?: string; // 制作者名
+  memo?: string;    // メモ（クレジット出力には含めない）
 }
 
 export interface Character {
@@ -11,14 +36,19 @@ export interface Character {
   name: string;
   group: string; // グループ設定を追加
   emotions: {
-    [key in Emotion]: {
-      iconUrl: string;
-    };
+    normal: EmotionSetting; // 既定の表情（必須）
+    [emotion: Emotion]: EmotionSetting; // ユーザー定義の表情差分
   };
   backgroundColor?: string; // アイコン背景色
   disabledProjects?: string[]; // 無効なプロジェクトIDの配列（未設定の場合は全プロジェクトで有効）
   userPresets?: UserPreset[]; // ユーザープリセット
+  materialCredit?: MaterialCredit; // 立ち絵素材クレジット
+  chatSide?: 'left' | 'right'; // チャットビューでの表示サイド（未設定はキャラ順で自動振り分け）
 }
+
+// グループ名 → クレジット表記（例: "VOICEVOX:ずんだもん"）のマップ
+// voiscripter_group_credits に保存（groups は string[] のまま非破壊で拡張）
+export type GroupCredits = Record<string, string>;
 
 export interface ScriptBlock {
   id: string;

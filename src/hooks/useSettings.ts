@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { DataManagementHook } from './useDataManagement';
 
+// フキダシの見た目テーマ
+export type BubbleTheme = 'classic' | 'pop' | 'cinema' | 'chat';
+
 export interface SettingsHook {
   saveDirectory: string;
   setSaveDirectory: (directory: string) => void;
@@ -18,6 +21,12 @@ export interface SettingsHook {
   simpleMode: boolean;
   setSimpleMode: (enabled: boolean) => void;
   handleSimpleModeChange: (enabled: boolean) => void;
+  bubbleTheme: BubbleTheme;
+  handleBubbleThemeChange: (theme: BubbleTheme) => void;
+  stagePanelEnabled: boolean;
+  handleStagePanelEnabledChange: (enabled: boolean) => void;
+  stagePanelSide: 'left' | 'right';
+  handleStagePanelSideChange: (side: 'left' | 'right') => void;
 }
 
 export const useSettings = (dataManagement: DataManagementHook): SettingsHook => {
@@ -27,6 +36,9 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
   const [reverseToolbarOrder, setReverseToolbarOrder] = useState<boolean>(false);
   const [fontSize, setFontSize] = useState<number>(16);
   const [simpleMode, setSimpleMode] = useState<boolean>(false);
+  const [bubbleTheme, setBubbleTheme] = useState<BubbleTheme>('classic');
+  const [stagePanelEnabled, setStagePanelEnabled] = useState<boolean>(false);
+  const [stagePanelSide, setStagePanelSide] = useState<'left' | 'right'>('right');
 
   // 初回マウント時に設定を読み込み
   useEffect(() => {
@@ -51,6 +63,18 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
         const savedSimpleMode = await dataManagement.loadData('voiscripter_simpleMode');
         if (savedSimpleMode !== null) {
           setSimpleMode(savedSimpleMode === 'true');
+        }
+        const savedBubbleTheme = await dataManagement.loadData('voiscripter_bubbleTheme');
+        if (savedBubbleTheme === 'classic' || savedBubbleTheme === 'pop' || savedBubbleTheme === 'cinema' || savedBubbleTheme === 'chat') {
+          setBubbleTheme(savedBubbleTheme);
+        }
+        const savedStageEnabled = await dataManagement.loadData('voiscripter_stagePanelEnabled');
+        if (savedStageEnabled !== null) {
+          setStagePanelEnabled(savedStageEnabled === 'true');
+        }
+        const savedStageSide = await dataManagement.loadData('voiscripter_stagePanelSide');
+        if (savedStageSide === 'left' || savedStageSide === 'right') {
+          setStagePanelSide(savedStageSide);
         }
       }
     };
@@ -77,6 +101,21 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
   const handleSimpleModeChange = (enabled: boolean) => {
     setSimpleMode(enabled);
     dataManagement.saveData('voiscripter_simpleMode', enabled.toString());
+  };
+
+  const handleBubbleThemeChange = (theme: BubbleTheme) => {
+    setBubbleTheme(theme);
+    dataManagement.saveData('voiscripter_bubbleTheme', theme);
+  };
+
+  const handleStagePanelEnabledChange = (enabled: boolean) => {
+    setStagePanelEnabled(enabled);
+    dataManagement.saveData('voiscripter_stagePanelEnabled', enabled.toString());
+  };
+
+  const handleStagePanelSideChange = (side: 'left' | 'right') => {
+    setStagePanelSide(side);
+    dataManagement.saveData('voiscripter_stagePanelSide', side);
   };
 
   // データ保存先変更
@@ -160,6 +199,12 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
     handleFontSizeChange,
     simpleMode,
     setSimpleMode,
-    handleSimpleModeChange
+    handleSimpleModeChange,
+    bubbleTheme,
+    handleBubbleThemeChange,
+    stagePanelEnabled,
+    handleStagePanelEnabledChange,
+    stagePanelSide,
+    handleStagePanelSideChange
   };
 };

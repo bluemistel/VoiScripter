@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Character } from '@/types';
+import { Character, GroupCredits } from '@/types';
 import { DataManagementHook } from './useDataManagement';
 
 export interface CharacterManagementHook {
@@ -7,6 +7,8 @@ export interface CharacterManagementHook {
   setCharacters: (characters: Character[]) => void;
   groups: string[];
   setGroups: (groups: string[]) => void;
+  groupCredits: GroupCredits;
+  handleSetGroupCredit: (group: string, credit: string) => void;
   handleAddCharacter: (character: Character) => void;
   handleUpdateCharacter: (updated: Character) => void;
   handleDeleteCharacter: (id: string) => void;
@@ -29,10 +31,12 @@ export const useCharacterManagement = (
 ): CharacterManagementHook => {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [groups, setGroups] = useState<string[]>([]);
-  
+  const [groupCredits, setGroupCredits] = useState<GroupCredits>({});
+
   // グループ保存フラグ
   const isFirstGroups = useRef(true);
   const isFirstCharacters = useRef(true);
+  const isFirstGroupCredits = useRef(true);
 
   // 初回マウント時にデータを読み込み
   useEffect(() => {
@@ -105,8 +109,22 @@ export const useCharacterManagement = (
         setGroups([]);
         isFirstGroups.current = false;
       }
+
+      // group credits（グループ名 → クレジット表記）
+      const savedGroupCredits = await dataManagement.loadData('voiscripter_group_credits');
+      if (savedGroupCredits) {
+        try {
+          const parsed = JSON.parse(savedGroupCredits);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            setGroupCredits(parsed);
+          }
+        } catch (error) {
+          console.error('Group credits parse error:', error);
+        }
+      }
+      isFirstGroupCredits.current = false;
     };
-    
+
     loadInitialData();
   }, [dataManagement.saveDirectory]);
 
@@ -135,6 +153,14 @@ export const useCharacterManagement = (
     }
   }, [groups]);
 
+  // group credits保存（全削除の反映が必要なため空オブジェクトでも保存する）
+  useEffect(() => {
+    if (isFirstGroupCredits.current) return;
+    if (typeof window === 'undefined') return;
+
+    dataManagement.saveData('voiscripter_group_credits', JSON.stringify(groupCredits));
+  }, [groupCredits]);
+
   // saveDirectory変更時のキャラクター・グループ設定の再保存
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -147,7 +173,10 @@ export const useCharacterManagement = (
       dataManagement.saveData('voiscripter_groups', JSON.stringify(groups));
       //console.log('saveDirectory変更後、グループ設定を保存:', groups.length, '個');
     }
-  }, [dataManagement.saveDirectory, characters, groups]);
+    if (Object.keys(groupCredits).length > 0) {
+      dataManagement.saveData('voiscripter_group_credits', JSON.stringify(groupCredits));
+    }
+  }, [dataManagement.saveDirectory, characters, groups, groupCredits]);
 
   // キャラクター追加
   const handleAddCharacter = (character: Character) => {
@@ -190,11 +219,34 @@ export const useCharacterManagement = (
   // グループ削除
   const handleDeleteGroup = (group: string) => {
     setGroups(prev => prev.filter(g => g !== group));
-    
+
     // 削除されたグループのキャラクターを「なし」に変更
-    setCharacters(prev => prev.map(char => 
+    setCharacters(prev => prev.map(char =>
       char.group === group ? { ...char, group: 'なし' } : char
     ));
+
+    // クレジット表記も削除
+    setGroupCredits(prev => {
+      if (!(group in prev)) return prev;
+      const next = { ...prev };
+      delete next[group];
+      return next;
+    });
+  };
+
+  // グループのクレジット表記を設定（空文字で削除）
+  const handleSetGroupCredit = (group: string, credit: string) => {
+    setGroupCredits(prev => {
+      const trimmed = credit.trim();
+      if (!trimmed) {
+        if (!(group in prev)) return prev;
+        const next = { ...prev };
+        delete next[group];
+        return next;
+      }
+      if (prev[group] === trimmed) return prev;
+      return { ...prev, [group]: trimmed };
+    });
   };
 
   // キャラクターの並び替え
@@ -416,6 +468,8 @@ export const useCharacterManagement = (
     setCharacters,
     groups,
     setGroups,
+    groupCredits,
+    handleSetGroupCredit,
     handleAddCharacter,
     handleUpdateCharacter,
     handleDeleteCharacter,

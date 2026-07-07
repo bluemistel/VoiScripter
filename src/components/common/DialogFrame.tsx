@@ -21,6 +21,25 @@ const getEnabledActionButtons = (root: ParentNode) => {
   ).filter((button) => !button.disabled && isElementVisible(button));
 };
 
+// ダイアログ表示中は背景（テキストブロック側）のスクロールを停止する。
+// 複数のダイアログが重なるためカウントで管理（検索ウィンドウは DialogFrame
+// 非使用のため対象外＝スクロール可能なまま）。
+let scrollLockCount = 0;
+const lockBodyScroll = () => {
+  if (typeof document === 'undefined') return;
+  scrollLockCount++;
+  if (scrollLockCount === 1) {
+    document.body.style.overflow = 'hidden';
+  }
+};
+const unlockBodyScroll = () => {
+  if (typeof document === 'undefined') return;
+  scrollLockCount = Math.max(0, scrollLockCount - 1);
+  if (scrollLockCount === 0) {
+    document.body.style.overflow = '';
+  }
+};
+
 export default function DialogFrame({
   isOpen,
   onCancel,
@@ -42,6 +61,13 @@ export default function DialogFrame({
     const tagName = el.tagName.toLowerCase();
     return tagName === 'input' || tagName === 'textarea' || el.isContentEditable;
   };
+
+  // ダイアログ表示中は背景のスクロールを停止
+  useEffect(() => {
+    if (!isOpen) return;
+    lockBodyScroll();
+    return () => unlockBodyScroll();
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;

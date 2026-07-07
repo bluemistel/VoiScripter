@@ -8,6 +8,8 @@ import ProjectDialog from '@/components/ProjectDialog';
 import CSVExportDialog from '@/components/CSVExportDialog';
 import CharacterManager from '@/components/CharacterManager';
 import SearchDialog, { SearchResult } from '@/components/SearchDialog';
+import ScriptViewDialog from '@/components/ScriptViewDialog';
+import StagePanel from '@/components/StagePanel';
 import DataSyncDialog from '@/components/DataSyncDialog';
 import UpdateDialog from '@/components/UpdateDialog';
 import DialogFrame from '@/components/common/DialogFrame';
@@ -54,6 +56,8 @@ export default function Home() {
 
   // ローディング状態
   const [isLoading, setIsLoading] = useState(true);
+  // 立ち絵ステージ用: フォーカス中のブロックID
+  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [syncSession, setSyncSession] = useState<{ uuid: string; password: string } | null>(null);
   const { syncToCloud } = useDataSync();
 
@@ -492,6 +496,15 @@ export default function Home() {
     setIsProjectDialogOpen(true);
   };
 
+  // 立ち絵ステージに表示するブロック（フォーカス中 → 見つからなければ現在シーンの最後のセリフ）
+  const activeStageBlock = (() => {
+    if (!settings.stagePanelEnabled || !selectedSceneId) return null;
+    const blocks = project.scenes.find(s => s.id === selectedSceneId)?.scripts[0]?.blocks || [];
+    const focused = activeBlockId ? blocks.find(b => b.id === activeBlockId) : undefined;
+    if (focused?.characterId) return focused;
+    return [...blocks].reverse().find(b => b.characterId) || null;
+  })();
+
   // 検索機能
   const handleSearch = (query: string, searchAllScenes: boolean): SearchResult[] => {
     const results: SearchResult[] = [];
@@ -681,6 +694,8 @@ export default function Home() {
         groups={groups}
         onAddGroup={characterManagement.handleAddGroup}
         onDeleteGroup={characterManagement.handleDeleteGroup}
+        groupCredits={characterManagement.groupCredits}
+        onSetGroupCredit={characterManagement.handleSetGroupCredit}
         onReorderCharacters={characterManagement.handleReorderCharacters}
         onReorderGroups={characterManagement.handleReorderGroups}
         projectName={project.name}
@@ -712,6 +727,8 @@ export default function Home() {
         onOpenSettings={() => uiState.setIsSettingsOpen(true)}
         onOpenSearch={() => uiState.setIsSearchDialogOpen(true)}
         onOpenDataSync={() => uiState.setIsDataSyncOpen(true)}
+        onOpenScriptView={() => uiState.setIsScriptViewOpen(true)}
+        onNotification={showNotification}
         showLatestDownloadMenu={appUpdate.isUpdateSkipped}
         onOpenLatestDownload={handleOpenLatestDownload}
         projectList={projectManagement.projectList}
@@ -744,6 +761,11 @@ export default function Home() {
           }`}
         >
           {project && selectedSceneId ? (
+          <div className="flex items-start gap-3">
+          {settings.stagePanelEnabled && settings.stagePanelSide === 'left' && (
+            <StagePanel characters={characters} activeBlock={activeStageBlock} />
+          )}
+          <div className="flex-1 min-w-0">
           <ScriptEditor
             script={project.scenes.find(s => s.id === selectedSceneId)?.scripts[0] || buildEmptyScript({ id: 'placeholder', title: 'placeholder' })}
             onUpdateBlock={handleBlockUpdate}
@@ -831,6 +853,7 @@ export default function Home() {
             enterOnlyBlockAdd={settings.enterOnlyBlockAdd}
             reverseToolbarOrder={settings.reverseToolbarOrder}
             simpleMode={settings.simpleMode}
+            bubbleTheme={settings.bubbleTheme}
             currentProjectId={projectId}
             onUpdateScript={handleScriptUpdate}
             onUndo={handleUndoAction}
@@ -894,7 +917,13 @@ export default function Home() {
                 }
               }
             }}
+            onActiveBlockChange={setActiveBlockId}
           />
+          </div>
+          {settings.stagePanelEnabled && settings.stagePanelSide === 'right' && (
+            <StagePanel characters={characters} activeBlock={activeStageBlock} />
+          )}
+          </div>
         ) : (
           // 現在開いているプロジェクトが存在しない、かつ、シーンがひとつもない場合
             // プロジェクトリストにdefaultのみしか存在しない場合（初回起動時、または、プロジェクトをすべて削除した場合）
@@ -1047,6 +1076,8 @@ export default function Home() {
           exportImport.handleExportPresetSeparator(separator, includeTogaki, selectedOnly, fileFormat, useGroupExport, selectedGroups, useSceneExport, sceneIds);
         }}
         project={project}
+        groupCredits={characterManagement.groupCredits}
+        onNotification={showNotification}
       />
 
       {/* CharacterManager */}
@@ -1060,12 +1091,24 @@ export default function Home() {
         groups={groups}
         onAddGroup={characterManagement.handleAddGroup}
         onDeleteGroup={characterManagement.handleDeleteGroup}
+        groupCredits={characterManagement.groupCredits}
+        onSetGroupCredit={characterManagement.handleSetGroupCredit}
         onReorderCharacters={characterManagement.handleReorderCharacters}
         onReorderGroups={characterManagement.handleReorderGroups}
         currentProjectId={projectId}
         projectList={projectList}
         getCharacterProjectStates={characterManagement.getCharacterProjectStates}
         saveCharacterProjectStates={characterManagement.saveCharacterProjectStates}
+      />
+
+      {/* ビュー（チャット / キャラ台詞） */}
+      <ScriptViewDialog
+        isOpen={uiState.isScriptViewOpen}
+        onClose={() => uiState.setIsScriptViewOpen(false)}
+        project={project}
+        characters={characters}
+        selectedSceneId={selectedSceneId}
+        onNavigateToResult={handleNavigateToResult}
       />
 
       {/* Settings */}
@@ -1082,6 +1125,12 @@ export default function Home() {
         onFontSizeChange={settings.handleFontSizeChange}
         simpleMode={settings.simpleMode}
         onSimpleModeChange={settings.handleSimpleModeChange}
+        bubbleTheme={settings.bubbleTheme}
+        onBubbleThemeChange={settings.handleBubbleThemeChange}
+        stagePanelEnabled={settings.stagePanelEnabled}
+        onStagePanelEnabledChange={settings.handleStagePanelEnabledChange}
+        stagePanelSide={settings.stagePanelSide}
+        onStagePanelSideChange={settings.handleStagePanelSideChange}
         showLatestDownloadMenu={appUpdate.isUpdateSkipped}
         onOpenLatestDownload={handleOpenLatestDownload}
         shortcuts={shortcutConfig.shortcuts}

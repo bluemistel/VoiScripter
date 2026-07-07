@@ -1,4 +1,4 @@
-import { Project, ScriptBlock, Character } from '@/types';
+import { Project, ScriptBlock, Character, MaterialCredit, EmotionSetting } from '@/types';
 import { buildEmptyScript } from '@/utils/scriptDefaults';
 import { DataManagementHook } from './useDataManagement';
 
@@ -313,16 +313,24 @@ export const useExportImport = (
   // キャラクター設定のCSVエクスポート
   const handleExportCharacterCSV = () => {
     const rows = [
-      ['ID', '名前', 'アイコン', 'グループ', '背景色', '無効プロジェクト', 'ユーザープリセット'],
-      ...characters.map(char => [
-        char.id,
-        char.name,
-        char.emotions.normal.iconUrl,
-        char.group,
-        char.backgroundColor || '#e5e7eb',
-        char.disabledProjects ? char.disabledProjects.join(';') : '',
-        char.userPresets && char.userPresets.length > 0 ? JSON.stringify(char.userPresets) : ''
-      ])
+      ['ID', '名前', 'アイコン', 'グループ', '背景色', '無効プロジェクト', 'ユーザープリセット', '素材クレジット', '表情差分'],
+      ...characters.map(char => {
+        // normal 以外の表情差分（アイコン＋プリセット連動）をJSONで往復させる
+        const extraEmotions = Object.fromEntries(
+          Object.entries(char.emotions).filter(([key]) => key !== 'normal')
+        );
+        return [
+          char.id,
+          char.name,
+          char.emotions.normal.iconUrl,
+          char.group,
+          char.backgroundColor || '#e5e7eb',
+          char.disabledProjects ? char.disabledProjects.join(';') : '',
+          char.userPresets && char.userPresets.length > 0 ? JSON.stringify(char.userPresets) : '',
+          char.materialCredit && Object.values(char.materialCredit).some(v => v) ? JSON.stringify(char.materialCredit) : '',
+          Object.keys(extraEmotions).length > 0 ? JSON.stringify(extraEmotions) : ''
+        ];
+      })
     ];
     
     const csv = encodeCSV(rows);
@@ -577,6 +585,8 @@ export const useExportImport = (
           const backgroundColor = row[4]?.trim() || '#e5e7eb';
           const disabledProjectsStr = row[5]?.trim() || '';
           const userPresetsStr = row[6]?.trim() || '';
+          const materialCreditStr = row[7]?.trim() || '';
+          const extraEmotionsStr = row[8]?.trim() || '';
 
           let userPresets: { id: string; name: string }[] | undefined;
           if (userPresetsStr) {
@@ -590,20 +600,64 @@ export const useExportImport = (
             }
           }
 
+          let materialCredit: MaterialCredit | undefined;
+          if (materialCreditStr) {
+            try {
+              const parsed = JSON.parse(materialCreditStr);
+              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                materialCredit = {
+                  ...(typeof parsed.url === 'string' ? { url: parsed.url } : {}),
+                  ...(typeof parsed.id === 'string' ? { id: parsed.id } : {}),
+                  ...(typeof parsed.creator === 'string' ? { creator: parsed.creator } : {}),
+                  ...(typeof parsed.memo === 'string' ? { memo: parsed.memo } : {})
+                };
+              }
+            } catch {
+              // 旧形式またはパース失敗時はクレジットなしとして扱う
+            }
+          }
+
+          let extraEmotions: Record<string, EmotionSetting> | undefined;
+          if (extraEmotionsStr) {
+            try {
+              const parsed = JSON.parse(extraEmotionsStr);
+              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                extraEmotions = Object.fromEntries(
+                  Object.entries(parsed)
+                    .filter(([key, value]) =>
+                      key !== 'normal' && value && typeof (value as EmotionSetting).iconUrl === 'string')
+                    .map(([key, value]) => {
+                      const setting = value as EmotionSetting;
+                      return [key, {
+                        iconUrl: setting.iconUrl,
+                        ...(typeof setting.userPresetId === 'string' ? { userPresetId: setting.userPresetId } : {})
+                      }];
+                    })
+                );
+              }
+            } catch {
+              // 旧形式またはパース失敗時は表情差分なしとして扱う
+            }
+          }
+
           if (characterName) {
             const existingCharacter = characters.find(c => c.name === characterName);
 
             if (existingCharacter) {
               const disabledProjects = disabledProjectsStr ? disabledProjectsStr.split(';').filter(p => p.trim() !== '') : [];
-              if (existingCharacter.group !== characterGroup || existingCharacter.emotions.normal.iconUrl !== iconUrl || existingCharacter.backgroundColor !== backgroundColor || existingCharacter.id !== characterId || JSON.stringify(existingCharacter.disabledProjects || []) !== JSON.stringify(disabledProjects)) {
+              if (existingCharacter.group !== characterGroup || existingCharacter.emotions.normal.iconUrl !== iconUrl || existingCharacter.backgroundColor !== backgroundColor || existingCharacter.id !== characterId || JSON.stringify(existingCharacter.disabledProjects || []) !== JSON.stringify(disabledProjects) || (userPresets !== undefined && JSON.stringify(existingCharacter.userPresets || []) !== JSON.stringify(userPresets)) || (materialCredit !== undefined && JSON.stringify(existingCharacter.materialCredit || {}) !== JSON.stringify(materialCredit)) || (extraEmotions !== undefined && JSON.stringify(Object.fromEntries(Object.entries(existingCharacter.emotions).filter(([k]) => k !== 'normal'))) !== JSON.stringify(extraEmotions))) {
                 const updatedCharacter = {
                   ...existingCharacter,
                   id: characterId,
                   group: characterGroup,
-                  emotions: { ...existingCharacter.emotions, normal: { iconUrl } },
+                  emotions: {
+                    ...(extraEmotions !== undefined ? extraEmotions : existingCharacter.emotions),
+                    normal: { ...existingCharacter.emotions.normal, iconUrl }
+                  },
                   backgroundColor,
                   disabledProjects: disabledProjects,
-                  ...(userPresets !== undefined ? { userPresets } : {})
+                  ...(userPresets !== undefined ? { userPresets } : {}),
+                  ...(materialCredit !== undefined ? { materialCredit } : {})
                 };
                 onCharactersUpdate(characters.map(char =>
                   char.name === characterName ? updatedCharacter : char
@@ -616,6 +670,7 @@ export const useExportImport = (
               }
 
               const emotions = {
+                ...(extraEmotions || {}),
                 normal: { iconUrl }
               };
 
@@ -628,7 +683,8 @@ export const useExportImport = (
                 emotions,
                 backgroundColor,
                 disabledProjects: disabledProjects,
-                ...(userPresets !== undefined ? { userPresets } : {})
+                ...(userPresets !== undefined ? { userPresets } : {}),
+                ...(materialCredit !== undefined ? { materialCredit } : {})
               });
             }
           }

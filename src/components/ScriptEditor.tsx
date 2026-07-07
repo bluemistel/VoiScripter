@@ -21,6 +21,10 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Script, ScriptBlock, Character, Emotion, StorySeparatorSegment, StorySeparatorImage } from '@/types';
 import { loadStoryPanelAsset, removeStoryPanelAsset, saveStoryPanelAsset } from '@/utils/storyPanelAssets';
+import { getEmotionKeys, getEmotionIconUrl } from '@/utils/emotionUtils';
+import { getReadableTextColor } from '@/utils/colorUtils';
+import { buildChatSideMap } from '@/utils/chatUtils';
+import type { BubbleTheme } from '@/hooks/useSettings';
 import {
   ArrowUpIcon,
   ArrowDownIcon,
@@ -63,6 +67,7 @@ interface ScriptEditorProps {
   enterOnlyBlockAdd?: boolean;
   reverseToolbarOrder?: boolean;
   simpleMode?: boolean;
+  bubbleTheme?: BubbleTheme;
   currentProjectId?: string;
   onUpdateScript?: (updates: Partial<Script>) => void;
   onUndo?: () => void;
@@ -71,6 +76,7 @@ interface ScriptEditorProps {
   canRedo?: boolean;
   onBlockDragStateChange?: (isDragging: boolean, blockIds: string[]) => void;
   onDragMovePosition?: (x: number, y: number) => void;
+  onActiveBlockChange?: (blockId: string) => void;
 }
 
 interface SortableBlockProps {
@@ -83,8 +89,10 @@ interface SortableBlockProps {
   onMoveUp: () => void;
   onMoveDown: () => void;
   onClick: (event: React.MouseEvent) => void;
+  onTextareaFocus?: () => void;
   enterOnlyBlockAdd?: boolean;
   simpleMode?: boolean;
+  bubbleTheme?: BubbleTheme;
   currentProjectId?: string;
   script: Script;
   onInsertBlock: (block: ScriptBlock, index: number) => void;
@@ -101,11 +109,13 @@ function SortableBlock({
   onMoveUp,
   onMoveDown,
   onClick,
+  onTextareaFocus,
   textareaRef,
   isSelected,
   isMultiDragGhost = false,
   enterOnlyBlockAdd = false,
   simpleMode = false,
+  bubbleTheme = 'classic',
   currentProjectId,
   script,
   onInsertBlock,
@@ -145,6 +155,7 @@ function SortableBlock({
   // textareaのfocus状態を管理
   const [isTextareaFocused, setIsTextareaFocused] = useState(false);
   const [isMobileCharacterPickerOpen, setIsMobileCharacterPickerOpen] = useState(false);
+  const [isEmotionPickerOpen, setIsEmotionPickerOpen] = useState(false);
   const [isMobileView, setIsMobileView] = useState(false);
 
   useEffect(() => {
@@ -169,10 +180,12 @@ function SortableBlock({
   const renderCharacterVisual = () => {
     if (!character) return null;
     const sizeClass = simpleMode ? 'w-8 h-8' : 'w-16 h-16 sm:w-16 sm:h-16 md:w-16 md:h-16';
-    if (character.emotions[block.emotion]?.iconUrl) {
+    // 感情差分アイコン（未設定・削除済みの感情は normal にフォールバック）
+    const iconUrl = getEmotionIconUrl(character, block.emotion);
+    if (iconUrl) {
       return (
         <img
-          src={character.emotions[block.emotion]?.iconUrl}
+          src={iconUrl}
           alt={character.name}
           className={`${sizeClass} rounded-full object-cover mt-0 ${simpleMode ? 'mr-1' : 'mr-2'} transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
         />
@@ -201,8 +214,33 @@ function SortableBlock({
   };
 
   const handleSelectCharacter = (characterId: string) => {
-    onUpdate({ characterId, userPresetId: undefined });
+    onUpdate({ characterId, emotion: 'normal', userPresetId: undefined });
     setIsMobileCharacterPickerOpen(false);
+  };
+
+  // このキャラクターの感情ラベル一覧（normal のみなら感情ピッカーは出さない）
+  const emotionKeys = character ? getEmotionKeys(character) : [];
+  const hasEmotionVariants = emotionKeys.length > 1;
+
+  // 感情を選択（連動プリセットが設定されていれば同時に切り替える）
+  const handleSelectEmotion = (emotion: Emotion) => {
+    const linkedPresetId = character?.emotions[emotion]?.userPresetId;
+    onUpdate({ emotion, ...(linkedPresetId ? { userPresetId: linkedPresetId } : {}) });
+    setIsEmotionPickerOpen(false);
+  };
+
+  // 感情ピッカー内のアイコン表示
+  const renderEmotionOption = (emotion: Emotion) => {
+    if (!character) return null;
+    const iconUrl = getEmotionIconUrl(character, emotion);
+    return iconUrl ? (
+      <img src={iconUrl} alt={emotion} className="w-9 h-9 rounded-full object-cover border shrink-0" />
+    ) : (
+      <div
+        className="w-9 h-9 rounded-full border shrink-0"
+        style={{ backgroundColor: character.backgroundColor || '#e5e7eb' }}
+      />
+    );
   };
 
   const keepTextareaAboveToolbar = (target: HTMLTextAreaElement) => {
@@ -239,6 +277,44 @@ function SortableBlock({
       emotion: (lastSpeakerBlock?.emotion || 'normal') as Emotion
     };
   };
+
+  // フキダシテーマ（シンプルモード・ト書きには適用しない）
+  const activeTheme: BubbleTheme = (!simpleMode && !isTogaki) ? bubbleTheme : 'classic';
+  const charColor = character?.backgroundColor || '#9ca3af';
+
+  // チャットテーマ: キャラの左右振り分けと連続発言判定
+  const isChatRight = activeTheme === 'chat' && !!character &&
+    buildChatSideMap(characters).get(character.id) === 'right';
+  const showChatName = (() => {
+    if (activeTheme !== 'chat' || !character) return false;
+    const blockIndex = script.blocks.findIndex(b => b.id === block.id);
+    return blockIndex <= 0 || script.blocks[blockIndex - 1].characterId !== block.characterId;
+  })();
+
+  // テーマごとのフキダシ（textarea）のクラスとスタイル
+  const bubbleClass = simpleMode
+    ? 'rounded-lg p-1 bg-transparent'
+    : activeTheme === 'pop'
+      ? 'rounded-[14px] p-2 bg-card/95 min-h-[60px]'
+      : activeTheme === 'cinema'
+        ? 'rounded-lg p-2 bg-transparent min-h-[40px]'
+        : activeTheme === 'chat'
+          ? 'p-2 bg-card/95 min-h-[60px]'
+          : 'rounded-2xl p-2 bg-card/95 shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20 min-h-[60px]';
+  const bubbleStyle: React.CSSProperties = simpleMode
+    ? { borderRadius: '8px' }
+    : activeTheme === 'pop'
+      ? { borderRadius: '14px', border: `2px solid ${charColor}` }
+      : activeTheme === 'cinema'
+        ? { borderRadius: '8px' }
+        : activeTheme === 'chat'
+          // 左右ともパーソナルカラーの淡色（複数キャラ登場を想定し、送信者=白のLINE風強制はしない）
+          ? {
+              borderRadius: isChatRight ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+              backgroundColor: `${charColor}33`,
+              border: `1px solid ${charColor}55`
+            }
+          : { borderRadius: '20px 20px 20px 0' };
 
   const renderCharacterGridVisual = (c: Character) => {
     const iconUrl = c.emotions.normal?.iconUrl;
@@ -286,7 +362,7 @@ function SortableBlock({
               onPointerDown={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
               onTouchStart={(e) => e.stopPropagation()}
-              onFocus={() => setIsTextareaFocused(true)}
+              onFocus={() => { setIsTextareaFocused(true); onTextareaFocus?.(); }}
               onBlur={() => setIsTextareaFocused(false)}
               onKeyDown={e => {
                 // DnDキーボードセンサーへの伝播を防ぎ、IME確定Enterで並び替えモードに入らないようにする
@@ -325,11 +401,11 @@ function SortableBlock({
 
             {/* キャラ選択リストとアイコン群を横並びに */}
             {!simpleMode && (
-            <div className="flex flex-col justify-between items-center h-16 mr-0.5 sm:mr-1 md:mr-2 mt-0">
+            <div className="order-3 flex flex-col justify-between items-center h-16 mr-0.5 sm:mr-1 md:mr-2 mt-0">
               {!isMobileView && (
                 <select
                   value={block.characterId}
-                  onChange={e => onUpdate({ characterId: e.target.value })}
+                  onChange={e => onUpdate({ characterId: e.target.value, emotion: 'normal', userPresetId: undefined })}
                   className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-24 sm:w-28 md:w-32 lg:w-36 mb-1"
                   style={{ height: '2.5rem' }}
                 >
@@ -387,8 +463,8 @@ function SortableBlock({
 
         ) : (
           <div className="flex items-start space-x-2">
-            {/* 左列: キャラアイコン */}
-            <div className="shrink-0">
+            {/* 左列: キャラアイコン（表情差分があればクリックで表情ピッカー。チャットテーマ右側キャラはアイコンを右に） */}
+            <div className={`shrink-0 relative${isChatRight ? ' order-2' : ''}`}>
               {isMobileView ? (
                 <button
                   type="button"
@@ -398,11 +474,73 @@ function SortableBlock({
                 >
                   {renderCharacterVisual()}
                 </button>
+              ) : hasEmotionVariants ? (
+                <button
+                  type="button"
+                  className="rounded-full cursor-pointer"
+                  onClick={(e) => { e.stopPropagation(); setIsEmotionPickerOpen(v => !v); }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  title="クリックで表情を選択"
+                >
+                  {renderCharacterVisual()}
+                </button>
               ) : (
                 renderCharacterVisual()
               )}
+              {!isMobileView && hasEmotionVariants && isEmotionPickerOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setIsEmotionPickerOpen(false); }} />
+                  <div
+                    className={`absolute ${isChatRight ? 'right-0' : 'left-0'} top-full mt-1 z-50 bg-popover border rounded-lg shadow-lg p-2 w-44 max-h-64 overflow-y-auto`}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    {emotionKeys.map(emotion => (
+                      <button
+                        key={emotion}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleSelectEmotion(emotion); }}
+                        className={`w-full flex items-center gap-2 p-1.5 rounded hover:bg-accent text-left text-xs ${block.emotion === emotion ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}`}
+                      >
+                        {renderEmotionOption(emotion)}
+                        <span className="truncate">{emotion === 'normal' ? '標準' : emotion}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
-            <div className="relative flex-1 pl-2">
+            <div
+              className={`relative flex-1 pl-2${isChatRight ? ' order-1' : ''}`}
+              style={activeTheme === 'cinema' ? { borderLeft: `3px solid ${charColor}`, paddingLeft: '10px' } : undefined}
+            >
+              {/* チャット: 話者名（連続発言時は省略） */}
+              {activeTheme === 'chat' && character && showChatName && (
+                <p className={`text-[10px] text-muted-foreground mb-0.5 select-none ${isChatRight ? 'text-right pr-1' : 'pl-1'}`}>
+                  {character.name}
+                </p>
+              )}
+              {/* シネマ: フキダシなしの脚本風キャラ名ラベル */}
+              {activeTheme === 'cinema' && character && (
+                <p
+                  className="text-[11px] font-medium tracking-widest mb-0.5 select-none"
+                  style={{ color: `color-mix(in srgb, ${charColor} 65%, var(--color-foreground))` }}
+                >
+                  {character.name}
+                </p>
+              )}
+              {/* フキダシ基準の配置ラッパー（名前チップ・三角形・プリセット選択はフキダシに追従させる） */}
+              <div className={`relative${activeTheme === 'pop' ? ' mt-2' : ''}`}>
+              {/* ポップ: フキダシに食い込むキャラ名チップ */}
+              {activeTheme === 'pop' && character && (
+                <span
+                  className="absolute top-[-9px] left-4 z-10 text-[10px] font-medium px-2 py-px rounded-full select-none pointer-events-none max-w-[10rem] truncate"
+                  style={{ backgroundColor: charColor, color: getReadableTextColor(charColor) }}
+                >
+                  {character.name}
+                </span>
+              )}
               <textarea
                 ref={textareaRef}
                 value={block.text}
@@ -435,13 +573,13 @@ function SortableBlock({
                   }
                 }}
                 placeholder="セリフを入力"
-                className={`${simpleMode ? 'rounded-lg p-1 bg-transparent' : 'rounded-2xl p-2 bg-card/95 shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20 min-h-[60px]'} w-full text-foreground ${simpleMode ? '' : 'focus:ring-1 focus:ring-primary/40'} focus:outline-none resize-none overflow-hidden${!simpleMode && !isMobileView && character?.userPresets?.length ? ' pr-[7.5rem]' : ''}`}
+                className={`${bubbleClass} w-full text-foreground ${simpleMode ? '' : 'focus:ring-1 focus:ring-primary/40'} focus:outline-none resize-none overflow-hidden${!simpleMode && !isMobileView && character?.userPresets?.length ? ' pr-[7.5rem]' : ''}`}
                 rows={1}
-                style={{ height: 'auto', borderRadius: simpleMode ? '8px' : '20px 20px 20px 0', fontSize: 'var(--editor-font-size, 14px)', lineHeight: simpleMode ? '1.4' : undefined, minHeight: simpleMode ? 'calc(var(--editor-font-size, 14px) * 1.4 + 8px)' : undefined }}
+                style={{ height: 'auto', ...bubbleStyle, fontSize: 'var(--editor-font-size, 14px)', lineHeight: simpleMode ? '1.4' : undefined, minHeight: simpleMode ? 'calc(var(--editor-font-size, 14px) * 1.4 + 8px)' : undefined }}
                 onPointerDown={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}
-                onFocus={() => setIsTextareaFocused(true)}
+                onFocus={() => { setIsTextareaFocused(true); onTextareaFocus?.(); }}
                 onBlur={() => setIsTextareaFocused(false)}
                 onInput={e => {
                   const target = e.target as HTMLTextAreaElement;
@@ -450,8 +588,8 @@ function SortableBlock({
                   keepTextareaAboveToolbar(target);
                 }}
               />
-              {/* フキダシの三角形 */}
-              {!simpleMode && (
+              {/* フキダシの三角形（クラシックのみ） */}
+              {!simpleMode && activeTheme === 'classic' && (
                 <div className="absolute left-[-4px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-400 dark:border-r-gray-500"></div>
               )}
               {/* プリセット名表示（シンプルモード: 選択時のみテキスト表示） */}
@@ -480,14 +618,15 @@ function SortableBlock({
                   ))}
                 </select>
               )}
+              </div>
             </div>
             {/* キャラ選択リストとアイコン群を横並びに */}
             {!simpleMode && (
-            <div className="flex flex-col justify-between items-center h-16 mr-0.5 sm:mr-1 md:mr-2 mt-0">
+            <div className="order-3 flex flex-col justify-between items-center h-16 mr-0.5 sm:mr-1 md:mr-2 mt-0">
               {!isMobileView && (
                 <select
                   value={block.characterId}
-                  onChange={e => onUpdate({ characterId: e.target.value, userPresetId: undefined })}
+                  onChange={e => onUpdate({ characterId: e.target.value, emotion: 'normal', userPresetId: undefined })}
                   className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-24 sm:w-28 md:w-32 lg:w-36 mb-1"
                   style={{ height: '2.5rem' }}
                   title="Alt+↑↓:話者を切り替え"
@@ -562,6 +701,25 @@ function SortableBlock({
               閉じる
             </button>
           </div>
+          {/* 表情選択（横スクロール） */}
+          {hasEmotionVariants && (
+            <div className="mb-3">
+              <p className="text-xs text-muted-foreground mb-1.5">表情</p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {emotionKeys.map(emotion => (
+                  <button
+                    key={emotion}
+                    type="button"
+                    className={`shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs ${block.emotion === emotion ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border text-muted-foreground'}`}
+                    onClick={() => handleSelectEmotion(emotion)}
+                  >
+                    {renderEmotionOption(emotion)}
+                    {emotion === 'normal' ? '標準' : emotion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {/* プリセット選択（横スクロール） */}
           {character?.userPresets && character.userPresets.length > 0 && (
             <div className="mb-3">
@@ -648,6 +806,7 @@ export default function ScriptEditor({
   enterOnlyBlockAdd = false,
   reverseToolbarOrder = false,
   simpleMode = false,
+  bubbleTheme = 'classic',
   currentProjectId,
   onUpdateScript,
   onUndo,
@@ -655,7 +814,8 @@ export default function ScriptEditor({
   canUndo = false,
   canRedo = false,
   onBlockDragStateChange,
-  onDragMovePosition
+  onDragMovePosition,
+  onActiveBlockChange
 }: ScriptEditorProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -2406,8 +2566,10 @@ export default function ScriptEditor({
                             isSelected={selectedBlockIds.includes(block.id)}
                             isMultiDragGhost={!!activeDragId && activeDragId !== block.id && selectedBlockIds.length > 1 && selectedBlockIds.includes(block.id)}
                             onClick={(event) => handleBlockClick(block.id, index, event)}
+                            onTextareaFocus={() => onActiveBlockChange?.(block.id)}
                             enterOnlyBlockAdd={enterOnlyBlockAdd}
                             simpleMode={simpleMode}
+                            bubbleTheme={bubbleTheme}
                             currentProjectId={currentProjectId}
                             script={script}
                             onInsertBlock={onInsertBlock}

@@ -54,7 +54,11 @@ export const restoreCharactersFromSyncPayload = (
       group: light.group || 'なし',
       backgroundColor: light.backgroundColor || '#e5e7eb',
       disabledProjects: light.disabledProjects || [],
-      emotions: existing?.emotions || { normal: { iconUrl: '' } }
+      emotions: existing?.emotions || { normal: { iconUrl: '' } },
+      // 軽量ペイロードに含まれないローカル固有情報は既存キャラから引き継ぐ
+      ...(existing?.userPresets !== undefined ? { userPresets: existing.userPresets } : {}),
+      ...(existing?.materialCredit !== undefined ? { materialCredit: existing.materialCredit } : {}),
+      ...(existing?.chatSide !== undefined ? { chatSide: existing.chatSide } : {})
     };
   });
 
