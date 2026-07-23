@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { 
   ArrowUpTrayIcon, 
@@ -15,7 +15,8 @@ import {
   MagnifyingGlassIcon,
   CloudArrowUpIcon,
   FolderIcon,
-  ChevronDownIcon
+  ChevronDownIcon,
+  ChatBubbleBottomCenterTextIcon
 } from '@heroicons/react/24/outline';
 import {
   DndContext,
@@ -36,7 +37,7 @@ import { CSS } from '@dnd-kit/utilities';
 import CharacterManager from './CharacterManager';
 import Settings from './Settings';
 import CSVExportDialog from './CSVExportDialog';
-import { Character, Project, Scene } from '@/types';
+import { Character, Project, Scene, GroupCredits } from '@/types';
 import DialogFrame from '@/components/common/DialogFrame';
 
 // ロゴパスを取得するカスタムフック
@@ -177,6 +178,8 @@ interface HeaderProps {
   groups: string[];
   onAddGroup: (group: string) => void;
   onDeleteGroup: (group: string) => void;
+  groupCredits: GroupCredits;
+  onSetGroupCredit: (group: string, credit: string) => void;
   onReorderCharacters?: (newOrder: Character[]) => void;
   onReorderGroups?: (newOrder: string[]) => void;
   projectName: string;
@@ -198,6 +201,8 @@ interface HeaderProps {
   saveCharacterProjectStates: (currentProjectId: string, characterStates: {[characterId: string]: boolean}, projectList?: string[]) => void;
   onOpenSearch: () => void;
   onOpenDataSync: () => void;
+  onOpenScriptView: () => void;
+  onNotification: (message: string, type: 'success' | 'error' | 'info') => void;
   showLatestDownloadMenu?: boolean;
   onOpenLatestDownload?: () => void;
   blockDropTargetSceneId?: string | null;
@@ -264,6 +269,8 @@ export default function Header(props: HeaderProps) {
     groups,
     onAddGroup,
     onDeleteGroup,
+    groupCredits,
+    onSetGroupCredit,
     onReorderCharacters,
     onReorderGroups,
     projectName,
@@ -286,11 +293,27 @@ export default function Header(props: HeaderProps) {
     saveCharacterProjectStates,
     onOpenSearch,
     onOpenDataSync,
+    onOpenScriptView,
+    onNotification,
     showLatestDownloadMenu = false,
     onOpenLatestDownload,
     blockDropTargetSceneId = null
   } = props;
   const logoPath = useLogoPath();
+
+  // 台本全体（全シーン）の台詞の合計文字数（ト書き・改行を除く）
+  const totalScriptChars = useMemo(() => {
+    let total = 0;
+    project?.scenes?.forEach(scene => {
+      scene.scripts.forEach(script => {
+        script.blocks.forEach(block => {
+          if (block.characterId) total += block.text.replace(/\n/g, '').length;
+        });
+      });
+    });
+    return total;
+  }, [project]);
+
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
   const [isCSVExportDialogOpen, setIsCSVExportDialogOpen] = useState(false);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
@@ -535,6 +558,12 @@ export default function Header(props: HeaderProps) {
             >
               <DocumentTextIcon className="w-7 h-7"/>
             </button>
+            <span
+              className="hidden sm:inline text-xs text-muted-foreground whitespace-nowrap select-none"
+              title="台本全体の文字数（全シーンの台詞の合計。ト書き・改行は含みません）"
+            >
+              {totalScriptChars.toLocaleString()}字
+            </span>
           </div>
         </h1>
         {/* Desktop menu - hidden on mobile */}
@@ -592,6 +621,13 @@ export default function Header(props: HeaderProps) {
             title="検索 (Ctrl+F)"
           >
             <MagnifyingGlassIcon className="w-7 h-7" />
+          </button>
+          <button
+            onClick={onOpenScriptView}
+            className="p-1 text-primary hover:bg-accent rounded-lg transition"
+            title="ビュー（チャット / キャラ台詞）"
+          >
+            <ChatBubbleBottomCenterTextIcon className="w-7 h-7" />
           </button>
           <button
             onClick={() => setIsCharacterModalOpen(true)}
@@ -723,6 +759,19 @@ export default function Header(props: HeaderProps) {
                   </div>
                 </button>
                 
+                <button
+                  onClick={() => {
+                    onOpenScriptView();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground"
+                >
+                  <div className="flex items-center space-x-3">
+                    <ChatBubbleBottomCenterTextIcon className="w-5 h-5" />
+                    <span>ビュー（チャット / キャラ台詞）</span>
+                  </div>
+                </button>
+
                 <button
                   onClick={() => {
                     setIsCharacterModalOpen(true);
@@ -876,6 +925,8 @@ export default function Header(props: HeaderProps) {
           groups={groups}
           onAddGroup={onAddGroup}
           onDeleteGroup={onDeleteGroup}
+          groupCredits={groupCredits}
+          onSetGroupCredit={onSetGroupCredit}
           onReorderCharacters={onReorderCharacters}
           onReorderGroups={onReorderGroups}
           currentProjectId={project.id} projectList={projectList} getCharacterProjectStates={getCharacterProjectStates} saveCharacterProjectStates={saveCharacterProjectStates}              />
@@ -905,6 +956,8 @@ export default function Header(props: HeaderProps) {
         onExportProjectJson={onExportProjectJson}
         onExportPresetSeparator={onExportPresetSeparator}
         project={project}
+        groupCredits={groupCredits}
+        onNotification={onNotification}
       />
       <ImportChoiceDialog
          isOpen={isImportChoiceDialogOpen && !!pendingImportFile && !!pendingImportType}

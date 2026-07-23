@@ -22,7 +22,7 @@ export interface ProjectManagementHook {
   undoStack: ProjectHistory[];
   redoStack: ProjectHistory[];
   handleCreateProject: (name: string) => void;
-  handleNewProject: (name: string) => Project;
+  handleNewProject: (name: string, initialCharacterId?: string) => Project;
   handleDeleteProject: () => void;
   handleRenameProject: (newName: string) => void;
   deleteProjectById: (id: string, options?: { silent?: boolean }) => Promise<void>;
@@ -726,14 +726,26 @@ export const useProjectManagement = (
   const handleRenameProject = (newName: string) => { renameProjectById(project.id, newName); };
 
   // 新しいプロジェクト作成
-  const handleNewProject = (name: string): Project => {
+  const handleNewProject = (name: string, initialCharacterId?: string): Project => {
+    const emptyScript = buildEmptyScript({ title: '新しいシーン' });
+    // キャラクター設定済み（2回目以降のプロジェクト作成）の場合は、説明テキストを出す代わりに
+    // 最初のキャラクターの空ブロックを1つ用意しておき、すぐに台本を書き始められるようにする。
+    // キャラクター未設定（初回利用）のときは initialCharacterId が渡されず、従来どおり空のまま。
+    if (initialCharacterId) {
+      emptyScript.blocks = [{
+        id: Date.now().toString() + Math.random().toString(36).slice(2, 9),
+        characterId: initialCharacterId,
+        emotion: 'normal',
+        text: ''
+      }];
+    }
     const newProject: Project = {
       id: name,
       name: name,
       scenes: [{
         id: Date.now().toString(),
         name: '新しいシーン',
-        scripts: [buildEmptyScript({ title: '新しいシーン' })]
+        scripts: [emptyScript]
       }]
     };
     

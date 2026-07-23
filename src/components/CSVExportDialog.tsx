@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Character, Scene } from '@/types';
+import { Character, Scene, GroupCredits } from '@/types';
 import DialogFrame from '@/components/common/DialogFrame';
+import CreditExportPanel from '@/components/CreditExportPanel';
 
 interface CSVExportDialogProps {
   isOpen: boolean;
@@ -21,6 +22,8 @@ interface CSVExportDialogProps {
   onExportProjectJson: () => void;
   onExportPresetSeparator: (separator: string, includeTogaki: boolean, selectedOnly: boolean, fileFormat: 'csv' | 'txt', useGroupExport: boolean, selectedGroups: string[], useSceneExport: boolean, sceneIds: string[]) => void;
   project: any; // プロジェクトデータ
+  groupCredits: GroupCredits;
+  onNotification: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
 export default function CSVExportDialog({
@@ -39,7 +42,9 @@ export default function CSVExportDialog({
   onExportSceneCSV,
   onExportProjectJson,
   onExportPresetSeparator,
-  project
+  project,
+  groupCredits,
+  onNotification
 }: CSVExportDialogProps) {
   type ExportType = 'full' | 'serif-only' | 'character-setting' | 'project' | 'preset-separator';
   const [exportType, setExportType] = useState<ExportType>('full');
@@ -48,7 +53,7 @@ export default function CSVExportDialog({
   const [includeTogaki, setIncludeTogaki] = useState(false);
   const [exportSelectedOnly, setExportSelectedOnly] = useState(false);
   const [exportToClipboard, setExportToClipboard] = useState(false);
-  const [activeTab, setActiveTab] = useState<'script' | 'project' | 'character'>('script');
+  const [activeTab, setActiveTab] = useState<'script' | 'backup' | 'credit'>('script');
   const [useSceneExport, setUseSceneExport] = useState(false);
   const [sceneCheckboxes, setSceneCheckboxes] = useState<string[]>([]);
   const [fileFormat, setFileFormat] = useState<'csv' | 'txt'>('csv');
@@ -111,10 +116,8 @@ export default function CSVExportDialog({
 
   // タブ切り替え時にエクスポートタイプをリセット
   useEffect(() => {
-    if (activeTab === 'project') {
+    if (activeTab === 'backup') {
       setExportType('project');
-    } else if (activeTab === 'character') {
-      setExportType('character-setting');
     } else {
       setExportType('full');
     }
@@ -199,24 +202,24 @@ export default function CSVExportDialog({
               台本
             </button>
             <button
-              onClick={() => setActiveTab('project')}
+              onClick={() => setActiveTab('backup')}
               className={`flex-1 px-4 py-2 font-medium transition-colors ${
-                activeTab === 'project'
+                activeTab === 'backup'
                   ? 'text-primary border-b-2 border-primary'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              プロジェクト
+              バックアップ
             </button>
             <button
-              onClick={() => setActiveTab('character')}
+              onClick={() => setActiveTab('credit')}
               className={`flex-1 px-4 py-2 font-medium transition-colors ${
-                activeTab === 'character'
+                activeTab === 'credit'
                   ? 'text-primary border-b-2 border-primary'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              キャラクター
+              クレジット
             </button>
           </div>
         </div>
@@ -510,48 +513,61 @@ export default function CSVExportDialog({
           </>
         )}
 
-{/* プロジェクト設定タブの内容 */}
-        {activeTab === 'project' && (
+{/* バックアップタブの内容（プロジェクト / キャラクターをトグルで切り替え） */}
+        {activeTab === 'backup' && (
           <div className="mb-4">
-            <span className="text-foreground mb-2 font-semibold">プロジェクト</span>
-            <div className="space-y-2">
-              <label className="flex items-center space-x-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="exportType"
-                  value="project"
-                  checked={exportType === 'project'}
-                  onChange={() => setExportType('project')}
-                  className="text-primary"
-                />
-                <span className="text-foreground">プロジェクト全体をJSONでエクスポート</span>
-              </label>
-              <span className="block text-sm text-muted-foreground">現在選択中のプロジェクト全体をJSONファイルとしてエクスポートします。インポートで復元できます。</span>
+            {/* 対象の切り替えトグル */}
+            <div className="flex border rounded-lg overflow-hidden mb-4">
+              <button
+                onClick={() => setExportType('project')}
+                className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                  exportType === 'project'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                プロジェクト
+              </button>
+              <button
+                onClick={() => setExportType('character-setting')}
+                className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                  exportType === 'character-setting'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                キャラクター
+              </button>
             </div>
+
+            {exportType === 'project' ? (
+              <div className="space-y-1">
+                <span className="text-foreground font-semibold">プロジェクト全体をJSONでエクスポート</span>
+                <span className="block text-sm text-muted-foreground">現在選択中のプロジェクト全体をJSONファイルとしてエクスポートします。インポートで復元できます。</span>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <span className="text-foreground font-semibold">キャラクター設定のエクスポート</span>
+                <span className="block text-sm text-muted-foreground">全キャラクターの設定（アイコン・グループ・プリセット・素材クレジット・表情差分）をCSVでエクスポートします。インポートで復元できます。</span>
+              </div>
+            )}
           </div>
         )}
 
-{/* キャラクター設定タブの内容 */}
-        {activeTab === 'character' && (
-          <div className="mb-4">
-            <span className="text-foreground mb-2 font-semibold">キャラクター設定</span>
-            <div className="space-y-2">
-              <label className="flex items-center space-x-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="exportType"
-                  value="character-setting"
-                  checked={exportType === 'character-setting'}
-                  onChange={(e) => setExportType(e.target.value as ExportType)}
-                  className="text-primary"
-                />
-                <span className="text-foreground">キャラクター設定のエクスポート</span>
-              </label>
-            </div>
-          </div>
+{/* クレジットタブの内容 */}
+        {activeTab === 'credit' && (
+          <CreditExportPanel
+            project={project}
+            characters={characters}
+            groups={groups}
+            groupCredits={groupCredits}
+            selectedSceneId={selectedSceneId}
+            onNotification={onNotification}
+          />
         )}
 
-        {/* エクスポートボタン */}
+        {/* エクスポートボタン（クレジットタブはパネル内のボタンを使用） */}
+        {activeTab !== 'credit' && (
         <div className="flex flex-col space-y-2 mt-4">
           <button
             onClick={() => {
@@ -587,6 +603,7 @@ export default function CSVExportDialog({
             {exportToClipboard ? 'クリップボードに出力' : 'エクスポート'}
           </button>
         </div>
+        )}
         </div>
     </DialogFrame>
   );

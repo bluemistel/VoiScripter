@@ -7,6 +7,7 @@ import {
   SHORTCUT_DEFS, ShortcutDef, ShortcutId, ShortcutBinding, ShortcutMap,
   defaultShortcuts, formatBinding, bindingsEqual
 } from '@/types/shortcuts';
+import type { BubbleTheme } from '@/hooks/useSettings';
 
 // ===== キーボードショートカット編集UI =====
 
@@ -196,6 +197,12 @@ interface SettingsProps {
   onFontSizeChange?: (size: number) => void;
   simpleMode?: boolean;
   onSimpleModeChange?: (enabled: boolean) => void;
+  bubbleTheme?: BubbleTheme;
+  onBubbleThemeChange?: (theme: BubbleTheme) => void;
+  stagePanelEnabled?: boolean;
+  onStagePanelEnabledChange?: (enabled: boolean) => void;
+  stagePanelSide?: 'left' | 'right';
+  onStagePanelSideChange?: (side: 'left' | 'right') => void;
   showLatestDownloadMenu?: boolean;
   onOpenLatestDownload?: () => void;
   shortcuts?: ShortcutMap;
@@ -216,6 +223,12 @@ export default function Settings({
   onFontSizeChange,
   simpleMode = false,
   onSimpleModeChange,
+  bubbleTheme = 'classic',
+  onBubbleThemeChange,
+  stagePanelEnabled = false,
+  onStagePanelEnabledChange,
+  stagePanelSide = 'right',
+  onStagePanelSideChange,
   showLatestDownloadMenu = false,
   onOpenLatestDownload,
   shortcuts = defaultShortcuts,
@@ -519,6 +532,52 @@ export default function Settings({
                       <p>• ブロック内の操作ボタンを非表示にし、行間を縮小したアウトライナー風の表示になります</p>
                       <p>• 各種操作はショートカットキーまたは下部ツールバーから行えます</p>
                     </div>
+                    <div className="flex items-center space-x-3 pt-2">
+                      <label htmlFor="bubbleTheme" className="text-sm font-medium text-foreground">
+                        フキダシのデザイン
+                      </label>
+                      <select
+                        id="bubbleTheme"
+                        value={bubbleTheme}
+                        onChange={(e) => onBubbleThemeChange?.(e.target.value as BubbleTheme)}
+                        disabled={simpleMode}
+                        className="p-2 border rounded bg-background text-foreground text-sm disabled:opacity-50"
+                      >
+                        <option value="classic">クラシック（従来）</option>
+                        <option value="pop">ポップ（キャラカラーの縁取り）</option>
+                        <option value="cinema">シネマ（字幕・脚本風）</option>
+                        <option value="chat">チャット（左右振り分け）</option>
+                      </select>
+                    </div>
+                    <div className="text-sm text-muted-foreground ml-7">
+                      <p>• セリフブロックの見た目を切り替えます{simpleMode ? '（シンプルモード中は変更できません）' : ''}</p>
+                      <p>• チャットはキャラクター編集の「チャットビュー: 左/右」で振り分けを変更できます</p>
+                    </div>
+                    <div className="flex items-center space-x-3 pt-2">
+                      <input
+                        type="checkbox"
+                        id="stagePanelEnabled"
+                        checked={stagePanelEnabled}
+                        onChange={(e) => onStagePanelEnabledChange?.(e.target.checked)}
+                        className="w-4 h-4 text-primary bg-background border-gray-300 rounded focus:ring-primary focus:ring-2"
+                      />
+                      <label htmlFor="stagePanelEnabled" className="text-sm font-medium text-foreground">
+                        立ち絵ステージを表示
+                      </label>
+                      <select
+                        value={stagePanelSide}
+                        onChange={(e) => onStagePanelSideChange?.(e.target.value as 'left' | 'right')}
+                        disabled={!stagePanelEnabled}
+                        className="p-2 border rounded bg-background text-foreground text-sm disabled:opacity-50"
+                      >
+                        <option value="right">右側</option>
+                        <option value="left">左側</option>
+                      </select>
+                    </div>
+                    <div className="text-sm text-muted-foreground ml-7">
+                      <p>• 編集中のブロックの話者の立ち絵をエディタ横に大きく表示します（表情差分と連動）</p>
+                      <p>• 立ち絵はキャラクター設定 &gt; 編集 &gt; 表情差分設定から登録できます</p>
+                    </div>
                   </div>
                 </div>
                 {/* アプリ初期化セクション */}
@@ -603,6 +662,58 @@ export default function Settings({
               <div className="flex flex-col max-h-[60vh] pr-2">
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.3.2</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>
+                        • クレジット出力機能を追加
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• 台本で使用中のキャラクターから、動画概要欄用のクレジットを自動生成できます（エクスポート &gt; クレジット）</li>
+                          <li>• 音声クレジットはグループ設定の「クレジット表記」、立ち絵クレジットはキャラクターの「素材クレジット」（制作者・素材ID・URL）を参照します</li>
+                        </ul>
+                      </li>
+                      <li>
+                        • 表情差分機能を追加
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• キャラクターにユーザープリセット単位の表情差分アイコンを登録し、ブロックごとに切り替えられます（アイコンと連動プリセットが同時に切り替わります）</li>
+                          <li>• 画像選択時にドラッグ・ズームで切り抜けるアイコン切り抜きツールを内蔵</li>
+                        </ul>
+                      </li>
+                      <li>
+                        • 立ち絵ステージを追加
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• 編集中のブロックの話者の立ち絵をエディタ横に大きく表示します（表情差分と連動、設定でON）</li>
+                          <li>• 立ち絵はキャラクターの表情差分設定から登録し、ズーム・位置の表示調整が可能です</li>
+                        </ul>
+                      </li>
+                      <li>
+                        • フキダシテーマを追加
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• セリフブロックの見た目をクラシック / ポップ / シネマ / チャットから選べます（設定 &gt; フキダシのデザイン）</li>
+                          <li>• チャットはキャラクター編集の「チャットビュー」設定で左右の振り分けを変更できます</li>
+                        </ul>
+                      </li>
+                      <li>
+                        • ビュー機能を追加
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• チャット風の閲覧・推敲ビューと、キャラクター単位の台詞通し確認ビューをタブで切り替えて利用できます</li>
+                          <li>• フキダシや台詞をクリックすると、エディタの該当ブロックへ移動します</li>
+                        </ul>
+                      </li>
+                      <li>
+                        • UI・操作性の改善
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• キャラクターにパーソナルカラーを設定できるように（フキダシテーマ・チャット・アイコン背景に反映）</li>
+                          <li>• キャラクター管理に「現在の台本で使用する」の一括チェック/解除ボタンを追加</li>
+                          <li>• エクスポートを 台本 / バックアップ / クレジット のタブに再編（バックアップはプロジェクト・キャラクターをトグルで切り替え）</li>
+                          <li>• ヘッダーの新規作成アイコン横に台本全体の文字数を表示</li>
+                          <li>• キャラクター編集で保存前に別キャラの編集やダイアログを閉じようとした場合に確認を表示</li>
+                          <li>• ダイアログ表示中は背面のスクロールを停止（検索ウィンドウを除く）</li>
+                          <li>• キャラクター設定CSVに素材クレジット・表情差分の列を追加</li>
+                        </ul>
+                      </li>
+                    </ul>
+                  </div>
                   <div>
                     <h4 className="font-medium text-foreground mb-2">v0.3.1</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
@@ -994,14 +1105,26 @@ export default function Settings({
                     <div className="mb-2">
                       <span className="font-semibold text-foreground">ライセンス:</span>
                       <div className="ml-2">
-                        <span>本アプリおよび上記ライブラリはMITまたはApache-2.0ライセンスに基づき配布されています。</span>
+                        <span>本アプリはMITライセンスで配布されています。上記ライブラリはそれぞれMITまたはApache-2.0ライセンスに基づき配布されています。</span>
                       </div>
                     </div>
                     <div className="mb-2">
                       <span className="font-semibold text-foreground">Copyright:</span>
                       <div className="ml-2">
-                        <span>© 2025 VoiScripter Authors</span>
+                        <span>© 2025-2026 VoiScripter Authors</span>
                       </div>
+                    </div>
+                    <div className="mb-2">
+                      <span className="font-semibold text-foreground">MIT License（本文）:</span>
+                      <pre className="ml-2 mt-1 p-3 border rounded bg-muted/30 text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">{`MIT License
+
+Copyright (c) 2025-2026 VoiScripter Authors (Bluemist)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.`}</pre>
                     </div>
                   </div>
                 </div>

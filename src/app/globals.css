@@ -83,3 +83,9 @@
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+
+/* 立ち絵ステージの切替フェード */
+@keyframes stage-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

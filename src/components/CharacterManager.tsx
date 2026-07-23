@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Character, Emotion, UserPreset } from '@/types';
-import { PlusIcon, TrashIcon, PencilIcon, Cog6ToothIcon, ListBulletIcon } from '@heroicons/react/24/outline';
+import { useState, useEffect, useRef } from 'react';
+import { Character, Emotion, EmotionSetting, UserPreset, MaterialCredit, GroupCredits } from '@/types';
+import { PlusIcon, TrashIcon, PencilIcon, Cog6ToothIcon, ListBulletIcon, IdentificationIcon, FaceSmileIcon } from '@heroicons/react/24/outline';
+import IconCropperDialog from '@/components/IconCropperDialog';
+import StandingViewAdjustDialog from '@/components/StandingViewAdjustDialog';
+import { generateStandingAssetId, saveStandingAsset, removeStandingAsset } from '@/utils/standingImageAssets';
 import {
   DndContext,
   closestCenter,
@@ -33,6 +36,8 @@ interface CharacterManagerProps {
   groups: string[];
   onAddGroup: (group: string) => void;
   onDeleteGroup: (group: string) => void;
+  groupCredits: GroupCredits;
+  onSetGroupCredit: (group: string, credit: string) => void;
   onReorderCharacters?: (newOrder: Character[]) => void; // 並び替え用
   onReorderGroups?: (newOrder: string[]) => void;
   isOpen: boolean;
@@ -123,6 +128,8 @@ export default function CharacterManager({
   groups,
   onAddGroup,
   onDeleteGroup,
+  groupCredits,
+  onSetGroupCredit,
   onReorderCharacters,
   onReorderGroups,
   isOpen,
@@ -152,6 +159,24 @@ export default function CharacterManager({
   // ユーザープリセット設定ダイアログ
   const [isPresetSettingsOpen, setIsPresetSettingsOpen] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
+
+  // 素材クレジット設定ダイアログ
+  const [isCreditSettingsOpen, setIsCreditSettingsOpen] = useState(false);
+
+  // 表情差分設定ダイアログ（表情はユーザープリセットから選択して追加する）
+  const [isEmotionSettingsOpen, setIsEmotionSettingsOpen] = useState(false);
+  const [newEmotionPresetId, setNewEmotionPresetId] = useState('');
+
+  // 立ち絵の表示調整ダイアログ（調整対象の表情）
+  const [standingAdjustEmotion, setStandingAdjustEmotion] = useState<Emotion | null>(null);
+
+  // アイコン切り抜きダイアログ（適用先はコールバックで指定）
+  const [cropperFile, setCropperFile] = useState<File | null>(null);
+  const cropperCallbackRef = useRef<((dataUrl: string) => void) | null>(null);
+  const openCropper = (file: File, apply: (dataUrl: string) => void) => {
+    cropperCallbackRef.current = apply;
+    setCropperFile(file);
+  };
 
   // カラーピッカー用の状態
   const [showColorPicker, setShowColorPicker] = useState<string | null>(null);
@@ -211,8 +236,12 @@ export default function CharacterManager({
     }
   }, [isOpen, currentProjectId, projectList, getCharacterProjectStates]);
 
-  // ダイアログを閉じる処理
+  // ダイアログを閉じる処理（未保存の編集がある場合は確認を挟む）
   const handleClose = () => {
+    guardUnsavedEdit(() => proceedClose());
+  };
+
+  const proceedClose = () => {
     if (currentProjectId) {
       // 無効にされたキャラクターがあるかチェック
       const disabledCharacters = characters.filter(char => {
@@ -284,29 +313,79 @@ export default function CharacterManager({
     saveCharacterProjectStates(currentProjectId, characterProjectStates, safeProjectList);
   };
 
-  // 画像ファイル→DataURL変換
-  const handleIconFileChange = (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
+  // 編集中キャラクターの感情設定を部分更新するヘルパー（他の感情を保持する）
+  const setEditEmotion = (emotion: Emotion, patch: Partial<EmotionSetting>) => {
+    setEditCharacter(prev => prev ? {
+      ...prev,
+      emotions: {
+        ...(prev.emotions || { normal: { iconUrl: '' } }),
+        [emotion]: { iconUrl: '', ...(prev.emotions?.[emotion] || {}), ...patch }
+      }
+    } : prev);
+  };
+
+  const removeEditEmotion = (emotion: Emotion) => {
+    if (emotion === 'normal') return;
+    setEditCharacter(prev => {
+      if (!prev?.emotions) return prev;
+      const assetId = prev.emotions[emotion]?.standingAssetId;
+      if (assetId) void removeStandingAsset(assetId);
+      const next = { ...prev.emotions };
+      delete next[emotion];
+      return { ...prev, emotions: next };
+    });
+  };
+
+  // 立ち絵画像の登録（アセット保存し、参照IDだけをキャラ設定に持たせる）
+  const handleStandingImageFileChange = (e: React.ChangeEvent<HTMLInputElement>, emotion: Emotion) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
+      const assetId = generateStandingAssetId();
+      const ok = await saveStandingAsset(assetId, reader.result as string);
+      if (!ok) return;
+      const oldId = editCharacter?.emotions?.[emotion]?.standingAssetId;
+      if (oldId) void removeStandingAsset(oldId);
+      // 画像を差し替えたら表示調整はリセット
+      setEditEmotion(emotion, { standingAssetId: assetId, standingView: undefined });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveStandingImage = (emotion: Emotion) => {
+    const oldId = editCharacter?.emotions?.[emotion]?.standingAssetId;
+    if (oldId) void removeStandingAsset(oldId);
+    setEditEmotion(emotion, { standingAssetId: undefined, standingView: undefined });
+  };
+
+  // 画像ファイル選択 → 切り抜きダイアログ経由でDataURLを適用
+  const handleIconFileChange = (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // 同じファイルの再選択を許可
+    if (!file) return;
+    openCropper(file, (dataUrl) => {
       if (isEdit) {
-        setEditCharacter(prev => ({
-          ...(prev ?? {}),
-          emotions: {
-            normal: { iconUrl: reader.result as string }
-          }
-        } as Partial<Character>));
+        setEditEmotion('normal', { iconUrl: dataUrl });
       } else {
         setNewCharacter(prev => ({
           ...prev,
           emotions: {
-            normal: { iconUrl: reader.result as string }
+            ...(prev.emotions || {}),
+            normal: { ...(prev.emotions?.normal || {}), iconUrl: dataUrl }
           }
         } as Partial<Character>));
       }
-    };
-    reader.readAsDataURL(file);
+    });
+  };
+
+  // 表情差分用の画像ファイル選択
+  const handleEmotionIconFileChange = (e: React.ChangeEvent<HTMLInputElement>, emotion: Emotion) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    openCropper(file, (dataUrl) => setEditEmotion(emotion, { iconUrl: dataUrl }));
   };
 
   // カラーピッカーで背景色を変更
@@ -342,7 +421,10 @@ export default function CharacterManager({
         id: Date.now().toString(),
         name: newCharacter.name,
         group: newCharacter.group || 'なし',
-        emotions: { normal: { iconUrl: newCharacter.emotions?.normal?.iconUrl || '' } },
+        emotions: {
+          ...(newCharacter.emotions || {}),
+          normal: { iconUrl: newCharacter.emotions?.normal?.iconUrl || '' }
+        },
         backgroundColor: '#e5e7eb' // デフォルトの背景色
       } as Character);
       setNewCharacter({ name: '', group: 'なし', emotions: { ...emptyEmotions } });
@@ -350,20 +432,71 @@ export default function CharacterManager({
     }
   };
 
+  // 全項目が空なら undefined に正規化（データを汚さない）
+  const normalizeMaterialCredit = (credit?: MaterialCredit): MaterialCredit | undefined => {
+    if (!credit) return undefined;
+    const normalized: MaterialCredit = {
+      ...(credit.url?.trim() ? { url: credit.url.trim() } : {}),
+      ...(credit.id?.trim() ? { id: credit.id.trim() } : {}),
+      ...(credit.creator?.trim() ? { creator: credit.creator.trim() } : {}),
+      ...(credit.memo?.trim() ? { memo: credit.memo.trim() } : {})
+    };
+    return Object.keys(normalized).length > 0 ? normalized : undefined;
+  };
+
+  // 編集フォームの内容から保存形の Character を組み立てる（保存・変更検知で共用）
+  const buildNormalizedCharacter = (source: Partial<Character>): Character => ({
+    id: source.id!,
+    name: source.name || '',
+    group: source.group || 'なし',
+    emotions: {
+      ...(source.emotions || {}),
+      normal: { ...(source.emotions?.normal || {}), iconUrl: source.emotions?.normal?.iconUrl || '' }
+    },
+    backgroundColor: source.backgroundColor || '#e5e7eb',
+    disabledProjects: source.disabledProjects || [],
+    userPresets: source.userPresets || [],
+    materialCredit: normalizeMaterialCredit(source.materialCredit),
+    chatSide: source.chatSide
+  } as Character);
+
+  // 編集中かつ未保存の変更があるか
+  const isEditDirty = (): boolean => {
+    if (!isEditingId || !editCharacter) return false;
+    const original = characters.find(c => c.id === isEditingId);
+    if (!original) return false;
+    return JSON.stringify(buildNormalizedCharacter(editCharacter)) !== JSON.stringify(buildNormalizedCharacter(original));
+  };
+
+  // 編集状態のリセット（サブダイアログも閉じる）
+  const resetEditState = () => {
+    setIsEditingId(null);
+    setEditCharacter(null);
+    setIsPresetSettingsOpen(false);
+    setIsCreditSettingsOpen(false);
+    setIsEmotionSettingsOpen(false);
+  };
+
+  // 未保存の編集がある状態での操作をガードする。破棄/保存の確認後に action を実行
+  const [unsavedAction, setUnsavedAction] = useState<(() => void) | null>(null);
+  const guardUnsavedEdit = (action: () => void) => {
+    if (isEditDirty()) {
+      setUnsavedAction(() => action);
+    } else {
+      action();
+    }
+  };
+
+  const saveEditCharacter = (): boolean => {
+    if (!editCharacter || !editCharacter.name) return false;
+    onUpdateCharacter(buildNormalizedCharacter(editCharacter));
+    return true;
+  };
+
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editCharacter && editCharacter.name) {
-      onUpdateCharacter({
-        id: editCharacter.id!,
-        name: editCharacter.name,
-        group: editCharacter.group || 'なし',
-        emotions: { normal: { iconUrl: editCharacter.emotions?.normal?.iconUrl || '' } },
-        backgroundColor: editCharacter.backgroundColor || '#e5e7eb',
-        userPresets: editCharacter.userPresets || []
-      } as Character);
-      setIsEditingId(null);
-      setEditCharacter(null);
-      setIsPresetSettingsOpen(false);
+    if (saveEditCharacter()) {
+      resetEditState();
     }
   };
 
@@ -428,15 +561,34 @@ export default function CharacterManager({
       panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-sm sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
     >
         <div className="shrink-0 p-6 pb-4 border-b">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center gap-3">
             <h3 className="text-lg font-semibold text-foreground">キャラクター管理</h3>
-            <button
-              onClick={handleClose}
-              className="text-muted-foreground hover:text-foreground text-2xl"
-              title="閉じる"
-            >
-              ×
-            </button>
+            <div className="flex items-center gap-2">
+              {currentProjectId && characters.length > 0 && (() => {
+                // 「現在の台本で使用する」の一括チェック/解除
+                const allChecked = characters.every(char => characterProjectStates[char.id]);
+                return (
+                  <button
+                    onClick={() => {
+                      const next: {[characterId: string]: boolean} = {};
+                      characters.forEach(char => { next[char.id] = !allChecked; });
+                      setCharacterProjectStates(next);
+                    }}
+                    className="px-2.5 py-1 text-xs border rounded text-foreground hover:bg-accent whitespace-nowrap"
+                    title="「現在の台本で使用する」のチェックを一括で切り替えます"
+                  >
+                    使用チェックを{allChecked ? 'すべて外す' : 'すべて付ける'}
+                  </button>
+                );
+              })()}
+              <button
+                onClick={handleClose}
+                className="text-muted-foreground hover:text-foreground text-2xl"
+                title="閉じる"
+              >
+                ×
+              </button>
+            </div>
           </div>
         </div>
         
@@ -474,16 +626,38 @@ export default function CharacterManager({
                               <option key={group} value={group}>{group}</option>
                             ))}
                           </select>
+                          <select
+                            value={editCharacter?.chatSide || ''}
+                            onChange={e => setEditCharacter(prev => ({
+                              ...(prev ?? {}),
+                              chatSide: (e.target.value || undefined) as Character['chatSide']
+                            }))}
+                            className="w-full p-2 border rounded bg-background text-foreground"
+                            title="チャットビューでフキダシを表示するサイド"
+                          >
+                            <option value="">チャットビュー: 自動</option>
+                            <option value="left">チャットビュー: 左</option>
+                            <option value="right">チャットビュー: 右</option>
+                          </select>
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs text-muted-foreground shrink-0">パーソナルカラー</label>
+                            <input
+                              type="color"
+                              value={editCharacter?.backgroundColor || '#e5e7eb'}
+                              onChange={e => setEditCharacter(prev => ({
+                                ...(prev ?? {}),
+                                backgroundColor: e.target.value
+                              }))}
+                              className="w-9 h-7 border rounded cursor-pointer bg-background p-0.5"
+                              title="フキダシテーマ・チャットビュー・アイコン未設定時の背景色に使用されます"
+                            />
+                            <span className="text-[10px] text-muted-foreground">フキダシテーマ・チャットビューの色に使用</span>
+                          </div>
                           <div className="flex items-center space-x-2 mb-1">
                             <input
                               type="text"
                               value={editCharacter?.emotions?.normal?.iconUrl || ''}
-                              onChange={e => setEditCharacter(prev => ({
-                                ...(prev ?? {}),
-                                emotions: {
-                                  normal: { iconUrl: e.target.value }
-                                }
-                              } as Partial<Character>))}
+                              onChange={e => setEditEmotion('normal', { iconUrl: e.target.value })}
                               placeholder="アイコンURLまたは画像を選択"
                               className="flex-1 p-2 border rounded bg-background text-foreground"
                             />
@@ -509,10 +683,34 @@ export default function CharacterManager({
                               ({(editCharacter?.userPresets || []).length}件)
                             </span>
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsEmotionSettingsOpen(true)}
+                            className="w-full flex items-center justify-center space-x-2 p-2 border rounded hover:bg-muted/80 text-foreground text-sm"
+                            style={{ backgroundColor: 'var(--color-muted)', color: 'var(--color-muted-foreground)' }}
+                          >
+                            <FaceSmileIcon className="w-4 h-4" />
+                            <span>表情差分設定</span>
+                            <span className="text-xs text-muted-foreground">
+                              ({Object.keys(editCharacter?.emotions || {}).filter(k => k !== 'normal').length}件)
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsCreditSettingsOpen(true)}
+                            className="w-full flex items-center justify-center space-x-2 p-2 border rounded hover:bg-muted/80 text-foreground text-sm"
+                            style={{ backgroundColor: 'var(--color-muted)', color: 'var(--color-muted-foreground)' }}
+                          >
+                            <IdentificationIcon className="w-4 h-4" />
+                            <span>素材クレジット設定</span>
+                            {normalizeMaterialCredit(editCharacter?.materialCredit) && (
+                              <span className="text-xs text-muted-foreground">(設定済み)</span>
+                            )}
+                          </button>
                           <div className="flex justify-end space-x-2">
                             <button
                               type="button"
-                              onClick={() => { setIsEditingId(null); setEditCharacter(null); setIsPresetSettingsOpen(false); }}
+                              onClick={() => { setIsEditingId(null); setEditCharacter(null); setIsPresetSettingsOpen(false); setIsCreditSettingsOpen(false); setIsEmotionSettingsOpen(false); }}
                               className="px-3 py-1 text-sm text-muted-foreground hover:bg-accent rounded"
                             >
                               キャンセル
@@ -589,8 +787,10 @@ export default function CharacterManager({
                           </div>
                           <div className="flex flex-col gap-1 ml-auto items-end">
                             <button onClick={() => {
-                              setIsEditingId(character.id);
-                              setEditCharacter({ ...character });
+                              guardUnsavedEdit(() => {
+                                setIsEditingId(character.id);
+                                setEditCharacter({ ...character });
+                              });
                             }} className="p-2 text-destructive hover:bg-destructive/10 rounded flex items-center">
                               <PencilIcon className="w-5 h-5" />
                               <span className="ml-1 text-xs">編集</span>
@@ -734,13 +934,31 @@ export default function CharacterManager({
                   <SortableContext items={groups.map((group, index) => `${group}-${index}`)} strategy={rectSortingStrategy}>
                     {groups.map((group, index) => (
                       <SortableGroup key={`${group}-${index}`} group={group} index={index}>
-                        <span className="text-foreground">{group}</span>
-                        <button
-                          onClick={() => onDeleteGroup(group)}
-                          className="p-1 text-destructive hover:bg-destructive/10 rounded"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="text-foreground truncate">{group}</span>
+                            <button
+                              onClick={() => onDeleteGroup(group)}
+                              className="p-1 text-destructive hover:bg-destructive/10 rounded shrink-0"
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <input
+                            type="text"
+                            defaultValue={groupCredits[group] || ''}
+                            onBlur={e => onSetGroupCredit(group, e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            placeholder="クレジット表記（例: VOICEVOX:ずんだもん）"
+                            className="w-full mt-1 p-1.5 text-xs border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                            title="動画概要欄などに記載するクレジット表記。クレジット出力機能で使用します。"
+                          />
+                        </div>
                       </SortableGroup>
                     ))}
                   </SortableContext>
@@ -850,6 +1068,253 @@ export default function CharacterManager({
         </DialogFrame>
       )}
 
+      {/* 表情差分設定ダイアログ */}
+      {isEmotionSettingsOpen && editCharacter && (
+        <DialogFrame
+          isOpen={isEmotionSettingsOpen}
+          onCancel={() => { setIsEmotionSettingsOpen(false); setNewEmotionPresetId(''); }}
+          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto p-6"
+          overlayClassName="bg-black/50"
+        >
+            <h3 className="text-lg font-semibold text-foreground mb-1">表情差分設定</h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              「{editCharacter.name}」の表情差分を管理します。表情はユーザープリセット（音声の感情）から追加し、台本のブロックで表情を選ぶとフキダシのアイコンとプリセットが同時に切り替わります。<br />
+              立ち絵を登録すると、立ち絵ステージ（設定でON）に表情連動で表示されます。
+            </p>
+
+            {/* 表情追加（ユーザープリセット＝音声の感情から選択。表情名はプリセット名と共通） */}
+            <div className="mb-4">
+              {(() => {
+                const availablePresets = (editCharacter.userPresets || []).filter(
+                  p => p.name !== 'normal' && !(editCharacter.emotions && p.name in editCharacter.emotions)
+                );
+                if ((editCharacter.userPresets || []).length === 0) {
+                  return (
+                    <p className="text-xs text-muted-foreground border rounded p-2 bg-muted/30">
+                      表情はユーザープリセット（音声の感情）から追加します。先に「ユーザープリセット設定」からプリセットを登録してください。
+                    </p>
+                  );
+                }
+                return (
+                  <div className="flex space-x-2">
+                    <select
+                      value={newEmotionPresetId}
+                      onChange={e => setNewEmotionPresetId(e.target.value)}
+                      className="flex-1 p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                    >
+                      <option value="">追加するプリセット（表情）を選択…</option>
+                      {availablePresets.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => {
+                        const preset = availablePresets.find(p => p.id === newEmotionPresetId);
+                        if (preset) {
+                          setEditEmotion(preset.name, { iconUrl: '', userPresetId: preset.id });
+                          setNewEmotionPresetId('');
+                        }
+                      }}
+                      disabled={!newEmotionPresetId}
+                      className="px-3 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      追加
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* 表情一覧 */}
+            <div className="space-y-2">
+              {['normal', ...Object.keys(editCharacter.emotions || {}).filter(k => k !== 'normal')].map(emotion => {
+                const setting = editCharacter.emotions?.[emotion] || { iconUrl: '' };
+                const isNormal = emotion === 'normal';
+                return (
+                  <div key={emotion} className="border rounded p-3 bg-muted/30">
+                    <div className="flex items-center gap-3">
+                      {setting.iconUrl ? (
+                        <img src={setting.iconUrl} alt={emotion} className="w-12 h-12 rounded-full border object-cover shrink-0" />
+                      ) : (
+                        <div
+                          className="w-12 h-12 rounded-full border shrink-0 flex items-center justify-center text-[10px] text-muted-foreground"
+                          style={{ backgroundColor: editCharacter.backgroundColor || '#e5e7eb' }}
+                        >
+                          未設定
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-foreground text-sm">
+                            {isNormal ? '標準（normal）' : emotion}
+                          </span>
+                          {!isNormal && (
+                            <button
+                              onClick={() => removeEditEmotion(emotion)}
+                              className="p-1 text-destructive hover:bg-destructive/10 rounded"
+                              title="この表情を削除（使用中のブロックは標準アイコンで表示されます）"
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <input
+                            type="text"
+                            value={setting.iconUrl}
+                            onChange={e => setEditEmotion(emotion, { iconUrl: e.target.value })}
+                            placeholder="アイコンURLまたは画像を選択"
+                            className="flex-1 min-w-0 p-1.5 text-xs border rounded bg-background text-foreground"
+                          />
+                          <label className="cursor-pointer bg-primary text-primary-foreground px-2 py-1.5 rounded text-xs hover:bg-primary/90 transition-colors shrink-0">
+                            画像を選択
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={e => handleEmotionIconFileChange(e, emotion)}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className="text-xs text-muted-foreground shrink-0">立ち絵</span>
+                          {setting.standingAssetId ? (
+                            <>
+                              <span className="text-xs text-foreground">登録済み</span>
+                              <button
+                                type="button"
+                                onClick={() => setStandingAdjustEmotion(emotion)}
+                                className="text-xs text-primary hover:underline"
+                                title="立ち絵ステージでの見え方（ズーム・位置）を調整"
+                              >
+                                表示調整
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveStandingImage(emotion)}
+                                className="text-xs text-destructive hover:underline"
+                              >
+                                削除
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">未登録</span>
+                          )}
+                          <label className="ml-auto cursor-pointer bg-secondary text-secondary-foreground px-2 py-1 rounded text-xs hover:bg-secondary/90 transition-colors shrink-0">
+                            画像を選択
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={e => handleStandingImageFileChange(e, emotion)}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="text-xs text-muted-foreground mt-3">
+              ※ 入力内容はキャラクター編集の「保存」を押すと確定されます。
+            </p>
+
+            <div className="flex justify-end mt-4">
+              <button
+                onClick={() => { setIsEmotionSettingsOpen(false); setNewEmotionPresetId(''); }}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+              >
+                閉じる
+              </button>
+            </div>
+        </DialogFrame>
+      )}
+
+      {/* 素材クレジット設定ダイアログ */}
+      {isCreditSettingsOpen && editCharacter && (
+        <DialogFrame
+          isOpen={isCreditSettingsOpen}
+          onCancel={() => setIsCreditSettingsOpen(false)}
+          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+          overlayClassName="bg-black/50"
+        >
+            <h3 className="text-lg font-semibold text-foreground mb-1">素材クレジット設定</h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              「{editCharacter.name}」の立ち絵などの素材情報を記録します。クレジット出力や制作時の確認に使用できます。
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">制作者</label>
+                <input
+                  type="text"
+                  value={editCharacter.materialCredit?.creator || ''}
+                  onChange={e => setEditCharacter(prev => prev ? {
+                    ...prev,
+                    materialCredit: { ...(prev.materialCredit || {}), creator: e.target.value }
+                  } : prev)}
+                  placeholder="例: ○○様"
+                  className="w-full p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">素材ID</label>
+                <input
+                  type="text"
+                  value={editCharacter.materialCredit?.id || ''}
+                  onChange={e => setEditCharacter(prev => prev ? {
+                    ...prev,
+                    materialCredit: { ...(prev.materialCredit || {}), id: e.target.value }
+                  } : prev)}
+                  placeholder="例: im〜 / nc〜"
+                  className="w-full p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">URL</label>
+                <input
+                  type="text"
+                  value={editCharacter.materialCredit?.url || ''}
+                  onChange={e => setEditCharacter(prev => prev ? {
+                    ...prev,
+                    materialCredit: { ...(prev.materialCredit || {}), url: e.target.value }
+                  } : prev)}
+                  placeholder="素材の配布ページURL"
+                  className="w-full p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">メモ（クレジット出力には含まれません）</label>
+                <textarea
+                  value={editCharacter.materialCredit?.memo || ''}
+                  onChange={e => setEditCharacter(prev => prev ? {
+                    ...prev,
+                    materialCredit: { ...(prev.materialCredit || {}), memo: e.target.value }
+                  } : prev)}
+                  placeholder="例: 利用規約は改変OK・クレジット必須"
+                  rows={3}
+                  className="w-full p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none resize-none"
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground mt-3">
+              ※ 入力内容はキャラクター編集の「保存」を押すと確定されます。
+            </p>
+
+            <div className="flex justify-end mt-4">
+              <button
+                onClick={() => setIsCreditSettingsOpen(false)}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+              >
+                閉じる
+              </button>
+            </div>
+        </DialogFrame>
+      )}
+
       {/* カラーピッカーダイアログ */}
       {showColorPicker && (
         <DialogFrame
@@ -916,6 +1381,82 @@ export default function CharacterManager({
             </div>
         </DialogFrame>
       )}
+
+      {/* 未保存の編集確認ダイアログ */}
+      {unsavedAction && (
+        <DialogFrame
+          isOpen={!!unsavedAction}
+          onCancel={() => setUnsavedAction(null)}
+          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+          overlayClassName="bg-black/50"
+        >
+            <h3 className="text-lg font-semibold text-foreground mb-3">編集中の情報があります</h3>
+            <p className="text-sm text-foreground mb-4">
+              キャラクターの編集内容がまだ保存されていません。<br />
+              保存せずに続行すると変更内容は破棄されます。
+            </p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                onClick={() => setUnsavedAction(null)}
+                className="px-4 py-2 text-muted-foreground hover:bg-accent rounded"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => {
+                  const action = unsavedAction;
+                  setUnsavedAction(null);
+                  resetEditState();
+                  action();
+                }}
+                className="px-4 py-2 border rounded text-destructive hover:bg-destructive/10"
+              >
+                破棄して続行
+              </button>
+              <button
+                onClick={() => {
+                  if (!saveEditCharacter()) return;
+                  const action = unsavedAction;
+                  setUnsavedAction(null);
+                  resetEditState();
+                  action();
+                }}
+                disabled={!editCharacter?.name}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold disabled:opacity-50"
+              >
+                保存して続行
+              </button>
+            </div>
+        </DialogFrame>
+      )}
+
+      {/* 立ち絵の表示調整ダイアログ */}
+      {standingAdjustEmotion && editCharacter && (
+        <StandingViewAdjustDialog
+          isOpen={!!standingAdjustEmotion}
+          assetId={editCharacter.emotions?.[standingAdjustEmotion]?.standingAssetId || null}
+          initialView={editCharacter.emotions?.[standingAdjustEmotion]?.standingView}
+          characterName={editCharacter.name || ''}
+          emotionLabel={standingAdjustEmotion === 'normal' ? '標準' : standingAdjustEmotion}
+          onCancel={() => setStandingAdjustEmotion(null)}
+          onApply={(view) => {
+            setEditEmotion(standingAdjustEmotion, { standingView: view });
+            setStandingAdjustEmotion(null);
+          }}
+        />
+      )}
+
+      {/* アイコン切り抜きダイアログ */}
+      <IconCropperDialog
+        isOpen={!!cropperFile}
+        file={cropperFile}
+        onCancel={() => setCropperFile(null)}
+        onApply={(dataUrl) => {
+          cropperCallbackRef.current?.(dataUrl);
+          cropperCallbackRef.current = null;
+          setCropperFile(null);
+        }}
+      />
     </DialogFrame>
   );
 }
