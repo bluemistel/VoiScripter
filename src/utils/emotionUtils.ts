@@ -15,3 +15,14 @@ export const getEmotionIconUrl = (character: Character, emotion: Emotion): strin
   const setting = character.emotions[emotion];
   return (setting?.iconUrl || character.emotions.normal?.iconUrl) ?? '';
 };
+
+/** 指定した感情に連動するユーザープリセットID（連動なしは undefined）。表情→プリセットの連動に使う */
+export const getPresetIdForEmotion = (character: Character, emotion: Emotion): string | undefined =>
+  character.emotions[emotion]?.userPresetId;
+
+/** 指定したプリセットに連動する感情ラベル（連動する差分がなければ normal）。プリセット→表情の連動に使う */
+export const getEmotionForPreset = (character: Character, presetId: string | undefined): Emotion => {
+  if (!presetId) return DEFAULT_EMOTION;
+  const linked = getEmotionKeys(character).find(e => character.emotions[e]?.userPresetId === presetId);
+  return linked ?? DEFAULT_EMOTION;
+};
