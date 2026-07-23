@@ -24,6 +24,7 @@ import { buildCharacterSyncPayload, restoreCharactersFromSyncPayload, Lightweigh
 // カスタムフックのインポート
 import { useDataManagement } from '@/hooks/useDataManagement';
 import { useProjectManagement } from '@/hooks/useProjectManagement';
+import type { ProjectManagementHook } from '@/hooks/useProjectManagement';
 import { useExportImport } from '@/hooks/useExportImport';
 import { useCharacterManagement } from '@/hooks/useCharacterManagement';
 import { useUndoRedo } from '@/hooks/useUndoRedo';
@@ -85,7 +86,10 @@ export default function Home() {
   } = uiState;
   
   // プロジェクト管理フック
-  const projectManagement = useProjectManagement(dataManagement, showNotification);
+  // 明示的に型注釈を付けることで、戻り値型の推論サイクル（TS7022: 初期化子内での間接参照）を防ぐ。
+  // これがないと一部の環境で projectManagement が暗黙的に any となり、project 由来のコールバック引数が
+  // すべて暗黙 any 扱い（TS7006）になる波及エラーが発生する。
+  const projectManagement: ProjectManagementHook = useProjectManagement(dataManagement, showNotification);
   const {
     project,
     setProject,
