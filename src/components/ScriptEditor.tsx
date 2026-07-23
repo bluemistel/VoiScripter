@@ -21,7 +21,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Script, ScriptBlock, Character, Emotion, StorySeparatorSegment, StorySeparatorImage } from '@/types';
 import { loadStoryPanelAsset, removeStoryPanelAsset, saveStoryPanelAsset } from '@/utils/storyPanelAssets';
-import { getEmotionKeys, getEmotionIconUrl } from '@/utils/emotionUtils';
+import { getEmotionKeys, getEmotionIconUrl, getPresetIdForEmotion, getEmotionForPreset } from '@/utils/emotionUtils';
 import { getReadableTextColor } from '@/utils/colorUtils';
 import { buildChatSideMap } from '@/utils/chatUtils';
 import type { BubbleTheme } from '@/hooks/useSettings';
@@ -222,11 +222,19 @@ function SortableBlock({
   const emotionKeys = character ? getEmotionKeys(character) : [];
   const hasEmotionVariants = emotionKeys.length > 1;
 
-  // 感情を選択（連動プリセットが設定されていれば同時に切り替える）
+  // 感情を選択（アイコン側）→ 連動するプリセットも同時に切り替える。
+  // 連動プリセットを持たない表情（標準など）を選んだ場合はプリセットも解除して整合させる。
   const handleSelectEmotion = (emotion: Emotion) => {
-    const linkedPresetId = character?.emotions[emotion]?.userPresetId;
-    onUpdate({ emotion, ...(linkedPresetId ? { userPresetId: linkedPresetId } : {}) });
+    const linkedPresetId = character ? getPresetIdForEmotion(character, emotion) : undefined;
+    onUpdate({ emotion, userPresetId: linkedPresetId });
     setIsEmotionPickerOpen(false);
+  };
+
+  // プリセットを選択（プリセットリスト側）→ 連動する表情（アイコン・立ち絵ステージ）も同時に切り替える。
+  // そのプリセットに紐づく表情差分がなければ標準表情に戻す。
+  const handleSelectPreset = (presetId: string | undefined) => {
+    const emotion = character ? getEmotionForPreset(character, presetId) : 'normal';
+    onUpdate({ userPresetId: presetId, emotion });
   };
 
   // 感情ピッカー内のアイコン表示
@@ -605,7 +613,7 @@ function SortableBlock({
               {!simpleMode && !isMobileView && character?.userPresets && character.userPresets.length > 0 && (
                 <select
                   value={block.userPresetId || ''}
-                  onChange={e => onUpdate({ userPresetId: e.target.value || undefined })}
+                  onChange={e => handleSelectPreset(e.target.value || undefined)}
                   className="absolute top-2 right-2 border rounded-lg bg-background/90 text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 text-xs truncate"
                   style={{ width: '7rem', height: '1.625rem', padding: '0 4px' }}
                   title="Alt+Shift+↑↓:プリセットを切り替え"
@@ -728,7 +736,7 @@ function SortableBlock({
                 <button
                   type="button"
                   className={`shrink-0 px-3 py-1 rounded-full border text-xs ${!block.userPresetId ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border text-muted-foreground'}`}
-                  onClick={() => onUpdate({ userPresetId: undefined })}
+                  onClick={() => handleSelectPreset(undefined)}
                 >
                   -
                 </button>
@@ -737,7 +745,7 @@ function SortableBlock({
                     key={p.id}
                     type="button"
                     className={`shrink-0 px-3 py-1 rounded-full border text-xs ${block.userPresetId === p.id ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border text-muted-foreground'}`}
-                    onClick={() => onUpdate({ userPresetId: p.id })}
+                    onClick={() => handleSelectPreset(p.id)}
                   >
                     {p.name}
                   </button>

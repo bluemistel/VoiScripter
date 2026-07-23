@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { UndoRedoHook, ProjectHistory } from './useUndoRedo';
 import { ScriptBlock } from '@/types';
 import { ShortcutMap, defaultShortcuts, matchesShortcut } from '@/types/shortcuts';
+import { getEmotionForPreset } from '@/utils/emotionUtils';
 
 export interface KeyboardShortcutsHook {
   registerShortcuts: () => void;
@@ -308,13 +309,17 @@ export const useKeyboardShortcuts = (
             if (presets.length > 0) {
               event.preventDefault();
               const currentPresetIdx = presets.findIndex((p: { id: string }) => p.id === block.userPresetId);
+              let nextPresetId: string | undefined;
               if (currentPresetIdx > 0) {
-                onUpdateBlock(block.id, { userPresetId: presets[currentPresetIdx - 1].id });
+                nextPresetId = presets[currentPresetIdx - 1].id;
               } else if (currentPresetIdx === 0) {
-                onUpdateBlock(block.id, { userPresetId: undefined });
+                nextPresetId = undefined;
               } else {
-                onUpdateBlock(block.id, { userPresetId: presets[presets.length - 1].id });
+                nextPresetId = presets[presets.length - 1].id;
               }
+              // プリセット切替に表情（アイコン・立ち絵）も連動させる
+              const nextEmotion = char ? getEmotionForPreset(char, nextPresetId) : 'normal';
+              onUpdateBlock(block.id, { userPresetId: nextPresetId, emotion: nextEmotion });
             }
           }
         }
@@ -330,10 +335,19 @@ export const useKeyboardShortcuts = (
             if (presets.length > 0) {
               event.preventDefault();
               const currentPresetIdx = presets.findIndex((p: { id: string }) => p.id === block.userPresetId);
+              let nextPresetId: string | undefined;
+              let shouldUpdate = true;
               if (currentPresetIdx === -1) {
-                onUpdateBlock(block.id, { userPresetId: presets[0].id });
+                nextPresetId = presets[0].id;
               } else if (currentPresetIdx < presets.length - 1) {
-                onUpdateBlock(block.id, { userPresetId: presets[currentPresetIdx + 1].id });
+                nextPresetId = presets[currentPresetIdx + 1].id;
+              } else {
+                shouldUpdate = false; // 末尾のときは据え置き（従来の挙動を維持）
+              }
+              if (shouldUpdate) {
+                // プリセット切替に表情（アイコン・立ち絵）も連動させる
+                const nextEmotion = char ? getEmotionForPreset(char, nextPresetId) : 'normal';
+                onUpdateBlock(block.id, { userPresetId: nextPresetId, emotion: nextEmotion });
               }
             }
           }
