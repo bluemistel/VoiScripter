@@ -496,6 +496,11 @@ export default function Home() {
     setIsProjectDialogOpen(true);
   };
 
+  // 新規プロジェクトの初期ブロックに使う先頭キャラクターID（キャラ未設定時は undefined）。
+  // これを handleNewProject に渡すと、説明テキストの代わりに最初のキャラの空ブロックが用意される。
+  const getInitialProjectCharacterId = (): string | undefined =>
+    characters.find(c => c.id)?.id;
+
   // 立ち絵ステージに表示するブロック（フォーカス中 → 見つからなければ現在シーンの最後のセリフ）
   const activeStageBlock = (() => {
     if (!settings.stagePanelEnabled || !selectedSceneId) return null;
@@ -981,7 +986,7 @@ export default function Home() {
         }}
         onCreateProject={(name, folderId) => {
           try {
-            projectManagement.handleNewProject(name);
+            projectManagement.handleNewProject(name, getInitialProjectCharacterId());
             if (folderId) {
               projectExplorer.moveProject(name, folderId);
             }
@@ -1028,7 +1033,7 @@ export default function Home() {
         onClose={() => uiState.setIsProjectDialogOpen(false)}
         onConfirm={(projectName) => {
           try {
-            const newProject = projectManagement.handleNewProject(projectName);
+            const newProject = projectManagement.handleNewProject(projectName, getInitialProjectCharacterId());
             setProject(newProject);
             showNotification('プロジェクトを作成しました', 'success');
             uiState.setIsProjectDialogOpen(false);

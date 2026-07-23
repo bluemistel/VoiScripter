@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "electron",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "electron-dev"],
+      "port": 3000
+    },
+    {
+      "name": "sync-mock",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["sync_poc/local_sync_server.js"],
+      "port": 8787
+    }
+  ]
+}
