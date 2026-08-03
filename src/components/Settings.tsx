@@ -1059,7 +1059,7 @@ export default function Settings({
                     </p>
                     <div className="mt-4">
                       <a 
-                        href="https://forms.gle/JksUg736A2p32UzT8" 
+                        href="https://app.notion.com/p/32b8c5bf8aa480b4b85be01d8d6847ff?v=32b8c5bf8aa4815d9161000c9202a7b2&source=copy_link"
                         target="_blank" 
                         rel="noopener noreferrer" 
                         className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"

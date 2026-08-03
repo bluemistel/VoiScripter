@@ -15,7 +15,7 @@ interface CSVExportDialogProps {
   onExportSerifOnly: (selectedOnly?: boolean, fileFormat?: 'csv' | 'txt', includeTogaki?: boolean, includeUserPreset?: boolean) => void;
   onExportByGroups: (selectedGroups: string[], exportType: 'full' | 'serif-only', includeTogaki?: boolean, selectedOnly?: boolean, sceneIds?: string[], fileFormat?: 'csv' | 'txt', includeUserPreset?: boolean) => void;
   onExportCharacterCSV: () => void;
-  onExportToClipboard: (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean) => void;
+  onExportToClipboard: (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean, selectedGroups?: string[]) => void;
   scenes: Scene[];
   selectedSceneId: string | null;
   onExportSceneCSV: (sceneIds: string[], exportType: 'full' | 'serif-only', includeTogaki: boolean, selectedOnly: boolean, fileFormat?: 'csv' | 'txt', includeUserPreset?: boolean) => void;
@@ -144,7 +144,7 @@ export default function CSVExportDialog({
 
   const handleExport = (exportType: 'full' | 'serif-only', includeTogaki: boolean) => {
     if (exportToClipboard) {
-      onExportToClipboard(exportType === 'serif-only', exportSelectedOnly, includeTogaki);
+      onExportToClipboard(exportType === 'serif-only', exportSelectedOnly, includeTogaki, useGroupExport ? selectedGroups : undefined);
     } else if (useGroupExport && selectedGroups.length > 0) {
       onExportByGroups(selectedGroups, exportType, includeTogaki, exportSelectedOnly, useSceneExport ? sceneCheckboxes : undefined, fileFormat, includeUserPreset);
     } else if (!useGroupExport) {
@@ -272,7 +272,6 @@ export default function CSVExportDialog({
                        setExportToClipboard(e.target.checked);
                        if (e.target.checked) {
                          setExportType('serif-only');
-                         setUseGroupExport(false);
                          setUseSceneExport(false);
                        }
                      }}
@@ -450,15 +449,14 @@ export default function CSVExportDialog({
               )}
 
               {/* グループごとにエクスポートオプション */}
-              <label className={`flex items-center space-x-2 cursor-pointer mb-2 ${exportToClipboard ? 'opacity-50' : ''}`}>
+              <label className="flex items-center space-x-2 cursor-pointer mb-2">
                 <input
                   type="checkbox"
                   checked={useGroupExport}
                   onChange={(e) => setUseGroupExport(e.target.checked)}
                   className="text-primary"
-                  disabled={exportToClipboard}
                 />
-                <span className={`font-medium ${exportToClipboard ? 'text-muted-foreground' : 'text-foreground'}`}>
+                <span className="font-medium text-foreground">
                   グループごとにエクスポート
                 </span>
               </label>

@@ -1070,8 +1070,8 @@ export default function Home() {
         onExportCharacterCSV={() => {
           exportImport.handleExportCharacterCSV();
         }}
-        onExportToClipboard={(serifOnly = false, selectedOnly = false, includeTogaki = false) => {
-          exportImport.handleExportToClipboard(serifOnly, selectedOnly, includeTogaki);
+        onExportToClipboard={(serifOnly = false, selectedOnly = false, includeTogaki = false, selectedGroups) => {
+          exportImport.handleExportToClipboard(serifOnly, selectedOnly, includeTogaki, selectedGroups);
         }}
         scenes={project.scenes}
         selectedSceneId={selectedSceneId}
