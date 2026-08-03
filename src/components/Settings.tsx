@@ -5,7 +5,7 @@ import { XMarkIcon, Cog6ToothIcon, QuestionMarkCircleIcon, InformationCircleIcon
 import DialogFrame from '@/components/common/DialogFrame';
 import {
   SHORTCUT_DEFS, ShortcutDef, ShortcutId, ShortcutBinding, ShortcutMap,
-  defaultShortcuts, formatBinding, bindingsEqual
+  defaultShortcuts, formatBinding, bindingsEqual, findConflictingDef, YIELDING_SHORTCUT_IDS
 } from '@/types/shortcuts';
 import type { BubbleTheme } from '@/hooks/useSettings';
 
@@ -35,6 +35,11 @@ function ShortcutRow({
   const conflict = captured
     ? SHORTCUT_DEFS.find(d => d.id !== def.id && bindingsEqual(captured, allBindings[d.id]))
     : null;
+
+  // 互換のため後から追加したショートカットは、既存の割り当てと衝突していると発火しない
+  const yieldedTo = YIELDING_SHORTCUT_IDS.includes(def.id)
+    ? findConflictingDef(def.id, allBindings)
+    : undefined;
 
   const startEditing = () => {
     setIsEditing(true);
@@ -68,7 +73,7 @@ function ShortcutRow({
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className="text-sm text-foreground flex-1 min-w-0">{def.label}</span>
         <div className="flex items-center gap-1.5 shrink-0">
-          <kbd className="px-2 py-0.5 bg-muted rounded text-xs text-muted-foreground min-w-[5.5rem] text-center whitespace-nowrap">
+          <kbd className={`px-2 py-0.5 bg-muted rounded text-xs min-w-[5.5rem] text-center whitespace-nowrap ${yieldedTo ? 'text-muted-foreground/50 line-through' : 'text-muted-foreground'}`}>
             {formatBinding(binding)}
           </kbd>
           {!isDefault && (
@@ -88,6 +93,11 @@ function ShortcutRow({
           </button>
         </div>
       </div>
+      {yieldedTo && (
+        <p className="text-xs text-amber-600 mt-1">
+          ⚠ 競合済み（無効）— 「{yieldedTo.label}」と同じキーです。別のキーに変更すると有効になります
+        </p>
+      )}
       {isEditing && (
         <div className="mt-2 p-2 bg-muted/50 rounded border space-y-2">
           <div
@@ -191,6 +201,8 @@ interface SettingsProps {
   onSaveDirectoryChange: (directory: string) => void;
   enterOnlyBlockAdd?: boolean;
   onEnterOnlyBlockAddChange?: (enabled: boolean) => void;
+  addBlockSpeakerPicker?: boolean;
+  onAddBlockSpeakerPickerChange?: (enabled: boolean) => void;
   reverseToolbarOrder?: boolean;
   onReverseToolbarOrderChange?: (enabled: boolean) => void;
   fontSize?: number;
@@ -217,6 +229,8 @@ export default function Settings({
   onSaveDirectoryChange,
   enterOnlyBlockAdd = false,
   onEnterOnlyBlockAddChange,
+  addBlockSpeakerPicker = false,
+  onAddBlockSpeakerPickerChange,
   reverseToolbarOrder = false,
   onReverseToolbarOrderChange,
   fontSize = 16,
@@ -500,6 +514,23 @@ export default function Settings({
                     <div className="text-sm text-muted-foreground ml-7">
                       <p>• チェックをONにすると、セリフ入力エリアでEnterキーを押すだけでテキストブロックが追加されるようになります</p>
                       <p>• 改行の入力はShift+Enterに変更されます</p>
+                    </div>
+                    <div className="flex items-center space-x-3 pt-2">
+                      <input
+                        type="checkbox"
+                        id="addBlockSpeakerPicker"
+                        checked={addBlockSpeakerPicker}
+                        onChange={(e) => onAddBlockSpeakerPickerChange?.(e.target.checked)}
+                        className="w-4 h-4 text-primary bg-background border-gray-300 rounded focus:ring-primary focus:ring-2"
+                      />
+                      <label htmlFor="addBlockSpeakerPicker" className="text-sm font-medium text-foreground">
+                        ブロック追加時に話者選択を表示
+                      </label>
+                    </div>
+                    <div className="text-sm text-muted-foreground ml-7">
+                      <p>• チェックをONにすると、セリフブロックを追加する前に話者を選ぶ画面が表示されます</p>
+                      <p>• 直前の話者が選択された状態で開くため、Enterを押すだけなら従来と同じ操作感です</p>
+                      <p>• 矢印キーでの移動、数字キー（1〜9・0）での直接選択に対応しています</p>
                     </div>
                     <div className="flex items-center space-x-3 pt-2">
                       <input

@@ -24,6 +24,9 @@ import { loadStoryPanelAsset, removeStoryPanelAsset, saveStoryPanelAsset } from 
 import { getEmotionKeys, getEmotionIconUrl, getPresetIdForEmotion, getEmotionForPreset } from '@/utils/emotionUtils';
 import { getReadableTextColor } from '@/utils/colorUtils';
 import { buildChatSideMap } from '@/utils/chatUtils';
+import { createScriptBlock } from '@/utils/blockFactory';
+import CharacterPicker from '@/components/CharacterPicker';
+import CharacterGridAvatar from '@/components/common/CharacterGridAvatar';
 import type { BubbleTheme } from '@/hooks/useSettings';
 import {
   ArrowUpIcon,
@@ -77,6 +80,9 @@ interface ScriptEditorProps {
   onBlockDragStateChange?: (isDragging: boolean, blockIds: string[]) => void;
   onDragMovePosition?: (x: number, y: number) => void;
   onActiveBlockChange?: (blockId: string) => void;
+  addBlockSpeakerPicker?: boolean;
+  /** ピッカー起動関数を親（キーボードショートカット側）へ渡すための登録口 */
+  setRequestSpeakerPicker?: (fn: (mode: 'append' | 'insertBelow', anchorIndex: number) => void) => void;
 }
 
 interface SortableBlockProps {
@@ -97,6 +103,8 @@ interface SortableBlockProps {
   script: Script;
   onInsertBlock: (block: ScriptBlock, index: number) => void;
   insertIdx: React.MutableRefObject<number>;
+  /** ピッカーモード時、ブロック追加の代わりに話者選択を要求する */
+  onRequestSpeakerPicker?: (anchorIndex: number) => void;
 }
 
 function SortableBlock({
@@ -119,7 +127,8 @@ function SortableBlock({
   currentProjectId,
   script,
   onInsertBlock,
-  insertIdx
+  insertIdx,
+  onRequestSpeakerPicker
 }: SortableBlockProps & { textareaRef: (el: HTMLTextAreaElement | null) => void; isSelected: boolean; isMultiDragGhost?: boolean }) {
   const {
     attributes,
@@ -324,27 +333,6 @@ function SortableBlock({
             }
           : { borderRadius: '20px 20px 20px 0' };
 
-  const renderCharacterGridVisual = (c: Character) => {
-    const iconUrl = c.emotions.normal?.iconUrl;
-    if (iconUrl) {
-      return (
-        <img
-          src={iconUrl}
-          alt={c.name}
-        className="w-10 h-10 rounded-full object-cover border"
-        />
-      );
-    }
-    return (
-      <div
-        className="w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-bold border"
-        style={{ backgroundColor: c.backgroundColor || '#e5e7eb' }}
-      >
-        {c.name?.slice(0, 2) || '?'}
-      </div>
-    );
-  };
-
   return (
     <>
     <div
@@ -373,20 +361,27 @@ function SortableBlock({
               onFocus={() => { setIsTextareaFocused(true); onTextareaFocus?.(); }}
               onBlur={() => setIsTextareaFocused(false)}
               onKeyDown={e => {
-                // DnDキーボードセンサーへの伝播を防ぎ、IME確定Enterで並び替えモードに入らないようにする
-                if (e.key === 'Enter' || e.key === ' ') {
+                // DnDキーボードセンサーへの伝播を防ぎ、IME確定Enterで並び替えモードに入らないようにする。
+                // Ctrl+Shift+Enter だけはグローバルショートカット（ト書き追加）へ通す。
+                if ((e.key === 'Enter' || e.key === ' ') && !(e.ctrlKey && e.shiftKey)) {
                   e.stopPropagation();
                 }
                 if (isImeComposingKey(e)) {
                   return;
                 }
                 // チェックボックスの状態に応じてEnter操作のみで切り替え
-                const shouldAddBlock = enterOnlyBlockAdd 
+                const shouldAddBlock = enterOnlyBlockAdd
                   ? (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey)  // Enter入力のみモード
-                  : (e.key === 'Enter' && e.ctrlKey);                 // 従来のCtrl+Enterモード
-                
+                  : (e.key === 'Enter' && e.ctrlKey && !e.shiftKey);  // 従来のCtrl+Enterモード
+
                 if (shouldAddBlock) {
                   e.preventDefault();
+                  const currentIndex = script.blocks.findIndex(b => b.id === block.id);
+                  // ピッカーモード時は追加前に話者を選ばせる
+                  if (onRequestSpeakerPicker) {
+                    onRequestSpeakerPicker(currentIndex);
+                    return;
+                  }
                   const { characterId, emotion } = buildBlockFromLastSpeaker();
                   const newBlock: ScriptBlock = {
                     id: Date.now().toString(),
@@ -394,7 +389,6 @@ function SortableBlock({
                     emotion,
                     text: ''
                   };
-                  const currentIndex = script.blocks.findIndex(b => b.id === block.id);
                   insertIdx.current = currentIndex + 1; // 挿入インデックスを設定
                   onInsertBlock(newBlock, currentIndex + 1);
                 }
@@ -554,8 +548,9 @@ function SortableBlock({
                 value={block.text}
                 onChange={e => onUpdate({ text: e.target.value })}
                 onKeyDown={e => {
-                  // DnDキーボードセンサーへの伝播を防ぎ、IME確定Enterで並び替えモードに入らないようにする
-                  if (e.key === 'Enter' || e.key === ' ') {
+                  // DnDキーボードセンサーへの伝播を防ぎ、IME確定Enterで並び替えモードに入らないようにする。
+                  // Ctrl+Shift+Enter だけはグローバルショートカット（ト書き追加）へ通す。
+                  if ((e.key === 'Enter' || e.key === ' ') && !(e.ctrlKey && e.shiftKey)) {
                     e.stopPropagation();
                   }
                   if (isImeComposingKey(e)) {
@@ -564,10 +559,16 @@ function SortableBlock({
                   // チェックボックスの状態に応じてEnter操作のみで切り替え
                   const shouldAddBlock = enterOnlyBlockAdd
                     ? (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey)  // Enter入力のみモード
-                    : (e.key === 'Enter' && e.ctrlKey);                 // 従来のCtrl+Enterモード
+                    : (e.key === 'Enter' && e.ctrlKey && !e.shiftKey);  // 従来のCtrl+Enterモード
 
                   if (shouldAddBlock) {
                     e.preventDefault();
+                    const currentIndex = script.blocks.findIndex(b => b.id === block.id);
+                    // ピッカーモード時は追加前に話者を選ばせる
+                    if (onRequestSpeakerPicker) {
+                      onRequestSpeakerPicker(currentIndex);
+                      return;
+                    }
                     const { characterId, emotion } = buildBlockFromLastSpeaker();
                     const newBlock: ScriptBlock = {
                       id: Date.now().toString(),
@@ -575,7 +576,6 @@ function SortableBlock({
                       emotion,
                       text: ''
                     };
-                    const currentIndex = script.blocks.findIndex(b => b.id === block.id);
                     insertIdx.current = currentIndex + 1; // 挿入インデックスを設定
                     onInsertBlock(newBlock, currentIndex + 1);
                   }
@@ -772,7 +772,7 @@ function SortableBlock({
                   className={`p-2 border rounded text-left text-xs flex items-center gap-2 ${block.characterId === c.id ? 'border-primary bg-primary/5' : ''}`}
                   onClick={() => handleSelectCharacter(c.id)}
                 >
-                  {renderCharacterGridVisual(c)}
+                  <CharacterGridAvatar character={c} />
                   {c.name}
                 </button>
               ))}
@@ -823,7 +823,9 @@ export default function ScriptEditor({
   canRedo = false,
   onBlockDragStateChange,
   onDragMovePosition,
-  onActiveBlockChange
+  onActiveBlockChange,
+  addBlockSpeakerPicker = false,
+  setRequestSpeakerPicker
 }: ScriptEditorProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -868,6 +870,9 @@ export default function ScriptEditor({
   const [mobileToolbarBottom, setMobileToolbarBottom] = useState(16);
   const [dragOverSegmentId, setDragOverSegmentId] = useState<string | null>(null);
   const pendingFocusIndexAfterDelete = useRef<number | null>(null);
+  // 話者選択ピッカー（addBlockSpeakerPicker が ON のときだけ表示）
+  const [speakerPickerRequest, setSpeakerPickerRequest] = useState<{ mode: 'append' | 'insertBelow'; anchorIndex: number } | null>(null);
+  const focusBeforePickerRef = useRef<HTMLElement | null>(null);
   
   useEffect(() => {
     setPanelWidth(script.storyPanelWidth || 320);
@@ -2206,6 +2211,62 @@ export default function ScriptEditor({
     handleAddTogaki(insertIndex);
   }, [getPrimarySelectedIndex, script.blocks.length]);
 
+  // ===== 話者選択ピッカー =====
+
+  // 現在のプロジェクトで有効なキャラクター（ピッカーの並び順＝数字キーの割り当て順）
+  const pickerCharacters = useMemo(() => characters.filter(c =>
+    c.id !== '' &&
+    (!currentProjectId || !c.disabledProjects || !c.disabledProjects.includes(currentProjectId))
+  ), [characters, currentProjectId]);
+
+  // ピッカーモードON時にブロック追加を要求する入口。
+  // 起動直後は再レンダーでフォーカスが移るため、この時点の要素を控えてキャンセル時に戻す。
+  const requestAddBlock = useCallback((mode: 'append' | 'insertBelow', anchorIndex: number) => {
+    focusBeforePickerRef.current = document.activeElement as HTMLElement | null;
+    setSpeakerPickerRequest({ mode, anchorIndex });
+  }, []);
+
+  const cancelSpeakerPicker = useCallback(() => {
+    const target = focusBeforePickerRef.current;
+    setSpeakerPickerRequest(null);
+    setTimeout(() => target?.focus?.(), 0);
+  }, []);
+
+  // キーボードショートカット側からピッカーを起動できるように関数を親へ渡す
+  useEffect(() => {
+    setRequestSpeakerPicker?.(requestAddBlock);
+  }, [requestAddBlock, setRequestSpeakerPicker]);
+
+  // ピッカー表示時の初期選択（従来アルゴリズムと同じ「直前の話者」）
+  const speakerPickerInitialId = useMemo(() => {
+    if (!speakerPickerRequest) return '';
+    return getLastSpeakerTemplate(
+      speakerPickerRequest.mode === 'insertBelow' ? speakerPickerRequest.anchorIndex : undefined
+    ).characterId;
+  }, [getLastSpeakerTemplate, speakerPickerRequest]);
+
+  const handleSpeakerPickerSelect = useCallback((characterId: string) => {
+    if (!speakerPickerRequest) return;
+    const { mode, anchorIndex } = speakerPickerRequest;
+    const insertIndex = mode === 'append'
+      ? script.blocks.length
+      : (anchorIndex >= 0 ? anchorIndex + 1 : script.blocks.length);
+
+    // 直前の話者をそのまま選んだ場合は表情も引き継ぐ（従来の追加挙動と一致させる）
+    const template = getLastSpeakerTemplate(mode === 'insertBelow' ? anchorIndex : undefined);
+    const emotion: Emotion = characterId && characterId === template.characterId
+      ? template.emotion
+      : 'normal';
+
+    const newBlock = createScriptBlock(characterId, emotion);
+    insertIdx.current = insertIndex;
+    onInsertBlock(newBlock, insertIndex);
+    setSpeakerPickerRequest(null);
+    setTimeout(() => {
+      setManualFocusTargetFn({ index: insertIndex, id: newBlock.id });
+    }, 10);
+  }, [getLastSpeakerTemplate, onInsertBlock, script.blocks.length, setManualFocusTargetFn, speakerPickerRequest]);
+
   const primarySelectedBlockId = useMemo(() => selectedBlockIds[0] || null, [selectedBlockIds]);
   const primarySelectedIndex = useMemo(() => {
     if (!primarySelectedBlockId) return -1;
@@ -2582,6 +2643,9 @@ export default function ScriptEditor({
                             script={script}
                             onInsertBlock={onInsertBlock}
                             insertIdx={insertIdx}
+                            onRequestSpeakerPicker={addBlockSpeakerPicker
+                              ? (anchorIndex) => requestAddBlock('insertBelow', anchorIndex)
+                              : undefined}
                           />
                           {/* セパレートライン（常時表示） */}
                           {isStoryPanelOpen && existingSegment && index < script.blocks.length - 1 && (
@@ -2889,23 +2953,44 @@ export default function ScriptEditor({
           </button>
           <button
             type="button"
-            onClick={onAddBlock}
+            onClick={() => {
+              if (addBlockSpeakerPicker) {
+                requestAddBlock('append', -1);
+                return;
+              }
+              onAddBlock();
+            }}
             className="h-10 px-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium whitespace-nowrap shrink-0"
-            title="最下段に新規ブロック追加"
+            title={addBlockSpeakerPicker ? '最下段に新規ブロック追加（話者を選択）' : '最下段に新規ブロック追加'}
           >
             末追
           </button>
           <button
             type="button"
-            onClick={handleAddBlockBelowSelected}
+            onClick={() => {
+              if (addBlockSpeakerPicker) {
+                requestAddBlock('insertBelow', getPrimarySelectedIndex());
+                return;
+              }
+              handleAddBlockBelowSelected();
+            }}
             className="h-10 px-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium whitespace-nowrap shrink-0"
-            title="直下に新規ブロック追加"
+            title={addBlockSpeakerPicker ? '直下に新規ブロック追加（話者を選択）' : '直下に新規ブロック追加'}
           >
             直追
           </button>
           </div>
         </div>
       </div>
+      {speakerPickerRequest && (
+        <CharacterPicker
+          characters={pickerCharacters}
+          initialCharacterId={speakerPickerInitialId}
+          onSelect={handleSpeakerPickerSelect}
+          onClose={cancelSpeakerPicker}
+          title={speakerPickerRequest.mode === 'append' ? '最下段に追加する話者' : '直下に追加する話者'}
+        />
+      )}
     </>
   );
 }
