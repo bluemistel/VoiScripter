@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { XMarkIcon, Cog6ToothIcon, QuestionMarkCircleIcon, InformationCircleIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, Cog6ToothIcon, QuestionMarkCircleIcon, InformationCircleIcon, DocumentTextIcon, CommandLineIcon } from '@heroicons/react/24/outline';
 import DialogFrame from '@/components/common/DialogFrame';
 import {
   SHORTCUT_DEFS, ShortcutDef, ShortcutId, ShortcutBinding, ShortcutMap,
@@ -249,7 +249,7 @@ export default function Settings({
   onUpdateShortcut,
   onResetShortcuts,
 }: SettingsProps) {
-  const [activeTab, setActiveTab] = useState<'settings' | 'help' | 'license' | 'changelog' | 'bugreport' | 'latestdownload'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'shortcuts' | 'help' | 'license' | 'changelog' | 'bugreport' | 'latestdownload'>('settings');
   const [isSelectingDirectory, setIsSelectingDirectory] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [fontFamily, setFontFamily] = useState<string>(() => {
@@ -362,6 +362,17 @@ export default function Settings({
               <span className="hidden sm:inline">設定</span>
             </button>
             <button
+              onClick={() => setActiveTab('shortcuts')}
+              className={`w-full p-3 sm:text-left text-center flex items-center justify-center sm:justify-start space-x-0 sm:space-x-2 transition-colors ${
+                activeTab === 'shortcuts'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'hover:bg-accent'
+              }`}
+            >
+              <CommandLineIcon className="w-5 h-5" />
+              <span className="hidden sm:inline">ショートカット</span>
+            </button>
+            <button
               onClick={() => setActiveTab('help')}
               className={`w-full p-3 sm:text-left text-center flex items-center justify-center sm:justify-start space-x-0 sm:space-x-2 transition-colors ${
                 activeTab === 'help' 
@@ -424,37 +435,6 @@ export default function Settings({
           <div className="flex-1 p-6 overflow-y-auto">
             {activeTab === 'settings' && (
               <div className="space-y-6">
-                {/* フォント選択セクション */}
-                <div>
-                  <h3 className="text-lg font-medium text-foreground mb-4">フォント</h3>
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground mb-2">表示フォント</label>
-                    <select
-                      className="p-2 border rounded bg-background text-foreground"
-                      value={fontFamily}
-                      onChange={e => setFontFamily(e.target.value)}
-                    >
-                      <option value="mplus">M PLUS 1p（デフォルト）</option>
-                      <option value="noto">Noto Sans JP</option>
-                      <option value="sawarabi">Sawarabi Gothic</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2 mt-4">
-                    <label className="block text-sm font-medium text-foreground mb-2">フォントサイズ</label>
-                    <select
-                      className="p-2 border rounded bg-background text-foreground"
-                      value={fontSize}
-                      onChange={e => onFontSizeChange?.(parseInt(e.target.value, 10))}
-                    >
-                      <option value={12}>12px</option>
-                      <option value={14}>14px</option>
-                      <option value={16}>16px（デフォルト）</option>
-                      <option value={18}>18px</option>
-                      <option value={20}>20px</option>
-                      <option value={22}>22px</option>
-                    </select>
-                  </div>
-                </div>
                 {/* データの保存先セクション */}
                 <div>
                   <h3 className="text-lg font-medium text-foreground mb-4">データの保存先</h3>
@@ -498,7 +478,10 @@ export default function Settings({
                 {/* 詳細設定セクション */}
                 <div>
                   <h3 className="text-lg font-medium text-foreground mb-4">詳細設定</h3>
-                  <div className="space-y-4">
+
+                  {/* 動作モード */}
+                  <h4 className="text-base font-medium text-foreground mb-3">動作モード</h4>
+                  <div className="space-y-4 mb-6">
                     <div className="flex items-center space-x-3">
                       <input
                         type="checkbox"
@@ -546,6 +529,39 @@ export default function Settings({
                     </div>
                     <div className="text-sm text-muted-foreground ml-7">
                       <p>• チェックをONにすると、1段ツールバー内のボタン順序を左右反転します</p>
+                    </div>
+                  </div>
+
+                  {/* 表示 */}
+                  <h4 className="text-base font-medium text-foreground mb-3">表示</h4>
+                  <div className="space-y-4">
+                    <h5 className="text-sm font-semibold text-foreground">フォント</h5>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-foreground mb-2">表示フォント</label>
+                      <select
+                        className="p-2 border rounded bg-background text-foreground"
+                        value={fontFamily}
+                        onChange={e => setFontFamily(e.target.value)}
+                      >
+                        <option value="mplus">M PLUS 1p（デフォルト）</option>
+                        <option value="noto">Noto Sans JP</option>
+                        <option value="sawarabi">Sawarabi Gothic</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-foreground mb-2">フォントサイズ</label>
+                      <select
+                        className="p-2 border rounded bg-background text-foreground"
+                        value={fontSize}
+                        onChange={e => onFontSizeChange?.(parseInt(e.target.value, 10))}
+                      >
+                        <option value={12}>12px</option>
+                        <option value={14}>14px</option>
+                        <option value={16}>16px（デフォルト）</option>
+                        <option value={18}>18px</option>
+                        <option value={20}>20px</option>
+                        <option value={22}>22px</option>
+                      </select>
                     </div>
                     <div className="flex items-center space-x-3 pt-2">
                       <input
@@ -659,25 +675,6 @@ export default function Settings({
                   </div>
                   
                   <div>
-                    {onUpdateShortcut && onResetShortcuts ? (
-                      <ShortcutEditor
-                        shortcuts={shortcuts}
-                        onUpdateShortcut={onUpdateShortcut}
-                        onResetShortcuts={onResetShortcuts}
-                      />
-                    ) : (
-                      <>
-                        <h4 className="font-medium text-foreground mb-2">キーボードショートカット</h4>
-                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
-                          {SHORTCUT_DEFS.map(def => (
-                            <li key={def.id}>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">{formatBinding(shortcuts[def.id])}</kbd> {def.label}</li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-                  </div>
-                  
-                  <div>
                     <h4 className="font-medium text-foreground mb-2">プロジェクト管理</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                       <li>• 複数のプロジェクトを作成・管理できます。</li>
@@ -689,10 +686,70 @@ export default function Settings({
               </div>
             )}
 
+            {activeTab === 'shortcuts' && (
+              <div className="flex flex-col max-h-[60vh] pr-2">
+                {onUpdateShortcut && onResetShortcuts ? (
+                  <ShortcutEditor
+                    shortcuts={shortcuts}
+                    onUpdateShortcut={onUpdateShortcut}
+                    onResetShortcuts={onResetShortcuts}
+                  />
+                ) : (
+                  <>
+                    <h4 className="font-medium text-foreground mb-2">キーボードショートカット</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      {SHORTCUT_DEFS.map(def => (
+                        <li key={def.id}>• <kbd className="px-1 py-0.5 bg-muted rounded text-xs">{formatBinding(shortcuts[def.id])}</kbd> {def.label}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
+
             {activeTab === 'changelog' && (
               <div className="flex flex-col max-h-[60vh] pr-2">
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.3.3</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>
+                        • ブロック追加時の話者選択を追加
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• 設定の「ブロック追加時に話者選択を表示」をONにすると、セリフブロックの追加前に話者を選ぶ画面が表示されます</li>
+                          <li>• 矢印キーでの移動、数字キー（1〜9・0）での直接選択に対応しています</li>
+                        </ul>
+                      </li>
+                      <li>
+                        • ト書きブロックの追加ショートカットを追加
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• 従来の Ctrl+Alt+B に加えて Ctrl+Shift+Enter でもト書きブロックを追加できます</li>
+                        </ul>
+                      </li>
+                      <li>
+                        • キャラクター管理にグループタブを追加
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• 「全て」とグループ設定に応じたタブでキャラクター一覧を絞り込めます</li>
+                        </ul>
+                      </li>
+                      <li>
+                        • 設定画面を整理
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• 詳細設定を「動作モード」「表示」に分類し、独立していたフォント設定を 表示 &gt; フォント にまとめました</li>
+                          <li>• キーボードショートカットをヘルプから独立させ、設定メニューの下に「ショートカット」項目を追加しました</li>
+                        </ul>
+                      </li>
+                      <li>
+                        • 不具合の修正
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• 「クリップボードにセリフをコピーする」の選択時に「グループごとにエクスポート」を利用できなかった問題を修正</li>
+                          <li>• バグ報告フォームのリンクをアプリ共通フォームのものに更新</li>
+                        </ul>
+                      </li>
+                    </ul>
+                  </div>
+
                   <div>
                     <h4 className="font-medium text-foreground mb-2">v0.3.2</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
