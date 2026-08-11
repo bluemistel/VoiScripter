@@ -22,7 +22,7 @@ import HTML_CONTENT from './public/index.html';
 
 const MAX_VALUE_SIZE = 25 * 1024 * 1024; // Cloudflare KV limit: 25MB
 
-const MIN_APP_VERSION = '0.3.2';
+const MIN_APP_VERSION = '0.3.3';
 
 const POW_DEFAULT_DIFFICULTY = 20; // leading zero bits required
 const POW_TTL_SECONDS = 120;       // challenge validity window

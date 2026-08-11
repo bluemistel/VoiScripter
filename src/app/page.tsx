@@ -45,6 +45,7 @@ export default function Home() {
   const textareaRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
   const setIsUndoRedoOperationRef = useRef<((isUndoRedo: boolean) => void) | null>(null);
   const setIsCtrlEnterBlockRef = useRef<((isCtrlEnter: boolean) => void) | null>(null);
+  const requestSpeakerPickerRef = useRef<((mode: 'append' | 'insertBelow', anchorIndex: number) => void) | null>(null);
   const storyAssetMigrationDoneRef = useRef(false);
   const sceneSelectionMemoryRef = useRef<Record<string, string[]>>({});
   const [isDraggingBlocks, setIsDraggingBlocks] = useState(false);
@@ -321,7 +322,11 @@ export default function Home() {
         // console.log('page.tsx - Set isCtrlEnterBlock to:', isCtrlEnter);
       }
     },
-    shortcutConfig.shortcuts
+    shortcutConfig.shortcuts,
+    settings.addBlockSpeakerPicker,
+    (mode, anchorIndex) => {
+      requestSpeakerPickerRef.current?.(mode, anchorIndex);
+    }
   );
 
   // 初期化処理は useProjectManagement フック内で行われるため、ここでは不要
@@ -860,6 +865,11 @@ export default function Home() {
               setIsUndoRedoOperationRef.current = setIsUndoRedoOperationFn;
             }}
             enterOnlyBlockAdd={settings.enterOnlyBlockAdd}
+            addBlockSpeakerPicker={settings.addBlockSpeakerPicker}
+            setRequestSpeakerPicker={(fn) => {
+              // ScriptEditorのピッカー起動関数を参照に保存（キーボードショートカットから利用）
+              requestSpeakerPickerRef.current = fn;
+            }}
             reverseToolbarOrder={settings.reverseToolbarOrder}
             simpleMode={settings.simpleMode}
             bubbleTheme={settings.bubbleTheme}
@@ -1070,8 +1080,8 @@ export default function Home() {
         onExportCharacterCSV={() => {
           exportImport.handleExportCharacterCSV();
         }}
-        onExportToClipboard={(serifOnly = false, selectedOnly = false, includeTogaki = false) => {
-          exportImport.handleExportToClipboard(serifOnly, selectedOnly, includeTogaki);
+        onExportToClipboard={(serifOnly = false, selectedOnly = false, includeTogaki = false, selectedGroups) => {
+          exportImport.handleExportToClipboard(serifOnly, selectedOnly, includeTogaki, selectedGroups);
         }}
         scenes={project.scenes}
         selectedSceneId={selectedSceneId}
@@ -1128,6 +1138,8 @@ export default function Home() {
         onSaveDirectoryChange={settings.handleSaveDirectoryChange}
         enterOnlyBlockAdd={settings.enterOnlyBlockAdd}
         onEnterOnlyBlockAddChange={settings.handleEnterOnlyBlockAddChange}
+        addBlockSpeakerPicker={settings.addBlockSpeakerPicker}
+        onAddBlockSpeakerPickerChange={settings.handleAddBlockSpeakerPickerChange}
         reverseToolbarOrder={settings.reverseToolbarOrder}
         onReverseToolbarOrderChange={settings.handleReverseToolbarOrderChange}
         fontSize={settings.fontSize}

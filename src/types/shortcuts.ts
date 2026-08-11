@@ -8,6 +8,7 @@ export type ShortcutId =
   | 'insertBlock'
   | 'addBlock'
   | 'insertTogakiBlock'
+  | 'insertTogakiBlockAlt'
   | 'deleteBlock'
   | 'moveBlockUp'
   | 'moveBlockDown'
@@ -41,6 +42,7 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
   { id: 'insertBlock',       label: '直下に新規ブロック追加',      group: 'editor', defaultBinding: { ctrl: true,  shift: false, alt: false, key: 'Enter' } },
   { id: 'addBlock',          label: '最下段に新規ブロック追加',    group: 'editor', defaultBinding: { ctrl: true,  shift: false, alt: false, key: 'b' } },
   { id: 'insertTogakiBlock', label: 'ト書きブロックを追加',        group: 'editor', defaultBinding: { ctrl: true,  shift: false, alt: true,  key: 'b' } },
+  { id: 'insertTogakiBlockAlt', label: 'ト書きブロックを追加（別キー）', group: 'editor', defaultBinding: { ctrl: true,  shift: true,  alt: false, key: 'Enter' } },
   { id: 'deleteBlock',       label: '選択ブロック削除',            group: 'editor', defaultBinding: { ctrl: false, shift: false, alt: true,  key: 'b' } },
   { id: 'moveBlockUp',       label: 'ブロックを上に移動',          group: 'editor', defaultBinding: { ctrl: true,  shift: false, alt: false, key: 'ArrowUp' } },
   { id: 'moveBlockDown',     label: 'ブロックを下に移動',          group: 'editor', defaultBinding: { ctrl: true,  shift: false, alt: false, key: 'ArrowDown' } },
@@ -92,3 +94,16 @@ export const bindingsEqual = (a: ShortcutBinding, b: ShortcutBinding): boolean =
   a.shift === b.shift &&
   a.alt   === b.alt   &&
   normalizeKey(a.key) === normalizeKey(b.key);
+
+/**
+ * 後から追加されたショートカットが既存の割り当てと衝突していないか調べる。
+ * 衝突している場合は相手の定義を返し、呼び出し側は自分の発火を見送る（既存側を優先）。
+ */
+export const findConflictingDef = (id: ShortcutId, map: ShortcutMap): ShortcutDef | undefined => {
+  const binding = map[id];
+  if (!binding) return undefined;
+  return SHORTCUT_DEFS.find(def => def.id !== id && map[def.id] && bindingsEqual(binding, map[def.id]));
+};
+
+/** 衝突時に自分から譲るショートカット（互換のため後から追加したもの） */
+export const YIELDING_SHORTCUT_IDS: ShortcutId[] = ['insertTogakiBlockAlt'];

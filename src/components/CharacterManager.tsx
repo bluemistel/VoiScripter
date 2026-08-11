@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Character, Emotion, EmotionSetting, UserPreset, MaterialCredit, GroupCredits } from '@/types';
 import { PlusIcon, TrashIcon, PencilIcon, Cog6ToothIcon, ListBulletIcon, IdentificationIcon, FaceSmileIcon } from '@heroicons/react/24/outline';
 import IconCropperDialog from '@/components/IconCropperDialog';
@@ -23,6 +23,11 @@ import { CSS } from '@dnd-kit/utilities';
 import DialogFrame from '@/components/common/DialogFrame';
 
 const defaultEmotions: Emotion[] = ['normal'];
+
+/** グループタブ: 全キャラクターを表示する既定タブ */
+const ALL_GROUP_TAB = '__all__';
+/** グループ未設定（または削除済みグループ）のキャラクターをまとめるタブ */
+const NO_GROUP = 'なし';
 
 const emptyEmotions = {
   normal: { iconUrl: '' }
@@ -185,6 +190,35 @@ export default function CharacterManager({
   // キャラクターのプロジェクト使用状況を管理
   const [characterProjectStates, setCharacterProjectStates] = useState<{[characterId: string]: boolean}>({});
   const [showCloseDialog, setShowCloseDialog] = useState(false);
+
+  // グループタブ（既定は「全て」）
+  const [activeGroupTab, setActiveGroupTab] = useState<string>(ALL_GROUP_TAB);
+
+  // キャラクターの所属グループ。未設定・削除済みグループは「なし」に寄せる
+  const resolveGroup = (character: Character) =>
+    character.group && groups.includes(character.group) ? character.group : NO_GROUP;
+
+  // タブ構成: 全て → グループ設定の並び順 →（該当キャラがいれば）なし
+  const groupTabs = useMemo(() => {
+    const tabs = [ALL_GROUP_TAB, ...groups];
+    if (characters.some(c => resolveGroup(c) === NO_GROUP)) tabs.push(NO_GROUP);
+    return tabs;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, characters]);
+
+  // 現在のタブに表示するキャラクター
+  const visibleCharacters = useMemo(
+    () => activeGroupTab === ALL_GROUP_TAB
+      ? characters
+      : characters.filter(c => resolveGroup(c) === activeGroupTab),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeGroupTab, characters, groups]
+  );
+
+  // グループ削除などでタブが消えた場合は「全て」へ戻す
+  useEffect(() => {
+    if (!groupTabs.includes(activeGroupTab)) setActiveGroupTab(ALL_GROUP_TAB);
+  }, [groupTabs, activeGroupTab]);
 
   // フォールバック用の関数を定義
   const fallbackGetCharacterProjectStates = (currentProjectId: string, projectList: string[]) => {
@@ -564,18 +598,22 @@ export default function CharacterManager({
           <div className="flex justify-between items-center gap-3">
             <h3 className="text-lg font-semibold text-foreground">キャラクター管理</h3>
             <div className="flex items-center gap-2">
-              {currentProjectId && characters.length > 0 && (() => {
-                // 「現在の台本で使用する」の一括チェック/解除
-                const allChecked = characters.every(char => characterProjectStates[char.id]);
+              {currentProjectId && visibleCharacters.length > 0 && (() => {
+                // 「現在の台本で使用する」の一括チェック/解除（表示中のタブのキャラクターが対象）
+                const allChecked = visibleCharacters.every(char => characterProjectStates[char.id]);
                 return (
                   <button
                     onClick={() => {
-                      const next: {[characterId: string]: boolean} = {};
-                      characters.forEach(char => { next[char.id] = !allChecked; });
-                      setCharacterProjectStates(next);
+                      setCharacterProjectStates(prev => {
+                        const next = { ...prev };
+                        visibleCharacters.forEach(char => { next[char.id] = !allChecked; });
+                        return next;
+                      });
                     }}
                     className="px-2.5 py-1 text-xs border rounded text-foreground hover:bg-accent whitespace-nowrap"
-                    title="「現在の台本で使用する」のチェックを一括で切り替えます"
+                    title={activeGroupTab === ALL_GROUP_TAB
+                      ? '「現在の台本で使用する」のチェックを一括で切り替えます'
+                      : `グループ「${activeGroupTab}」のキャラクターだけを一括で切り替えます`}
                   >
                     使用チェックを{allChecked ? 'すべて外す' : 'すべて付ける'}
                   </button>
@@ -592,13 +630,40 @@ export default function CharacterManager({
           </div>
         </div>
         
+        {/* グループタブ（全て＋グループ設定） */}
+        {groupTabs.length > 1 && (
+          <div className="shrink-0 px-6 pt-3 border-b">
+            <div className="flex gap-1 overflow-x-auto whitespace-nowrap">
+              {groupTabs.map(tab => {
+                const count = tab === ALL_GROUP_TAB
+                  ? characters.length
+                  : characters.filter(c => resolveGroup(c) === tab).length;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveGroupTab(tab)}
+                    className={`px-3 py-2 text-sm font-medium transition-colors shrink-0 ${
+                      activeGroupTab === tab
+                        ? 'text-primary border-b-2 border-primary'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {tab === ALL_GROUP_TAB ? '全て' : tab}
+                    <span className="ml-1 text-xs text-muted-foreground">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-4">
             {/* キャラクター一覧を2段組グリッドで表示＋ドラッグ＆ドロップ */}
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={characters.map(c => c.id)} strategy={rectSortingStrategy}>
+              <SortableContext items={visibleCharacters.map(c => c.id)} strategy={rectSortingStrategy}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {characters.map(character => (
+                  {visibleCharacters.map(character => (
                     <SortableCharacter key={character.id} character={character} isEditing={isEditingId === character.id}>
                       {isEditingId === character.id ? (
                         <form onSubmit={handleEditSubmit} className="flex-1 space-y-2">
@@ -807,6 +872,11 @@ export default function CharacterManager({
                 </div>
               </SortableContext>
             </DndContext>
+            {visibleCharacters.length === 0 && characters.length > 0 && (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                このグループにはキャラクターがいません
+              </p>
+            )}
             {isAdding ? (
               <form onSubmit={handleSubmit} className="border rounded p-3 space-y-3 bg-background">
                 <input
@@ -877,7 +947,13 @@ export default function CharacterManager({
                   <span>グループ設定</span>
                 </button>
                 <button
-                  onClick={() => setIsAdding(true)}
+                  onClick={() => {
+                    // グループタブを開いているときは、追加後に一覧から消えないよう既定グループを合わせる
+                    if (activeGroupTab !== ALL_GROUP_TAB) {
+                      setNewCharacter(prev => ({ ...prev, group: activeGroupTab }));
+                    }
+                    setIsAdding(true);
+                  }}
                   className="flex-1 flex items-center justify-center space-x-2 p-2 border rounded hover:bg-primary/80 text-foreground"
                   style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-primary-foreground)' }}
                 >

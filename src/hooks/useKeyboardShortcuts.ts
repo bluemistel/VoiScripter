@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { UndoRedoHook, ProjectHistory } from './useUndoRedo';
 import { ScriptBlock } from '@/types';
-import { ShortcutMap, defaultShortcuts, matchesShortcut } from '@/types/shortcuts';
+import { ShortcutMap, defaultShortcuts, matchesShortcut, findConflictingDef } from '@/types/shortcuts';
 import { getEmotionForPreset } from '@/utils/emotionUtils';
 
 export interface KeyboardShortcutsHook {
@@ -39,11 +39,21 @@ export const useKeyboardShortcuts = (
   textareaRefs?: React.MutableRefObject<(HTMLTextAreaElement | null)[]>,
   setManualFocusTarget?: (target: { index: number; id: string } | null) => void,
   setIsCtrlEnterBlock?: (isCtrlEnter: boolean) => void,
-  shortcuts: ShortcutMap = defaultShortcuts
+  shortcuts: ShortcutMap = defaultShortcuts,
+  // 話者選択ピッカーモード（ONのときブロック追加前に話者を選ばせる）
+  speakerPickerEnabled: boolean = false,
+  onRequestSpeakerPicker?: (mode: 'append' | 'insertBelow', anchorIndex: number) => void
 ): KeyboardShortcutsHook => {
   const isRegistered = useRef(false);
   const [undoResult, setUndoResult] = useState<ProjectHistory | null>(null);
   const [redoResult, setRedoResult] = useState<ProjectHistory | null>(null);
+
+  // ピッカー起動コールバックは毎レンダーで同一性が変わるため、
+  // リスナーの再登録を避けて ref 経由で最新版を参照する。
+  const requestSpeakerPickerRef = useRef(onRequestSpeakerPicker);
+  useEffect(() => {
+    requestSpeakerPickerRef.current = onRequestSpeakerPicker;
+  }, [onRequestSpeakerPicker]);
 
   // ブロックがウィンドウの表示領域に収まるようにスクロール位置を調整する関数
   const ensureBlockVisible = (targetRef: HTMLTextAreaElement, index: number) => {
@@ -148,12 +158,36 @@ export const useKeyboardShortcuts = (
         }
       }
 
+      // ト書きブロックを挿入する共通処理（Ctrl+Alt+B / Ctrl+Shift+Enter で共有）
+      const insertTogakiAt = (idx: number) => {
+        const newBlock: ScriptBlock = {
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          characterId: '',
+          emotion: 'normal',
+          text: ''
+        };
+        onInsertBlock(newBlock, idx);
+        if (setIsCtrlEnterBlock) setIsCtrlEnterBlock(true);
+        setTimeout(() => {
+          const newBlockRef = textareaRefs?.current?.[idx];
+          if (newBlockRef) {
+            newBlockRef.focus();
+            ensureBlockVisible(newBlockRef, idx);
+          }
+        }, 100);
+      };
+
       // 直下に新規ブロック追加
       if (matchesShortcut(event, shortcuts.insertBlock)) {
         if (activeIdx >= 0 && activeIdx < scriptBlocks.length) {
           const currentBlock = scriptBlocks[activeIdx];
           if (currentBlock) {
             event.preventDefault();
+            // ピッカーモード時は話者を選ばせてから挿入する
+            if (speakerPickerEnabled && requestSpeakerPickerRef.current) {
+              requestSpeakerPickerRef.current('insertBelow', activeIdx);
+              return;
+            }
             // 新規ブロックは現在ブロックの直後に挿入されるため、話者は「現在ブロック以前」の
             // 直近の話者ブロックから引き継ぐ（末尾ではなく、Alt+↑/↓ で切り替えた現在ブロックの話者）。
             const precedingBlocks = scriptBlocks.slice(0, activeIdx + 1);
@@ -182,28 +216,27 @@ export const useKeyboardShortcuts = (
       // ト書きブロックを追加（addBlock より先にチェック）
       if (matchesShortcut(event, shortcuts.insertTogakiBlock)) {
         event.preventDefault();
-        const idx = activeIdx >= 0 ? activeIdx + 1 : scriptBlocks.length;
-        const newBlock: ScriptBlock = {
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          characterId: '',
-          emotion: 'normal',
-          text: ''
-        };
-        onInsertBlock(newBlock, idx);
-        if (setIsCtrlEnterBlock) setIsCtrlEnterBlock(true);
-        setTimeout(() => {
-          const newBlockRef = textareaRefs?.current?.[idx];
-          if (newBlockRef) {
-            newBlockRef.focus();
-            ensureBlockVisible(newBlockRef, idx);
-          }
-        }, 100);
+        insertTogakiAt(activeIdx >= 0 ? activeIdx + 1 : scriptBlocks.length);
+        return;
+      }
+
+      // ト書きブロックを追加（別キー割り当て）。
+      // 既存ショートカットと同じキーに割り当てられている場合は既存側を優先し、ここでは発火させない。
+      if (matchesShortcut(event, shortcuts.insertTogakiBlockAlt) &&
+          !findConflictingDef('insertTogakiBlockAlt', shortcuts)) {
+        event.preventDefault();
+        insertTogakiAt(activeIdx >= 0 ? activeIdx + 1 : scriptBlocks.length);
         return;
       }
 
       // 最下段に新規ブロック追加
       if (matchesShortcut(event, shortcuts.addBlock)) {
         event.preventDefault();
+        // ピッカーモード時は話者を選ばせてから追加する
+        if (speakerPickerEnabled && requestSpeakerPickerRef.current) {
+          requestSpeakerPickerRef.current('append', -1);
+          return;
+        }
         onAddBlock();
         setTimeout(() => {
           const lastIndex = scriptBlocks.length;
@@ -377,7 +410,7 @@ export const useKeyboardShortcuts = (
     return () => {
       unregisterShortcuts();
     };
-  }, [scriptBlocks, characters, undoRedo, shortcuts]); // 依存配列に必要な値を追加
+  }, [scriptBlocks, characters, undoRedo, shortcuts, speakerPickerEnabled]); // 依存配列に必要な値を追加
 
   return {
     registerShortcuts,

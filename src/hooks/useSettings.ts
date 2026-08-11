@@ -12,6 +12,8 @@ export interface SettingsHook {
   enterOnlyBlockAdd: boolean;
   setEnterOnlyBlockAdd: (enabled: boolean) => void;
   handleEnterOnlyBlockAddChange: (enabled: boolean) => void;
+  addBlockSpeakerPicker: boolean;
+  handleAddBlockSpeakerPickerChange: (enabled: boolean) => void;
   reverseToolbarOrder: boolean;
   setReverseToolbarOrder: (enabled: boolean) => void;
   handleReverseToolbarOrderChange: (enabled: boolean) => void;
@@ -33,6 +35,7 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
   // saveDirectoryはdataManagementから取得
   const { saveDirectory, setSaveDirectory } = dataManagement;
   const [enterOnlyBlockAdd, setEnterOnlyBlockAdd] = useState<boolean>(false);
+  const [addBlockSpeakerPicker, setAddBlockSpeakerPicker] = useState<boolean>(false);
   const [reverseToolbarOrder, setReverseToolbarOrder] = useState<boolean>(false);
   const [fontSize, setFontSize] = useState<number>(16);
   const [simpleMode, setSimpleMode] = useState<boolean>(false);
@@ -47,6 +50,10 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
         const savedValue = await dataManagement.loadData('voiscripter_enterOnlyBlockAdd');
         if (savedValue !== null) {
           setEnterOnlyBlockAdd(savedValue === 'true');
+        }
+        const savedSpeakerPicker = await dataManagement.loadData('voiscripter_addBlockSpeakerPicker');
+        if (savedSpeakerPicker !== null) {
+          setAddBlockSpeakerPicker(savedSpeakerPicker === 'true');
         }
         const savedToolbarOrder = await dataManagement.loadData('voiscripter_reverseToolbarOrder');
         if (savedToolbarOrder !== null) {
@@ -85,6 +92,12 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
   const handleEnterOnlyBlockAddChange = (enabled: boolean) => {
     setEnterOnlyBlockAdd(enabled);
     dataManagement.saveData('voiscripter_enterOnlyBlockAdd', enabled.toString());
+  };
+
+  // ブロック追加前に話者選択ピッカーを表示するモードの設定変更
+  const handleAddBlockSpeakerPickerChange = (enabled: boolean) => {
+    setAddBlockSpeakerPicker(enabled);
+    dataManagement.saveData('voiscripter_addBlockSpeakerPicker', enabled.toString());
   };
 
   const handleReverseToolbarOrderChange = (enabled: boolean) => {
@@ -191,6 +204,8 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
     enterOnlyBlockAdd,
     setEnterOnlyBlockAdd,
     handleEnterOnlyBlockAddChange,
+    addBlockSpeakerPicker,
+    handleAddBlockSpeakerPickerChange,
     reverseToolbarOrder,
     setReverseToolbarOrder,
     handleReverseToolbarOrderChange,

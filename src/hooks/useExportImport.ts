@@ -15,7 +15,7 @@ export interface ExportImportHook {
     includeUserPreset?: boolean
   ) => Promise<void>;
   handleExportCharacterCSV: () => void;
-  handleExportToClipboard: (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean) => Promise<void>;
+  handleExportToClipboard: (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean, selectedGroups?: string[]) => Promise<void>;
   handleImportCSV: (file: File, options?: { mode: 'append' | 'new'; projectName?: string }) => Promise<void>;
   handleImportCharacterCSV: (file: File) => Promise<void>;
   handleImportJson: (file: File) => Promise<void>;
@@ -344,13 +344,23 @@ export const useExportImport = (
   };
 
   // クリップボードに出力
-  const handleExportToClipboard = async (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean) => {
+  const handleExportToClipboard = async (serifOnly?: boolean, selectedOnly?: boolean, includeTogaki?: boolean, selectedGroups?: string[]) => {
     let allBlocks = project.scenes.flatMap(scene => scene.scripts[0]?.blocks || []);
-    
+
     if (selectedOnly && selectedBlockIds.length > 0) {
       allBlocks = allBlocks.filter(block => selectedBlockIds.includes(block.id));
     }
-    
+
+    if (selectedGroups && selectedGroups.length > 0) {
+      const groupCharacterIds = characters
+        .filter(char => selectedGroups.includes(char.group))
+        .map(char => char.id);
+      allBlocks = allBlocks.filter(block =>
+        (block.characterId && groupCharacterIds.includes(block.characterId)) ||
+        (!block.characterId && includeTogaki)
+      );
+    }
+
     let text: string;
     if (serifOnly) {
       text = allBlocks
