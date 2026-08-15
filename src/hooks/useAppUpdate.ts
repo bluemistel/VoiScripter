@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { DataManagementHook } from './useDataManagement';
 
 const GITHUB_RELEASES_API = 'https://api.github.com/repos/bluemistel/VoiScripter/releases?per_page=20';
@@ -70,15 +70,23 @@ export const useAppUpdate = (dataManagement: DataManagementHook) => {
   const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
   const [isUpdateSkipped, setIsUpdateSkipped] = useState(false);
 
+  // useDataManagement は毎レンダーで新しいオブジェクトを返すため、依存に入れると
+  // checkForUpdates の同一性が毎回変わり、呼び出し側の useEffect が再実行され続ける。
+  // 最新値は ref 経由で参照し、コールバックの同一性を保つ。
+  const dataManagementRef = useRef(dataManagement);
+  useEffect(() => {
+    dataManagementRef.current = dataManagement;
+  }, [dataManagement]);
+
   const setSkipForLatest = useCallback(async (skip: boolean) => {
     if (!updateInfo) return;
     setIsUpdateSkipped(skip);
     if (skip) {
-      await dataManagement.saveData(UPDATE_SKIP_KEY, updateInfo.latestVersion);
+      await dataManagementRef.current.saveData(UPDATE_SKIP_KEY, updateInfo.latestVersion);
     } else {
-      await dataManagement.deleteData(UPDATE_SKIP_KEY);
+      await dataManagementRef.current.deleteData(UPDATE_SKIP_KEY);
     }
-  }, [dataManagement, updateInfo]);
+  }, [updateInfo]);
 
   const checkForUpdates = useCallback(async (
     options: CheckForUpdatesOptions = {}
@@ -142,7 +150,7 @@ export const useAppUpdate = (dataManagement: DataManagementHook) => {
       return null;
     }
 
-    const skippedVersionRaw = await dataManagement.loadData(UPDATE_SKIP_KEY);
+    const skippedVersionRaw = await dataManagementRef.current.loadData(UPDATE_SKIP_KEY);
     const skippedVersion = normalizeVersion(skippedVersionRaw);
     const skippedLatest = skippedVersion === latest.version;
     setIsUpdateSkipped(skippedLatest);
@@ -164,7 +172,7 @@ export const useAppUpdate = (dataManagement: DataManagementHook) => {
       setIsUpdateDialogOpen(true);
     }
     return info;
-  }, [dataManagement]);
+  }, []);
 
   return {
     updateInfo,

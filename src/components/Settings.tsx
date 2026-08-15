@@ -477,10 +477,9 @@ export default function Settings({
                 
                 {/* 詳細設定セクション */}
                 <div>
-                  <h3 className="text-lg font-medium text-foreground mb-4">詳細設定</h3>
 
                   {/* 動作モード */}
-                  <h4 className="text-base font-medium text-foreground mb-3">動作モード</h4>
+                  <h3 className="text-base font-medium text-foreground mb-3">動作モードの切り替え</h3>
                   <div className="space-y-4 mb-6">
                     <div className="flex items-center space-x-3">
                       <input
@@ -512,8 +511,7 @@ export default function Settings({
                     </div>
                     <div className="text-sm text-muted-foreground ml-7">
                       <p>• チェックをONにすると、セリフブロックを追加する前に話者を選ぶ画面が表示されます</p>
-                      <p>• 直前の話者が選択された状態で開くため、Enterを押すだけなら従来と同じ操作感です</p>
-                      <p>• 矢印キーでの移動、数字キー（1〜9・0）での直接選択に対応しています</p>
+                      <p>• 話者選択は矢印キーでの移動と、数字キーでの直接選択に対応しています（1〜9がキャラクター、0がト書き）</p>
                     </div>
                     <div className="flex items-center space-x-3 pt-2">
                       <input
@@ -533,9 +531,9 @@ export default function Settings({
                   </div>
 
                   {/* 表示 */}
-                  <h4 className="text-base font-medium text-foreground mb-3">表示</h4>
+                  <h3 className="text-base font-medium text-foreground mb-3">表示の切り替え</h3>
                   <div className="space-y-4">
-                    <h5 className="text-sm font-semibold text-foreground">フォント</h5>
+                    <h4 className="text-sm font-semibold text-foreground">フォント</h4>
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-foreground mb-2">表示フォント</label>
                       <select
@@ -718,7 +716,7 @@ export default function Settings({
                         • ブロック追加時の話者選択を追加
                         <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                           <li>• 設定の「ブロック追加時に話者選択を表示」をONにすると、セリフブロックの追加前に話者を選ぶ画面が表示されます</li>
-                          <li>• 矢印キーでの移動、数字キー（1〜9・0）での直接選択に対応しています</li>
+                          <li>• 矢印キーでの移動と、数字キーでの直接選択に対応しています（1〜9がキャラクター、0がト書き）</li>
                         </ul>
                       </li>
                       <li>

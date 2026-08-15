@@ -15,8 +15,10 @@ interface CharacterPickerProps {
 }
 
 const GRID_COLUMNS = 2;
-/** 数字キーの並び。1〜9 のあと 0 で10体目 */
-const NUMBER_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
+/** キャラクターに割り当てる数字キー（有効キャラクターの並び順で先頭9名） */
+const CHARACTER_NUMBER_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+/** ト書きに割り当てる数字キー */
+const TOGAKI_NUMBER_KEY = '0';
 
 export default function CharacterPicker({
   characters,
@@ -36,6 +38,8 @@ export default function CharacterPicker({
   const initialIndex = Math.max(0, options.findIndex(o => o.id === initialCharacterId));
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [isMobileView, setIsMobileView] = useState(false);
+  // 表示行数は解像度で決める（タブレットはボトムシートのままでも5行表示にする）
+  const [isNarrowScreen, setIsNarrowScreen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -45,6 +49,7 @@ export default function CharacterPicker({
       const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
       const smallScreen = window.innerWidth < 640;
       setIsMobileView(coarsePointer || smallScreen);
+      setIsNarrowScreen(smallScreen);
     };
     updateMobileView();
     window.addEventListener('resize', updateMobileView);
@@ -93,15 +98,22 @@ export default function CharacterPicker({
         return;
       }
 
-      // 数字キーは「有効キャラクターの並び順」に割り当てる（ト書きは対象外）
-      const numberIndex = NUMBER_KEYS.indexOf(event.key);
-      if (numberIndex >= 0 && !event.ctrlKey && !event.altKey && !event.metaKey) {
-        const target = characters[numberIndex];
-        if (target) {
+      // 数字キーは 0 がト書き、1〜9 が「有効キャラクターの並び順」
+      if (!event.ctrlKey && !event.altKey && !event.metaKey) {
+        if (event.key === TOGAKI_NUMBER_KEY) {
           stop();
-          onSelect(target.id);
+          onSelect('');
+          return;
         }
-        return;
+        const numberIndex = CHARACTER_NUMBER_KEYS.indexOf(event.key);
+        if (numberIndex >= 0) {
+          const target = characters[numberIndex];
+          if (target) {
+            stop();
+            onSelect(target.id);
+          }
+          return;
+        }
       }
     };
 
@@ -111,13 +123,20 @@ export default function CharacterPicker({
 
   const gridItems = (
     <div
-      className="grid grid-cols-2 gap-2 overflow-y-auto max-h-[260px]"
+      // パネルの左右パディング分だけ外側へ広げ、内側で同量を戻す。
+      // これでスクロールバーがパネル端に収まり、カードの左右余白が揃う。
+      className={`grid grid-cols-2 gap-2 overflow-y-auto -mx-4 px-4 ${
+        // 狭い画面は2列×4行のまま。それ以上では数字キー(0・1〜9)で選べる10件
+        // ＝ト書き＋キャラ9名をスクロールせず出せるよう5行分を確保する。
+        // 縦が短い環境ではみ出さないよう vh でも上限をかける。
+        isNarrowScreen ? 'max-h-[260px]' : 'max-h-[min(325px,50vh)]'
+      }`}
       onPointerDown={e => e.stopPropagation()}
       onMouseDown={e => e.stopPropagation()}
     >
       {options.map((option, index) => {
-        // ト書きは数字キー対象外なので、キャラクター側は index-1 でバッジ番号を決める
-        const numberKey = index > 0 ? NUMBER_KEYS[index - 1] : undefined;
+        // 先頭のト書きは 0、以降のキャラクターは 1〜9
+        const numberKey = index === 0 ? TOGAKI_NUMBER_KEY : CHARACTER_NUMBER_KEYS[index - 1];
         return (
           <button
             key={option.id || 'togaki'}

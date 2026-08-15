@@ -47,6 +47,7 @@ export default function Home() {
   const setIsCtrlEnterBlockRef = useRef<((isCtrlEnter: boolean) => void) | null>(null);
   const requestSpeakerPickerRef = useRef<((mode: 'append' | 'insertBelow', anchorIndex: number) => void) | null>(null);
   const storyAssetMigrationDoneRef = useRef(false);
+  const updateCheckDoneRef = useRef(false);
   const sceneSelectionMemoryRef = useRef<Record<string, string[]>>({});
   const [isDraggingBlocks, setIsDraggingBlocks] = useState(false);
   const draggingBlockIdsRef = useRef<string[]>([]);
@@ -217,10 +218,13 @@ export default function Home() {
   const appUpdate = useAppUpdate(dataManagement);
   const shortcutConfig = useShortcutConfig();
 
+  // アップデート確認は起動時の1回のみ（GitHub APIのレート制限を無駄に消費しないため）
   useEffect(() => {
-    if (!dataManagement.isInitialized) return;
+    if (!dataManagement.isInitialized || updateCheckDoneRef.current) return;
+    updateCheckDoneRef.current = true;
     appUpdate.checkForUpdates({ openDialogIfNeeded: true });
-  }, [dataManagement.isInitialized, appUpdate.checkForUpdates]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataManagement.isInitialized]);
 
   useEffect(() => {
     if (!dataManagement.isInitialized || storyAssetMigrationDoneRef.current) return;
