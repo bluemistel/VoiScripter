@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Project, Scene } from '@/types';
 import { buildEmptyScript } from '@/utils/scriptDefaults';
+import { createScriptBlock } from '@/utils/blockFactory';
 import { PROJECT_KEY_SUFFIXES } from '@/utils/explorerTree';
 import { DataManagementHook } from './useDataManagement';
 
@@ -771,17 +772,16 @@ export const useProjectManagement = (
     const newSceneId = Date.now().toString();
     const emptyScript = buildEmptyScript({ title: name.trim() });
 
-    // 直前のシーンから最後の話者ブロックを探して初期ブロックを作成
+    // 直前のシーンの「最後のブロック」に合わせて初期ブロックを作成する。
+    // 話者ブロックならその話者を、ト書きならト書きを引き継ぐ。
+    // （ここで作らないと空の台本になり、初回利用向けの説明テキストが出てしまう）
     const currentScene = project.scenes.find(s => s.id === selectedSceneId);
     const currentBlocks = currentScene?.scripts[0]?.blocks || [];
-    const lastSpeaker = [...currentBlocks].reverse().find(b => b.characterId);
-    if (lastSpeaker) {
-      emptyScript.blocks = [{
-        id: Date.now().toString() + Math.random().toString(36).slice(2, 9),
-        characterId: lastSpeaker.characterId,
-        emotion: lastSpeaker.emotion || 'normal',
-        text: ''
-      }];
+    const lastBlock = currentBlocks[currentBlocks.length - 1];
+    if (lastBlock) {
+      emptyScript.blocks = [
+        createScriptBlock(lastBlock.characterId, lastBlock.emotion || 'normal')
+      ];
     }
 
     const newScene = {

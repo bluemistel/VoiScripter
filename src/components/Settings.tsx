@@ -710,6 +710,20 @@ export default function Settings({
                 <h4 className="font-medium text-foreground mb-4">更新履歴</h4>
                 <div className="space-y-6">
                   <div>
+                    <h4 className="font-medium text-foreground mb-2">v0.3.4</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                      <li>
+                        • 不具合の修正
+                        <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                          <li>• シーンを切り替えた際に、改行を含むセリフ・ト書きの高さが切り替え前のままとなり、本文が見切れる問題を修正</li>
+                          <li>• ト書きで終わるシーンから新しいシーンを追加すると、ブロックが作られず古い説明文が表示される問題を修正（直前のシーンの最後がト書きの場合はト書きブロックを作成します）</li>
+                          <li>• 設定のバグ報告フォームのリンクが、外部から開けないURLになっていた問題を修正</li>
+                        </ul>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div>
                     <h4 className="font-medium text-foreground mb-2">v0.3.3</h4>
                     <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                       <li>
@@ -1145,7 +1159,7 @@ export default function Settings({
                     </p>
                     <div className="mt-4">
                       <a 
-                        href="https://app.notion.com/p/32b8c5bf8aa480b4b85be01d8d6847ff?v=32b8c5bf8aa4815d9161000c9202a7b2&source=copy_link"
+                        href="https://ionian-gallimimus-e47.notion.site/32b8c5bf8aa481978f37e470a25e1e01"
                         target="_blank" 
                         rel="noopener noreferrer" 
                         className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"

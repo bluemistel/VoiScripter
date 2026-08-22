@@ -161,6 +161,13 @@ function SortableBlock({
     prevCharacterId.current = block.characterId;
   }, [block.characterId]);
 
+  // 高さの自動調整用にこのブロックのtextareaを保持しつつ、親のref配列にも登録する
+  const localTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const setTextareaRef = (el: HTMLTextAreaElement | null) => {
+    localTextareaRef.current = el;
+    textareaRef(el);
+  };
+
   // textareaのfocus状態を管理
   const [isTextareaFocused, setIsTextareaFocused] = useState(false);
   const [isMobileCharacterPickerOpen, setIsMobileCharacterPickerOpen] = useState(false);
@@ -178,6 +185,16 @@ function SortableBlock({
     window.addEventListener('resize', updateMobileView);
     return () => window.removeEventListener('resize', updateMobileView);
   }, []);
+
+  // 本文や表示設定が変わったら、このブロックの高さを内容に合わせ直す。
+  // シーン切り替えでブロック数が変わらない場合は親側の一括調整が走らないため、
+  // ここで個別に調整しないと前のシーンの高さのまま文章が見切れてしまう。
+  useEffect(() => {
+    const el = localTextareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [block.text, simpleMode, bubbleTheme, isMobileView]);
 
   const selectableCharacters = characters.filter(c =>
     c.id === '' ||
@@ -348,7 +365,7 @@ function SortableBlock({
         {isTogaki ? (
           <div className="flex items-center space-x-2">
             <textarea
-              ref={textareaRef}
+              ref={setTextareaRef}
               value={block.text}
               onChange={e => onUpdate({ text: e.target.value })}
               placeholder="ト書きを入力"
@@ -544,7 +561,7 @@ function SortableBlock({
                 </span>
               )}
               <textarea
-                ref={textareaRef}
+                ref={setTextareaRef}
                 value={block.text}
                 onChange={e => onUpdate({ text: e.target.value })}
                 onKeyDown={e => {
