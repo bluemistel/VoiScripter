@@ -13,9 +13,12 @@ import StagePanel from '@/components/StagePanel';
 import DataSyncDialog from '@/components/DataSyncDialog';
 import UpdateDialog from '@/components/UpdateDialog';
 import DialogFrame from '@/components/common/DialogFrame';
+import { buttonClass } from '@/components/common/Button';
+import { CheckCircleIcon, ExclamationTriangleIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 import ProjectExplorer from '@/components/ProjectExplorer/ProjectExplorer';
 import { Project, Character, ScriptBlock } from '@/types';
 import { buildEmptyScript } from '@/utils/scriptDefaults';
+import { createScriptBlock } from '@/utils/blockFactory';
 import { collectFolderContents } from '@/utils/explorerTree';
 import { buildSyncProjectPayload } from '@/utils/storyPanelAssets';
 import { migrateLegacyStoryPanelAssets } from '@/utils/storyPanelAssets';
@@ -260,13 +263,8 @@ export default function Home() {
       const lastSerif = [...currentScript.blocks].reverse().find(b => b.characterId);
       const charId = lastSerif?.characterId || characters[0]?.id || '';
       const emotion = lastSerif?.emotion || 'normal';
-      
-      const newBlock: ScriptBlock = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        characterId: charId,
-        emotion,
-        text: ''
-      };
+
+      const newBlock = createScriptBlock(charId, emotion, characters);
       
       // 最後のブロックの後に挿入
       const insertIndex = currentScript.blocks.length;
@@ -675,21 +673,23 @@ export default function Home() {
   const renderNotification = () => {
     if (!notification) return null;
     
-    const bgColor = {
-      success: 'bg-green-500',
-      error: 'bg-red-500',
-      info: 'bg-blue-500'
+    // 色の塗り分けはせず、パネル面のトーストにアイコンで種類を示す（エラーのみ destructive）
+    const Icon = {
+      success: CheckCircleIcon,
+      error: ExclamationTriangleIcon,
+      info: InformationCircleIcon
     }[notification.type];
-    
+
     return (
-      <div className={`fixed top-4 right-4 ${bgColor} text-white px-4 py-2 rounded shadow-lg z-50`}>
-        {notification.message}
+      <div className="fixed top-4 right-4 z-50 flex items-start gap-2 max-w-sm px-4 py-3 rounded-2xl bg-panel text-fg text-[13px] ring-1 ring-hairline shadow-(--shadow-popover) whitespace-pre-line">
+        <Icon className={`size-[18px] shrink-0 ${notification.type === 'error' ? 'text-destructive' : 'text-primary-text'}`} />
+        <span>{notification.message}</span>
       </div>
     );
   };
 
   return (
-    <div className={`min-h-screen ${theme.isDarkMode ? 'dark bg-background text-foreground ' : 'bg-background text-foreground'} transition-colors duration-300 `}>
+    <div className={`min-h-screen ${theme.isDarkMode ? 'dark bg-canvas text-fg ' : 'bg-canvas text-fg'} transition-colors duration-300 `}>
       <Header
         characters={characters}
         onAddCharacter={characterManagement.handleAddCharacter}
@@ -712,6 +712,7 @@ export default function Home() {
         groups={groups}
         onAddGroup={characterManagement.handleAddGroup}
         onDeleteGroup={characterManagement.handleDeleteGroup}
+        onRenameGroup={characterManagement.handleRenameGroup}
         groupCredits={characterManagement.groupCredits}
         onSetGroupCredit={characterManagement.handleSetGroupCredit}
         onReorderCharacters={characterManagement.handleReorderCharacters}
@@ -721,7 +722,7 @@ export default function Home() {
         selectedBlockIds={uiState.selectedBlockIds}
         scenes={project.scenes}
         selectedSceneId={selectedSceneId}
-        onAddScene={projectManagement.handleAddScene}
+        onAddScene={(name: string) => projectManagement.handleAddScene(name, characters)}
         onRenameScene={projectManagement.handleRenameScene}
         onDeleteScene={(sceneId: string) => {
           delete sceneSelectionMemoryRef.current[sceneId];
@@ -753,6 +754,10 @@ export default function Home() {
         getCharacterProjectStates={characterManagement.getCharacterProjectStates}
         saveCharacterProjectStates={characterManagement.saveCharacterProjectStates}
         blockDropTargetSceneId={blockDropTargetSceneId}
+        isSearchOpen={uiState.isSearchDialogOpen}
+        isScriptViewOpen={uiState.isScriptViewOpen}
+        isDataSyncOpen={uiState.isDataSyncOpen}
+        isSettingsDialogOpen={uiState.isSettingsOpen}
       />
 
       <main className="w-full max-w-none px-[clamp(0.5rem,1.6vw,1rem)] py-[clamp(1rem,2.2vw,2rem)] relative">
@@ -768,7 +773,7 @@ export default function Home() {
               <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
               <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
             </div>
-            <p className="text-muted-foreground">読み込み中...</p>
+            <p className="text-fg-sub">読み込み中...</p>
           </div>
         </div>
         
@@ -787,12 +792,6 @@ export default function Home() {
           <ScriptEditor
             script={project.scenes.find(s => s.id === selectedSceneId)?.scripts[0] || buildEmptyScript({ id: 'placeholder', title: 'placeholder' })}
             onUpdateBlock={handleBlockUpdate}
-            onAddBlock={() => {
-              if (project && selectedSceneId) {
-                const newProject = blockOperations.handleAddBlock(project, selectedSceneId, characters);
-                setProject(newProject);
-              }
-            }}
             onDeleteBlock={(blockId) => {
               if (project && selectedSceneId) {
                 const newProject = blockOperations.handleDeleteBlock(project, selectedSceneId, blockId);
@@ -869,6 +868,7 @@ export default function Home() {
               setIsUndoRedoOperationRef.current = setIsUndoRedoOperationFn;
             }}
             enterOnlyBlockAdd={settings.enterOnlyBlockAdd}
+            isDarkMode={theme.isDarkMode}
             addBlockSpeakerPicker={settings.addBlockSpeakerPicker}
             setRequestSpeakerPicker={(fn) => {
               // ScriptEditorのピッカー起動関数を参照に保存（キーボードショートカットから利用）
@@ -952,31 +952,31 @@ export default function Home() {
             // プロジェクトリストにdefaultのみしか存在しない場合（初回起動時、または、プロジェクトをすべて削除した場合）
             <div className="text-center py-12">
             <div>
-              <h2 className="text-foreground text-2xl font-bold mb-4">VoiScripter.へようこそ！</h2>
-              <p className="text-muted-foreground mb-8">
+              <h2 className="text-fg text-2xl font-bold mb-4">VoiScripter.へようこそ！</h2>
+              <p className="text-fg-sub text-sm leading-relaxed mb-8">
                 ここから台本を作りましょう。<br />新しいプロジェクトを作成するか、登場キャラクターの設定を行ってください。<br />すでに作った台本は上部のリストから読み込めます。
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <button
                   onClick={() => setIsProjectDialogOpen(true)}
-                  className="px-6 py-3 bg-primary hover:bg-primary/80 text-primary-foreground font-medium rounded-lg transition-colors duration-200"
+                  className={`${buttonClass('primary')} px-6 py-3 text-sm`}
                 >
                   新しいプロジェクトを作成
                 </button>
                 <button
                   onClick={() => uiState.setIsCharacterManagerOpen(true)}
-                  className="px-6 py-3 bg-secondary hover:bg-secondary/80 text-secondary-foreground font-medium rounded-lg transition-colors duration-200"
+                  className={`${buttonClass('secondary')} px-6 py-3 text-sm`}
                 >
                   キャラクター設定を開く
                 </button>
               </div>
-              <p className="text-muted-foreground mt-4 mb-4">
+              <p className="text-fg-sub text-sm mt-6 mb-4">
                 詳しい使い方は設定からヘルプをご覧ください。
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <button
                   onClick={() => uiState.setIsSettingsOpen(true)}
-                  className="px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground font-medium rounded-lg transition-colors duration-200"
+                  className={`${buttonClass('secondary')} px-6 py-3 text-sm`}
                 >
                   アプリ設定・ヘルプを開く
                 </button>
@@ -1004,7 +1004,7 @@ export default function Home() {
         }}
         onCreateProject={(name, folderId) => {
           try {
-            projectManagement.handleNewProject(name, getInitialProjectCharacterId());
+            projectManagement.handleNewProject(name, getInitialProjectCharacterId(), characters);
             if (folderId) {
               projectExplorer.moveProject(name, folderId);
             }
@@ -1051,7 +1051,7 @@ export default function Home() {
         onClose={() => uiState.setIsProjectDialogOpen(false)}
         onConfirm={(projectName) => {
           try {
-            const newProject = projectManagement.handleNewProject(projectName, getInitialProjectCharacterId());
+            const newProject = projectManagement.handleNewProject(projectName, getInitialProjectCharacterId(), characters);
             setProject(newProject);
             showNotification('プロジェクトを作成しました', 'success');
             uiState.setIsProjectDialogOpen(false);
@@ -1114,6 +1114,7 @@ export default function Home() {
         groups={groups}
         onAddGroup={characterManagement.handleAddGroup}
         onDeleteGroup={characterManagement.handleDeleteGroup}
+        onRenameGroup={characterManagement.handleRenameGroup}
         groupCredits={characterManagement.groupCredits}
         onSetGroupCredit={characterManagement.handleSetGroupCredit}
         onReorderCharacters={characterManagement.handleReorderCharacters}
@@ -1132,6 +1133,7 @@ export default function Home() {
         characters={characters}
         selectedSceneId={selectedSceneId}
         onNavigateToResult={handleNavigateToResult}
+        isDarkMode={theme.isDarkMode}
       />
 
       {/* Settings */}
@@ -1217,7 +1219,7 @@ export default function Home() {
                 `クラウド側 (${new Date(remoteUpdatedAt).toLocaleString()}) より新しい可能性があります。\n\n` +
                 `クラウドデータで上書きしますか？`
               );
-              if (!useCloud) return;
+              if (!useCloud) return false;
             }
             const parsed = JSON.parse(restoredDataJson) as Project;
             const normalized = normalizeRestoredProject(parsed, restoredSyncId, remoteUpdatedAt);
@@ -1248,8 +1250,10 @@ export default function Home() {
               setSyncSession({ uuid: restoredSyncId, password });
             }
             showNotification('データを復元しました', 'success');
+            return true;
           } catch (e) {
             showNotification('データの復元に失敗しました', 'error');
+            return false;
           }
         }}
         onSyncSuccess={(activeSyncId, password, remoteUpdatedAt) => {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Character, ScriptBlock } from '@/types';
+import { nameBadgeText } from '@/utils/colorUtils';
 import { loadStandingAsset } from '@/utils/standingImageAssets';
 
 interface StagePanelProps {
@@ -56,7 +57,7 @@ export default function StagePanel({ characters, activeBlock }: StagePanelProps)
     : '';
 
   return (
-    <div className="hidden lg:flex w-56 xl:w-64 shrink-0 flex-col sticky top-32 self-start rounded-xl border bg-muted/20 overflow-hidden" style={{ height: 'calc(100vh - 10rem)' }}>
+    <div className="hidden lg:flex w-56 xl:w-64 shrink-0 flex-col sticky top-32 self-start rounded-[20px] bg-block shadow-(--shadow-block) overflow-hidden" style={{ height: 'calc(100vh - 10rem)' }}>
       <div className="flex-1 relative flex items-end justify-center overflow-hidden">
         {character ? (
           assetId ? (
@@ -80,36 +81,37 @@ export default function StagePanel({ characters, activeBlock }: StagePanelProps)
             // 立ち絵未登録: アイコンで代替
             <div className="flex flex-col items-center justify-center gap-3 pb-16 h-full">
               {iconUrl ? (
-                <img src={iconUrl} alt={character.name} className="w-24 h-24 rounded-full border object-cover" />
+                <img src={iconUrl} alt={character.name} className="size-24 rounded-full ring-1 ring-hairline object-cover" />
               ) : (
                 <div
-                  className="w-24 h-24 rounded-full border flex items-center justify-center text-sm font-bold text-foreground"
-                  style={{ backgroundColor: character.backgroundColor || '#e5e7eb' }}
+                  className="size-24 rounded-full flex items-center justify-center text-sm font-bold"
+                  style={{ backgroundColor: character.backgroundColor || '#e5e7eb', color: nameBadgeText(character.backgroundColor || '#e5e7eb') }}
                 >
                   {character.name.slice(0, 4)}
                 </div>
               )}
-              <p className="text-xs text-muted-foreground text-center px-4">
+              <p className="text-xs text-fg-sub text-center px-4">
                 立ち絵未登録<br />（キャラクター設定 &gt; 表情差分設定）
               </p>
             </div>
           )
         ) : (
-          <p className="text-xs text-muted-foreground self-center pb-16">
+          <p className="text-xs text-fg-sub self-center pb-16">
             セリフブロックを選択すると<br />話者の立ち絵が表示されます
           </p>
         )}
       </div>
 
       {character && (
-        <div className="shrink-0 m-2 px-3 py-2 rounded-lg bg-background/90 text-center">
-          <p
-            className="text-sm font-medium truncate"
-            style={{ color: `color-mix(in srgb, ${character.backgroundColor || '#9ca3af'} 65%, var(--color-foreground))` }}
+        <div className="shrink-0 m-2 px-3 py-2.5 rounded-2xl bg-panel/90 text-center">
+          {/* 話者名はエディタと同じ話者名バッジで示す（キャラ色を使ってよい場所） */}
+          <span
+            className="inline-block max-w-full text-[11px] font-bold px-2.5 py-px rounded-full truncate"
+            style={{ backgroundColor: character.backgroundColor || '#9ca3af', color: nameBadgeText(character.backgroundColor || '#9ca3af') }}
           >
             {character.name}
-          </p>
-          <p className="text-[10px] text-muted-foreground truncate">
+          </span>
+          <p className="text-[10px] text-fg-sub truncate mt-1">
             表情: {emotion === 'normal' ? '標準' : emotion}
             {presetName ? ` ／ プリセット: ${presetName}` : ''}
           </p>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Character, Emotion, EmotionSetting, UserPreset, MaterialCredit, GroupCredits } from '@/types';
-import { PlusIcon, TrashIcon, PencilIcon, Cog6ToothIcon, ListBulletIcon, IdentificationIcon, FaceSmileIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, TrashIcon, PencilIcon, PencilSquareIcon, Cog6ToothIcon, ListBulletIcon, IdentificationIcon, FaceSmileIcon, UsersIcon, SwatchIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import IconCropperDialog from '@/components/IconCropperDialog';
 import StandingViewAdjustDialog from '@/components/StandingViewAdjustDialog';
 import { generateStandingAssetId, saveStandingAsset, removeStandingAsset } from '@/utils/standingImageAssets';
@@ -21,6 +21,10 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import DialogFrame from '@/components/common/DialogFrame';
+import DialogHeader from '@/components/common/DialogHeader';
+import TabBar from '@/components/common/TabBar';
+import Button, { buttonClass } from '@/components/common/Button';
+import { nameBadgeText } from '@/utils/colorUtils';
 
 const defaultEmotions: Emotion[] = ['normal'];
 
@@ -41,6 +45,8 @@ interface CharacterManagerProps {
   groups: string[];
   onAddGroup: (group: string) => void;
   onDeleteGroup: (group: string) => void;
+  /** グループ名の変更。重複などで変更できなければ false */
+  onRenameGroup?: (oldName: string, newName: string) => boolean;
   groupCredits: GroupCredits;
   onSetGroupCredit: (group: string, credit: string) => void;
   onReorderCharacters?: (newOrder: Character[]) => void; // 並び替え用
@@ -51,6 +57,17 @@ interface CharacterManagerProps {
   projectList: string[]; // プロジェクトリスト
   getCharacterProjectStates: (currentProjectId: string, projectList?: string[]) => {[characterId: string]: boolean};
   saveCharacterProjectStates: (currentProjectId: string, characterStates: {[characterId: string]: boolean}, projectList?: string[]) => void;
+}
+
+/** 並び替え用のグリップ（2列×3行のドット） */
+function GripDots() {
+  return (
+    <span className="grid grid-cols-2 gap-[3px] p-1" aria-hidden="true">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <span key={i} className="size-[3px] rounded-full bg-fg-faint" />
+      ))}
+    </span>
+  );
 }
 
 function SortableCharacter({ character, isEditing, children, ...props }: any) {
@@ -68,9 +85,9 @@ function SortableCharacter({ character, isEditing, children, ...props }: any) {
     opacity: isDragging ? 0.5 : 1
   };
   return (
-    <div ref={setNodeRef} style={style} className="border rounded p-3 flex items-center justify-items-start bg-background">
-      <div {...attributes} {...listeners} className="cursor-grab mr-2 select-none">
-        <svg width="20" height="20" fill="none"><rect width="4" height="4" x="2" y="2" rx="1" fill="#888"/><rect width="4" height="4" x="2" y="10" rx="1" fill="#888"/><rect width="4" height="4" x="10" y="2" rx="1" fill="#888"/><rect width="4" height="4" x="10" y="10" rx="1" fill="#888"/></svg>
+    <div ref={setNodeRef} style={style} className={`rounded-2xl p-3 flex items-center justify-items-start ${isEditing ? 'bg-panel shadow-[inset_0_0_0_1.5px_var(--color-hairline)]' : 'bg-well'}`}>
+      <div {...attributes} {...listeners} className="cursor-grab mr-2 select-none self-start mt-1">
+        <GripDots />
       </div>
       {children}
     </div>
@@ -92,9 +109,9 @@ function SortablePreset({ preset, children, ...props }: any) {
     opacity: isDragging ? 0.5 : 1
   };
   return (
-    <div ref={setNodeRef} style={style} className="flex items-center justify-between p-2 border rounded bg-muted/30 mb-1">
+    <div ref={setNodeRef} style={style} className="flex items-center justify-between px-[13px] py-[9px] rounded-2xl bg-well mb-2">
       <div {...attributes} {...listeners} className="cursor-grab mr-2 select-none">
-        <svg width="16" height="16" fill="none"><rect width="3" height="3" x="1" y="1" rx="1" fill="#888"/><rect width="3" height="3" x="1" y="7" rx="1" fill="#888"/><rect width="3" height="3" x="7" y="1" rx="1" fill="#888"/><rect width="3" height="3" x="7" y="7" rx="1" fill="#888"/></svg>
+        <GripDots />
       </div>
       {children}
     </div>
@@ -116,9 +133,9 @@ function SortableGroup({ group, children, ...props }: any) {
     opacity: isDragging ? 0.5 : 1
   };
   return (
-    <div ref={setNodeRef} style={style} className="flex items-center justify-between p-2 border rounded bg-muted/30 mb-1">
-      <div {...attributes} {...listeners} className="cursor-grab mr-2 select-none">
-        <svg width="16" height="16" fill="none"><rect width="3" height="3" x="1" y="1" rx="1" fill="#888"/><rect width="3" height="3" x="1" y="7" rx="1" fill="#888"/><rect width="3" height="3" x="7" y="1" rx="1" fill="#888"/><rect width="3" height="3" x="7" y="7" rx="1" fill="#888"/></svg>
+    <div ref={setNodeRef} style={style} className="flex items-start px-[13px] py-[11px] rounded-2xl bg-well mb-2">
+      <div {...attributes} {...listeners} className="cursor-grab mr-2 mt-1 select-none">
+        <GripDots />
       </div>
       {children}
     </div>
@@ -133,6 +150,7 @@ export default function CharacterManager({
   groups,
   onAddGroup,
   onDeleteGroup,
+  onRenameGroup,
   groupCredits,
   onSetGroupCredit,
   onReorderCharacters,
@@ -151,6 +169,10 @@ export default function CharacterManager({
   const [isEditingId, setIsEditingId] = useState<string | null>(null);
   const [isGroupSettingsOpen, setIsGroupSettingsOpen] = useState(false);
   const [newGroup, setNewGroup] = useState('');
+  // グループ名の編集中の対象と入力値（null のときは編集していない）
+  const [editingGroup, setEditingGroup] = useState<string | null>(null);
+  const [editingGroupName, setEditingGroupName] = useState('');
+  const [groupRenameError, setGroupRenameError] = useState('');
   const [newCharacter, setNewCharacter] = useState<Partial<Character>>({
     name: '',
     group: 'なし',
@@ -592,12 +614,14 @@ export default function CharacterManager({
     <DialogFrame
       isOpen={isOpen}
       onCancel={handleClose}
-      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-sm sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
+      panelClassName="w-full max-w-sm sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
     >
-        <div className="shrink-0 p-6 pb-4 border-b">
-          <div className="flex justify-between items-center gap-3">
-            <h3 className="text-lg font-semibold text-foreground">キャラクター管理</h3>
-            <div className="flex items-center gap-2">
+        <DialogHeader
+          icon={UsersIcon}
+          title="キャラクター管理"
+          onClose={handleClose}
+          className="shrink-0"
+          actions={<>
               {currentProjectId && visibleCharacters.length > 0 && (() => {
                 // 「現在の台本で使用する」の一括チェック/解除（表示中のタブのキャラクターが対象）
                 const allChecked = visibleCharacters.every(char => characterProjectStates[char.id]);
@@ -610,7 +634,7 @@ export default function CharacterManager({
                         return next;
                       });
                     }}
-                    className="px-2.5 py-1 text-xs border rounded text-foreground hover:bg-accent whitespace-nowrap"
+                    className={buttonClass('secondary', 'sm')}
                     title={activeGroupTab === ALL_GROUP_TAB
                       ? '「現在の台本で使用する」のチェックを一括で切り替えます'
                       : `グループ「${activeGroupTab}」のキャラクターだけを一括で切り替えます`}
@@ -619,50 +643,37 @@ export default function CharacterManager({
                   </button>
                 );
               })()}
-              <button
-                onClick={handleClose}
-                className="text-muted-foreground hover:text-foreground text-2xl"
-                title="閉じる"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        </div>
-        
+          </>}
+        />
+
         {/* グループタブ（全て＋グループ設定） */}
         {groupTabs.length > 1 && (
-          <div className="shrink-0 px-6 pt-3 border-b">
-            <div className="flex gap-1 overflow-x-auto whitespace-nowrap">
-              {groupTabs.map(tab => {
-                const count = tab === ALL_GROUP_TAB
-                  ? characters.length
-                  : characters.filter(c => resolveGroup(c) === tab).length;
-                return (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveGroupTab(tab)}
-                    className={`px-3 py-2 text-sm font-medium transition-colors shrink-0 ${
-                      activeGroupTab === tab
-                        ? 'text-primary border-b-2 border-primary'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
+          <TabBar
+            items={groupTabs.map(tab => {
+              const count = tab === ALL_GROUP_TAB
+                ? characters.length
+                : characters.filter(c => resolveGroup(c) === tab).length;
+              return {
+                id: tab,
+                label: (
+                  <>
                     {tab === ALL_GROUP_TAB ? '全て' : tab}
-                    <span className="ml-1 text-xs text-muted-foreground">({count})</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+                    <span className="ml-1 text-[11px] font-normal text-fg-faint">({count})</span>
+                  </>
+                )
+              };
+            })}
+            activeId={activeGroupTab}
+            onChange={setActiveGroupTab}
+          />
         )}
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto px-5 py-5">
           <div className="space-y-4">
             {/* キャラクター一覧を2段組グリッドで表示＋ドラッグ＆ドロップ */}
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={visibleCharacters.map(c => c.id)} strategy={rectSortingStrategy}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {visibleCharacters.map(character => (
                     <SortableCharacter key={character.id} character={character} isEditing={isEditingId === character.id}>
                       {isEditingId === character.id ? (
@@ -675,7 +686,7 @@ export default function CharacterManager({
                               name: e.target.value
                             }))}
                             placeholder="キャラクター名"
-                            className="w-full p-2 border rounded bg-background text-foreground"
+                            className="ui-input w-full"
                             required
                           />
                           <select
@@ -684,7 +695,7 @@ export default function CharacterManager({
                               ...(prev ?? {}),
                               group: e.target.value
                             }))}
-                            className="w-full p-2 border rounded bg-background text-foreground"
+                            className="ui-input w-full"
                           >
                             <option value="なし">なし</option>
                             {groups.map(group => (
@@ -697,7 +708,7 @@ export default function CharacterManager({
                               ...(prev ?? {}),
                               chatSide: (e.target.value || undefined) as Character['chatSide']
                             }))}
-                            className="w-full p-2 border rounded bg-background text-foreground"
+                            className="ui-input w-full"
                             title="チャットビューでフキダシを表示するサイド"
                           >
                             <option value="">チャットビュー: 自動</option>
@@ -705,7 +716,7 @@ export default function CharacterManager({
                             <option value="right">チャットビュー: 右</option>
                           </select>
                           <div className="flex items-center gap-2">
-                            <label className="text-xs text-muted-foreground shrink-0">パーソナルカラー</label>
+                            <label className="ui-section-label shrink-0">パーソナルカラー</label>
                             <input
                               type="color"
                               value={editCharacter?.backgroundColor || '#e5e7eb'}
@@ -713,10 +724,10 @@ export default function CharacterManager({
                                 ...(prev ?? {}),
                                 backgroundColor: e.target.value
                               }))}
-                              className="w-9 h-7 border rounded cursor-pointer bg-background p-0.5"
+                              className="w-10 h-8 rounded-lg cursor-pointer bg-field p-1"
                               title="フキダシテーマ・チャットビュー・アイコン未設定時の背景色に使用されます"
                             />
-                            <span className="text-[10px] text-muted-foreground">フキダシテーマ・チャットビューの色に使用</span>
+                            <span className="text-[10.5px] text-fg-sub">フキダシテーマ・チャットビューの色に使用</span>
                           </div>
                           <div className="flex items-center space-x-2 mb-1">
                             <input
@@ -724,9 +735,9 @@ export default function CharacterManager({
                               value={editCharacter?.emotions?.normal?.iconUrl || ''}
                               onChange={e => setEditEmotion('normal', { iconUrl: e.target.value })}
                               placeholder="アイコンURLまたは画像を選択"
-                              className="flex-1 p-2 border rounded bg-background text-foreground"
+                              className="ui-input flex-1 min-w-0"
                             />
-                            <label className="cursor-pointer bg-primary text-primary-foreground px-3 py-1 rounded text-xs hover:bg-primary/90 transition-colors">
+                            <label className={`${buttonClass('secondary', 'sm')} cursor-pointer shrink-0`}>
                               ファイルを選択
                               <input
                                 type="file"
@@ -739,50 +750,47 @@ export default function CharacterManager({
                           <button
                             type="button"
                             onClick={() => setIsPresetSettingsOpen(true)}
-                            className="w-full flex items-center justify-center space-x-2 p-2 border rounded hover:bg-muted/80 text-foreground text-sm"
-                            style={{ backgroundColor: 'var(--color-muted)', color: 'var(--color-muted-foreground)' }}
+                            className={`${buttonClass('secondary')} w-full`}
                           >
-                            <ListBulletIcon className="w-4 h-4" />
+                            <ListBulletIcon className="size-4" />
                             <span>ユーザープリセット設定</span>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-[11px] font-normal text-fg-faint">
                               ({(editCharacter?.userPresets || []).length}件)
                             </span>
                           </button>
                           <button
                             type="button"
                             onClick={() => setIsEmotionSettingsOpen(true)}
-                            className="w-full flex items-center justify-center space-x-2 p-2 border rounded hover:bg-muted/80 text-foreground text-sm"
-                            style={{ backgroundColor: 'var(--color-muted)', color: 'var(--color-muted-foreground)' }}
+                            className={`${buttonClass('secondary')} w-full`}
                           >
-                            <FaceSmileIcon className="w-4 h-4" />
+                            <FaceSmileIcon className="size-4" />
                             <span>表情差分設定</span>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-[11px] font-normal text-fg-faint">
                               ({Object.keys(editCharacter?.emotions || {}).filter(k => k !== 'normal').length}件)
                             </span>
                           </button>
                           <button
                             type="button"
                             onClick={() => setIsCreditSettingsOpen(true)}
-                            className="w-full flex items-center justify-center space-x-2 p-2 border rounded hover:bg-muted/80 text-foreground text-sm"
-                            style={{ backgroundColor: 'var(--color-muted)', color: 'var(--color-muted-foreground)' }}
+                            className={`${buttonClass('secondary')} w-full`}
                           >
-                            <IdentificationIcon className="w-4 h-4" />
+                            <IdentificationIcon className="size-4" />
                             <span>素材クレジット設定</span>
                             {normalizeMaterialCredit(editCharacter?.materialCredit) && (
-                              <span className="text-xs text-muted-foreground">(設定済み)</span>
+                              <span className="text-[11px] font-normal text-fg-faint">(設定済み)</span>
                             )}
                           </button>
-                          <div className="flex justify-end space-x-2">
+                          <div className="flex justify-end gap-2 pt-1">
                             <button
                               type="button"
                               onClick={() => { setIsEditingId(null); setEditCharacter(null); setIsPresetSettingsOpen(false); setIsCreditSettingsOpen(false); setIsEmotionSettingsOpen(false); }}
-                              className="px-3 py-1 text-sm text-muted-foreground hover:bg-accent rounded"
+                              className={buttonClass('secondary')}
                             >
                               キャンセル
                             </button>
                             <button
                               type="submit"
-                              className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                              className={buttonClass('primary')}
                             >
                               保存
                             </button>
@@ -794,42 +802,36 @@ export default function CharacterManager({
                             <div className="flex flex-wrap gap-2 md:mt-0">
                               <div className="flex items-center space-x-1">
                                 {character.emotions.normal.iconUrl ? (
-                                  <img src={character.emotions.normal.iconUrl} alt={character.name} className="w-14 h-14 rounded-full border object-cover" />
+                                  <img src={character.emotions.normal.iconUrl} alt={character.name} className="size-14 rounded-full ring-1 ring-hairline object-cover" />
                                 ) : (
                                   <div 
-                                    className="relative w-14 h-14 rounded-full border flex items-center justify-center text-center overflow-hidden group"
+                                    className="relative size-14 rounded-full flex items-center justify-center text-center overflow-hidden group"
                                     style={{ backgroundColor: character.backgroundColor || '#e5e7eb' }}
                                   >
-                                    <span 
-                                      className={`text-xs font-bold text-foreground px-1 max-w-[80px] whitespace-no-wrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}
-                                      style={{
-                                        textShadow: `
-                                          -1px -1px 0 var(--color-background),  
-                                           1px -1px 0 var(--color-background),
-                                          -1px  1px 0 var(--color-background),
-                                           1px  1px 0 var(--color-background)
-                                        `
-                                      }}
+                                    <span
+                                      className="text-[11px] font-bold leading-tight px-1 break-all line-clamp-2"
+                                      style={{ color: nameBadgeText(character.backgroundColor || '#e5e7eb') }}
                                     >
                                       {character.name.length > 8 ? character.name.slice(0, 8) + '…' : character.name}
                                     </span>
                                     {/* ペンアイコン（hover時のみ表示） */}
-                                    <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                       <button
                                         onClick={() => openColorPicker(character.id, character.backgroundColor || '#e5e7eb')}
-                                        className="p-1 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+                                        className="p-1.5 bg-panel text-fg rounded-full shadow-(--shadow-popover)"
+                                        title="背景色を変更"
                                       >
-                                        <PencilIcon className="w-3 h-3 text-gray-700" />
+                                        <PencilIcon className="size-3" />
                                       </button>
                                     </div>
                                   </div>
                                 )}
                               </div>
                               <div className="flex-1">
-                                <h3 className="font-semibold text-foreground ">{character.name}</h3>
-                                <p className="text-sm text-muted-foreground mt-1">グループ: {character.group || 'なし'}</p>
+                                <h3 className="text-[14.5px] font-bold text-fg">{character.name}</h3>
+                                <p className="text-[11px] text-fg-sub mt-0.5">グループ: {character.group || 'なし'}</p>
                                 {currentProjectId && (
-                                  <div className="flex items-center space-x-2 mt-2">
+                                  <div className="flex items-center gap-2 mt-2">
                                     <input
                                       type="checkbox"
                                       id={`project-enabled-${character.id}`}
@@ -840,9 +842,9 @@ export default function CharacterManager({
                                           [character.id]: e.target.checked
                                         }));
                                       }}
-                                      className="w-4 h-4 text-primary bg-background border-gray-300 rounded focus:ring-primary focus:ring-2"
+                                      className="ui-checkbox"
                                     />
-                                    <label htmlFor={`project-enabled-${character.id}`} className="text-xs text-foreground">
+                                    <label htmlFor={`project-enabled-${character.id}`} className="text-xs font-semibold text-fg cursor-pointer">
                                       現在の台本で使用する
                                     </label>
                                   </div>
@@ -850,19 +852,19 @@ export default function CharacterManager({
                               </div>
                             </div>
                           </div>
-                          <div className="flex flex-col gap-1 ml-auto items-end">
+                          <div className="flex flex-col gap-1.5 ml-auto items-end">
                             <button onClick={() => {
                               guardUnsavedEdit(() => {
                                 setIsEditingId(character.id);
                                 setEditCharacter({ ...character });
                               });
-                            }} className="p-2 text-destructive hover:bg-destructive/10 rounded flex items-center">
-                              <PencilIcon className="w-5 h-5" />
-                              <span className="ml-1 text-xs">編集</span>
+                            }} className={buttonClass('secondary', 'sm')}>
+                              <PencilSquareIcon className="size-3.5" />
+                              編集
                             </button>
-                            <button onClick={() => onDeleteCharacter(character.id)} className="p-2 text-destructive hover:bg-destructive/10 rounded flex items-center">
-                              <TrashIcon className="w-5 h-5" />
-                              <span className="ml-1 text-xs">削除</span>
+                            <button onClick={() => onDeleteCharacter(character.id)} className={buttonClass('destructive-weak', 'sm')}>
+                              <TrashIcon className="size-3.5" />
+                              削除
                             </button>
                           </div>
                         </>
@@ -873,24 +875,24 @@ export default function CharacterManager({
               </SortableContext>
             </DndContext>
             {visibleCharacters.length === 0 && characters.length > 0 && (
-              <p className="text-sm text-muted-foreground text-center py-6">
+              <p className="text-sm text-fg-sub text-center py-6">
                 このグループにはキャラクターがいません
               </p>
             )}
             {isAdding ? (
-              <form onSubmit={handleSubmit} className="border rounded p-3 space-y-3 bg-background">
+              <form onSubmit={handleSubmit} className="rounded-2xl p-4 space-y-3 bg-well">
                 <input
                   type="text"
                   value={newCharacter.name}
                   onChange={e => setNewCharacter(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="キャラクター名"
-                  className="w-full p-2 border rounded bg-background text-foreground"
+                  className="ui-input w-full"
                   required
                 />
                 <select
                   value={newCharacter.group || 'なし'}
                   onChange={e => setNewCharacter(prev => ({ ...prev, group: e.target.value }))}
-                  className="w-full p-2 border rounded bg-background text-foreground"
+                  className="ui-input w-full"
                 >
                   <option value="なし">なし</option>
                   {groups.map(group => (
@@ -908,9 +910,9 @@ export default function CharacterManager({
                       }
                     } as Partial<Character>))}
                     placeholder="アイコンURLまたは画像を選択"
-                    className="flex-1 p-2 border rounded text-foreground"
+                    className="ui-input flex-1 min-w-0"
                   />
-                  <label className="cursor-pointer bg-primary text-primary-foreground px-3 py-1 rounded text-xs hover:bg-primary/90 transition-colors">
+                  <label className={`${buttonClass('secondary', 'sm')} cursor-pointer shrink-0`}>
                     ファイルを選択
                     <input
                       type="file"
@@ -920,30 +922,29 @@ export default function CharacterManager({
                     />
                   </label>
                 </div>
-                <div className="flex justify-end space-x-2">
+                <div className="flex justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => setIsAdding(false)}
-                    className="px-3 py-1 text-sm text-muted-foreground hover:bg-accent rounded"
+                    className={buttonClass('secondary')}
                   >
                     キャンセル
                   </button>
                   <button
                     type="submit"
-                    className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                    className={buttonClass('primary')}
                   >
                     追加
                   </button>
                 </div>
               </form>
             ) : (
-              <div className="flex space-x-2">
+              <div className="flex gap-2">
                 <button
                   onClick={() => setIsGroupSettingsOpen(true)}
-                  className="flex-1 flex items-center justify-center space-x-2 p-2 border rounded hover:bg-muted/80 text-foreground"
-                  style={{ flex: '0 0 33.333%', backgroundColor: 'var(--color-muted)', color: 'var(--color-muted-foreground)' }}
+                  className={`${buttonClass('secondary')} basis-1/3 shrink-0`}
                 >
-                  <Cog6ToothIcon className="w-4 h-4" />
+                  <Cog6ToothIcon className="size-4" />
                   <span>グループ設定</span>
                 </button>
                 <button
@@ -954,10 +955,9 @@ export default function CharacterManager({
                     }
                     setIsAdding(true);
                   }}
-                  className="flex-1 flex items-center justify-center space-x-2 p-2 border rounded hover:bg-primary/80 text-foreground"
-                  style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-primary-foreground)' }}
+                  className={`${buttonClass('primary')} flex-1`}
                 >
-                  <PlusIcon className="w-5 h-5" />
+                  <PlusIcon className="size-[17px]" strokeWidth={2.2} />
                   <span>キャラクターを追加</span>
                 </button>
               </div>
@@ -970,20 +970,21 @@ export default function CharacterManager({
         <DialogFrame
           isOpen={isGroupSettingsOpen}
           onCancel={() => setIsGroupSettingsOpen(false)}
-          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+          panelClassName="w-full max-w-md mx-4 max-h-[85vh] overflow-y-auto"
           overlayClassName="bg-black/50"
         >
-            <h3 className="text-lg font-semibold text-foreground mb-4">グループ設定</h3>
-            
+            <DialogHeader icon={UsersIcon} title="グループ設定" onClose={() => setIsGroupSettingsOpen(false)} />
+            <div className="px-5 pb-5">
             {/* グループ追加 */}
-            <div className="mb-4">
-              <div className="flex space-x-2">
+            <div className="mb-5">
+              <div className="ui-section-label mb-2">グループを追加</div>
+              <div className="flex gap-2">
                 <input
                   type="text"
                   value={newGroup}
                   onChange={e => setNewGroup(e.target.value)}
                   placeholder="新しいグループ名"
-                  className="flex-1 p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                  className="ui-input flex-1 min-w-0"
                   autoFocus
                 />
                 <button
@@ -993,33 +994,83 @@ export default function CharacterManager({
                       setNewGroup('');
                     }
                   }}
-                  className="px-3 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                  className={buttonClass('primary')}
                 >
+                  <PlusIcon className="size-4" strokeWidth={2.2} />
                   追加
                 </button>
               </div>
             </div>
-            
+
             {/* グループ一覧 */}
-            <div className="space-y-2">
-              <h4 className="font-medium text-foreground">既存のグループ</h4>
+            <div>
+              <h4 className="text-[14.5px] font-bold text-fg mb-3">既存のグループ</h4>
               {groups.length === 0 ? (
-                <p className="text-muted-foreground text-sm">グループがありません</p>
+                <p className="text-fg-sub text-sm">グループがありません</p>
               ) : (
                 <DndContext sensors={groupSensors} collisionDetection={closestCenter} onDragEnd={handleGroupDragEnd}>
                   <SortableContext items={groups.map((group, index) => `${group}-${index}`)} strategy={rectSortingStrategy}>
                     {groups.map((group, index) => (
                       <SortableGroup key={`${group}-${index}`} group={group} index={index}>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="text-foreground truncate">{group}</span>
+                          <div className="flex items-center justify-between gap-2">
+                            {editingGroup === group ? (
+                              <input
+                                type="text"
+                                value={editingGroupName}
+                                onChange={e => { setEditingGroupName(e.target.value); setGroupRenameError(''); }}
+                                onKeyDown={e => {
+                                  // ダイアログ側の Enter 確定・Esc で閉じる、に流さない
+                                  if (e.key === 'Enter' || e.key === 'Escape') e.stopPropagation();
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    (e.target as HTMLInputElement).blur();
+                                  }
+                                  if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    setEditingGroup(null);
+                                    setGroupRenameError('');
+                                  }
+                                }}
+                                onBlur={() => {
+                                  if (editingGroup === null) return;
+                                  if (onRenameGroup?.(group, editingGroupName)) {
+                                    setEditingGroup(null);
+                                    setGroupRenameError('');
+                                  } else {
+                                    setGroupRenameError('同じ名前のグループがあるか、使えない名前です');
+                                  }
+                                }}
+                                className="ui-input flex-1 min-w-0 py-1.5 font-bold"
+                                autoFocus
+                              />
+                            ) : (
+                              // 名前にホバーしたときだけ右に編集ボタンを出す
+                              <div className="flex items-center gap-1.5 min-w-0 group/name">
+                                <span className="text-[13.5px] font-bold text-fg truncate">{group}</span>
+                                {onRenameGroup && (
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditingGroup(group); setEditingGroupName(group); setGroupRenameError(''); }}
+                                    className="size-[26px] shrink-0 rounded-lg bg-field text-fg-sub flex items-center justify-center opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100 hover:text-fg"
+                                    title="グループ名を編集"
+                                  >
+                                    <PencilSquareIcon className="size-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
                             <button
                               onClick={() => onDeleteGroup(group)}
-                              className="p-1 text-destructive hover:bg-destructive/10 rounded shrink-0"
+                              className={`${buttonClass('destructive-weak', 'sm')} shrink-0`}
                             >
-                              <TrashIcon className="w-4 h-4" />
+                              <TrashIcon className="size-3.5" />
+                              削除
                             </button>
                           </div>
+                          {editingGroup === group && groupRenameError && (
+                            <p className="text-[11px] text-destructive mt-1">{groupRenameError}</p>
+                          )}
                           <input
                             type="text"
                             defaultValue={groupCredits[group] || ''}
@@ -1031,7 +1082,7 @@ export default function CharacterManager({
                               }
                             }}
                             placeholder="クレジット表記（例: VOICEVOX:ずんだもん）"
-                            className="w-full mt-1 p-1.5 text-xs border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                            className="ui-input w-full mt-2 text-[13px]"
                             title="動画概要欄などに記載するクレジット表記。クレジット出力機能で使用します。"
                           />
                         </div>
@@ -1041,14 +1092,16 @@ export default function CharacterManager({
                 </DndContext>
               )}
             </div>
-            
-            <div className="flex justify-end mt-6">
+
+            {/* 変更は即時保存のため、フッターは「閉じる」のみ */}
+            <div className="flex justify-end mt-5">
               <button
                 onClick={() => setIsGroupSettingsOpen(false)}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                className={buttonClass('secondary')}
               >
                 閉じる
               </button>
+            </div>
             </div>
         </DialogFrame>
       )}
@@ -1058,17 +1111,18 @@ export default function CharacterManager({
         <DialogFrame
           isOpen={isPresetSettingsOpen}
           onCancel={() => { setIsPresetSettingsOpen(false); setNewPresetName(''); }}
-          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+          panelClassName="w-full max-w-md mx-4 max-h-[85vh] overflow-y-auto"
           overlayClassName="bg-black/50"
         >
-            <h3 className="text-lg font-semibold text-foreground mb-1">ユーザープリセット設定</h3>
-            <p className="text-xs text-muted-foreground mb-4">
+            <DialogHeader icon={ListBulletIcon} title="ユーザープリセット設定" onClose={() => { setIsPresetSettingsOpen(false); setNewPresetName(''); }} />
+            <div className="px-5 pb-5">
+            <p className="text-[11px] leading-[1.55] text-fg-sub mb-4">
               「{editCharacter.name}」のユーザープリセットを管理します。
             </p>
 
             {/* プリセット追加 */}
             <div className="mb-4">
-              <div className="flex space-x-2">
+              <div className="flex gap-2">
                 <input
                   type="text"
                   value={newPresetName}
@@ -1085,7 +1139,7 @@ export default function CharacterManager({
                     }
                   }}
                   placeholder="新しいプリセット名"
-                  className="flex-1 p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                  className="ui-input flex-1 min-w-0"
                   autoFocus
                 />
                 <button
@@ -1097,24 +1151,25 @@ export default function CharacterManager({
                       setNewPresetName('');
                     }
                   }}
-                  className="px-3 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                  className={buttonClass('primary')}
                 >
+                  <PlusIcon className="size-4" strokeWidth={2.2} />
                   追加
                 </button>
               </div>
             </div>
 
             {/* プリセット一覧 */}
-            <div className="space-y-2">
-              <h4 className="font-medium text-foreground">プリセット一覧</h4>
+            <div>
+              <h4 className="text-[14.5px] font-bold text-fg mb-3">プリセット一覧</h4>
               {(editCharacter.userPresets || []).length === 0 ? (
-                <p className="text-muted-foreground text-sm">プリセットがありません</p>
+                <p className="text-fg-sub text-sm">プリセットがありません</p>
               ) : (
                 <DndContext sensors={presetSensors} collisionDetection={closestCenter} onDragEnd={handlePresetDragEnd}>
                   <SortableContext items={(editCharacter.userPresets || []).map(p => `preset-${p.id}`)} strategy={rectSortingStrategy}>
                     {(editCharacter.userPresets || []).map(preset => (
                       <SortablePreset key={preset.id} preset={preset}>
-                        <span className="text-foreground flex-1">{preset.name}</span>
+                        <span className="text-[13.5px] text-fg flex-1 min-w-0 truncate">{preset.name}</span>
                         <button
                           onClick={() => {
                             setEditCharacter(prev => prev ? {
@@ -1122,9 +1177,10 @@ export default function CharacterManager({
                               userPresets: (prev.userPresets || []).filter(p => p.id !== preset.id)
                             } : prev);
                           }}
-                          className="p-1 text-destructive hover:bg-destructive/10 rounded ml-2"
+                          className="size-7 rounded-lg text-destructive hover:bg-destructive-tint flex items-center justify-center ml-2 shrink-0"
+                          title="プリセットを削除"
                         >
-                          <TrashIcon className="w-4 h-4" />
+                          <TrashIcon className="size-4" />
                         </button>
                       </SortablePreset>
                     ))}
@@ -1133,13 +1189,14 @@ export default function CharacterManager({
               )}
             </div>
 
-            <div className="flex justify-end mt-6">
+            <div className="flex justify-end mt-5">
               <button
                 onClick={() => { setIsPresetSettingsOpen(false); setNewPresetName(''); }}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                className={buttonClass('secondary')}
               >
                 閉じる
               </button>
+            </div>
             </div>
         </DialogFrame>
       )}
@@ -1149,11 +1206,12 @@ export default function CharacterManager({
         <DialogFrame
           isOpen={isEmotionSettingsOpen}
           onCancel={() => { setIsEmotionSettingsOpen(false); setNewEmotionPresetId(''); }}
-          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto p-6"
+          panelClassName="w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto"
           overlayClassName="bg-black/50"
         >
-            <h3 className="text-lg font-semibold text-foreground mb-1">表情差分設定</h3>
-            <p className="text-xs text-muted-foreground mb-4">
+            <DialogHeader icon={FaceSmileIcon} title="表情差分設定" onClose={() => { setIsEmotionSettingsOpen(false); setNewEmotionPresetId(''); }} />
+            <div className="px-5 pb-5">
+            <p className="text-[11px] leading-[1.55] text-fg-sub mb-4">
               「{editCharacter.name}」の表情差分を管理します。表情はユーザープリセット（音声の感情）から追加し、台本のブロックで表情を選ぶとフキダシのアイコンとプリセットが同時に切り替わります。<br />
               立ち絵を登録すると、立ち絵ステージ（設定でON）に表情連動で表示されます。
             </p>
@@ -1166,17 +1224,17 @@ export default function CharacterManager({
                 );
                 if ((editCharacter.userPresets || []).length === 0) {
                   return (
-                    <p className="text-xs text-muted-foreground border rounded p-2 bg-muted/30">
+                    <p className="text-[11px] leading-[1.55] text-fg-sub rounded-2xl px-3.5 py-3 bg-well">
                       表情はユーザープリセット（音声の感情）から追加します。先に「ユーザープリセット設定」からプリセットを登録してください。
                     </p>
                   );
                 }
                 return (
-                  <div className="flex space-x-2">
+                  <div className="flex gap-2">
                     <select
                       value={newEmotionPresetId}
                       onChange={e => setNewEmotionPresetId(e.target.value)}
-                      className="flex-1 p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                      className="ui-input flex-1 min-w-0"
                     >
                       <option value="">追加するプリセット（表情）を選択…</option>
                       {availablePresets.map(p => (
@@ -1192,8 +1250,9 @@ export default function CharacterManager({
                         }
                       }}
                       disabled={!newEmotionPresetId}
-                      className="px-3 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+                      className={buttonClass('primary')}
                     >
+                      <PlusIcon className="size-4" strokeWidth={2.2} />
                       追加
                     </button>
                   </div>
@@ -1207,30 +1266,30 @@ export default function CharacterManager({
                 const setting = editCharacter.emotions?.[emotion] || { iconUrl: '' };
                 const isNormal = emotion === 'normal';
                 return (
-                  <div key={emotion} className="border rounded p-3 bg-muted/30">
+                  <div key={emotion} className="rounded-2xl px-[13px] py-[11px] bg-well">
                     <div className="flex items-center gap-3">
                       {setting.iconUrl ? (
-                        <img src={setting.iconUrl} alt={emotion} className="w-12 h-12 rounded-full border object-cover shrink-0" />
+                        <img src={setting.iconUrl} alt={emotion} className="size-12 rounded-full ring-1 ring-hairline object-cover shrink-0" />
                       ) : (
                         <div
-                          className="w-12 h-12 rounded-full border shrink-0 flex items-center justify-center text-[10px] text-muted-foreground"
-                          style={{ backgroundColor: editCharacter.backgroundColor || '#e5e7eb' }}
+                          className="size-12 rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold"
+                          style={{ backgroundColor: editCharacter.backgroundColor || '#e5e7eb', color: nameBadgeText(editCharacter.backgroundColor || '#e5e7eb') }}
                         >
                           未設定
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
-                          <span className="font-medium text-foreground text-sm">
+                          <span className="font-bold text-fg text-[13.5px]">
                             {isNormal ? '標準（normal）' : emotion}
                           </span>
                           {!isNormal && (
                             <button
                               onClick={() => removeEditEmotion(emotion)}
-                              className="p-1 text-destructive hover:bg-destructive/10 rounded"
+                              className="size-7 rounded-lg text-destructive hover:bg-destructive-tint flex items-center justify-center"
                               title="この表情を削除（使用中のブロックは標準アイコンで表示されます）"
                             >
-                              <TrashIcon className="w-4 h-4" />
+                              <TrashIcon className="size-4" />
                             </button>
                           )}
                         </div>
@@ -1240,9 +1299,9 @@ export default function CharacterManager({
                             value={setting.iconUrl}
                             onChange={e => setEditEmotion(emotion, { iconUrl: e.target.value })}
                             placeholder="アイコンURLまたは画像を選択"
-                            className="flex-1 min-w-0 p-1.5 text-xs border rounded bg-background text-foreground"
+                            className="ui-input flex-1 min-w-0 py-2 text-xs"
                           />
-                          <label className="cursor-pointer bg-primary text-primary-foreground px-2 py-1.5 rounded text-xs hover:bg-primary/90 transition-colors shrink-0">
+                          <label className={`${buttonClass('secondary', 'sm')} cursor-pointer shrink-0`}>
                             画像を選択
                             <input
                               type="file"
@@ -1253,14 +1312,14 @@ export default function CharacterManager({
                           </label>
                         </div>
                         <div className="flex items-center gap-2 mt-1.5">
-                          <span className="text-xs text-muted-foreground shrink-0">立ち絵</span>
+                          <span className="ui-section-label shrink-0">立ち絵</span>
                           {setting.standingAssetId ? (
                             <>
-                              <span className="text-xs text-foreground">登録済み</span>
+                              <span className="text-xs text-fg">登録済み</span>
                               <button
                                 type="button"
                                 onClick={() => setStandingAdjustEmotion(emotion)}
-                                className="text-xs text-primary hover:underline"
+                                className="text-xs font-semibold text-primary-text hover:underline"
                                 title="立ち絵ステージでの見え方（ズーム・位置）を調整"
                               >
                                 表示調整
@@ -1268,15 +1327,15 @@ export default function CharacterManager({
                               <button
                                 type="button"
                                 onClick={() => handleRemoveStandingImage(emotion)}
-                                className="text-xs text-destructive hover:underline"
+                                className="text-xs font-semibold text-destructive hover:underline"
                               >
                                 削除
                               </button>
                             </>
                           ) : (
-                            <span className="text-xs text-muted-foreground">未登録</span>
+                            <span className="text-xs text-fg-faint">未登録</span>
                           )}
-                          <label className="ml-auto cursor-pointer bg-secondary text-secondary-foreground px-2 py-1 rounded text-xs hover:bg-secondary/90 transition-colors shrink-0">
+                          <label className={`${buttonClass('secondary', 'sm')} ml-auto cursor-pointer shrink-0`}>
                             画像を選択
                             <input
                               type="file"
@@ -1293,17 +1352,18 @@ export default function CharacterManager({
               })}
             </div>
 
-            <p className="text-xs text-muted-foreground mt-3">
+            <p className="text-[11px] text-fg-sub mt-3">
               ※ 入力内容はキャラクター編集の「保存」を押すと確定されます。
             </p>
 
-            <div className="flex justify-end mt-4">
+            <div className="flex justify-end mt-5">
               <button
                 onClick={() => { setIsEmotionSettingsOpen(false); setNewEmotionPresetId(''); }}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                className={buttonClass('secondary')}
               >
                 閉じる
               </button>
+            </div>
             </div>
         </DialogFrame>
       )}
@@ -1313,17 +1373,18 @@ export default function CharacterManager({
         <DialogFrame
           isOpen={isCreditSettingsOpen}
           onCancel={() => setIsCreditSettingsOpen(false)}
-          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+          panelClassName="w-full max-w-md mx-4 max-h-[85vh] overflow-y-auto"
           overlayClassName="bg-black/50"
         >
-            <h3 className="text-lg font-semibold text-foreground mb-1">素材クレジット設定</h3>
-            <p className="text-xs text-muted-foreground mb-4">
+            <DialogHeader icon={IdentificationIcon} title="素材クレジット設定" onClose={() => setIsCreditSettingsOpen(false)} />
+            <div className="px-5 pb-5">
+            <p className="text-[11px] leading-[1.55] text-fg-sub mb-4">
               「{editCharacter.name}」の立ち絵などの素材情報を記録します。クレジット出力や制作時の確認に使用できます。
             </p>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">制作者</label>
+                <label className="block ui-section-label mb-2">制作者</label>
                 <input
                   type="text"
                   value={editCharacter.materialCredit?.creator || ''}
@@ -1332,11 +1393,11 @@ export default function CharacterManager({
                     materialCredit: { ...(prev.materialCredit || {}), creator: e.target.value }
                   } : prev)}
                   placeholder="例: ○○様"
-                  className="w-full p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                  className="ui-input w-full"
                 />
               </div>
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">素材ID</label>
+                <label className="block ui-section-label mb-2">素材ID</label>
                 <input
                   type="text"
                   value={editCharacter.materialCredit?.id || ''}
@@ -1345,11 +1406,11 @@ export default function CharacterManager({
                     materialCredit: { ...(prev.materialCredit || {}), id: e.target.value }
                   } : prev)}
                   placeholder="例: im〜 / nc〜"
-                  className="w-full p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                  className="ui-input w-full"
                 />
               </div>
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">URL</label>
+                <label className="block ui-section-label mb-2">URL</label>
                 <input
                   type="text"
                   value={editCharacter.materialCredit?.url || ''}
@@ -1358,11 +1419,11 @@ export default function CharacterManager({
                     materialCredit: { ...(prev.materialCredit || {}), url: e.target.value }
                   } : prev)}
                   placeholder="素材の配布ページURL"
-                  className="w-full p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                  className="ui-input w-full"
                 />
               </div>
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">メモ（クレジット出力には含まれません）</label>
+                <label className="block ui-section-label mb-2">メモ（クレジット出力には含まれません）</label>
                 <textarea
                   value={editCharacter.materialCredit?.memo || ''}
                   onChange={e => setEditCharacter(prev => prev ? {
@@ -1371,22 +1432,23 @@ export default function CharacterManager({
                   } : prev)}
                   placeholder="例: 利用規約は改変OK・クレジット必須"
                   rows={3}
-                  className="w-full p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none resize-none"
+                  className="ui-input w-full resize-none"
                 />
               </div>
             </div>
 
-            <p className="text-xs text-muted-foreground mt-3">
+            <p className="text-[11px] text-fg-sub mt-3">
               ※ 入力内容はキャラクター編集の「保存」を押すと確定されます。
             </p>
 
-            <div className="flex justify-end mt-4">
+            <div className="flex justify-end mt-5">
               <button
                 onClick={() => setIsCreditSettingsOpen(false)}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                className={buttonClass('secondary')}
               >
                 閉じる
               </button>
+            </div>
             </div>
         </DialogFrame>
       )}
@@ -1396,29 +1458,29 @@ export default function CharacterManager({
         <DialogFrame
           isOpen={!!showColorPicker}
           onCancel={() => setShowColorPicker(null)}
-          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-sm mx-4 p-6"
+          panelClassName="w-full max-w-sm mx-4"
           overlayClassName="bg-black/50"
         >
-            <h3 className="text-lg font-semibold text-foreground mb-4">背景色を選択</h3>
-            <div className="flex flex-col items-center space-y-4">
+            <DialogHeader icon={SwatchIcon} title="背景色を選択" onClose={() => setShowColorPicker(null)} />
+            <div className="px-5 pb-5 flex flex-col items-center gap-5">
               <input
                 type="color"
                 value={tempBackgroundColor}
                 onChange={(e) => setTempBackgroundColor(e.target.value)}
-                className="w-32 h-32 cursor-pointer"
+                className="size-32 rounded-2xl bg-field p-1.5 cursor-pointer"
               />
-              <div className="flex space-x-2">
-                <button
-                  onClick={closeColorPicker}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
-                >
-                  適用
-                </button>
+              <div className="flex justify-end gap-2 self-stretch">
                 <button
                   onClick={() => setShowColorPicker(null)}
-                  className="px-4 py-2 bg-muted text-muted-foreground rounded hover:bg-muted/80"
+                  className={buttonClass('secondary')}
                 >
                   キャンセル
+                </button>
+                <button
+                  onClick={closeColorPicker}
+                  className={buttonClass('primary')}
+                >
+                  適用
                 </button>
               </div>
             </div>
@@ -1430,17 +1492,17 @@ export default function CharacterManager({
         <DialogFrame
           isOpen={showCloseDialog}
           onCancel={() => setShowCloseDialog(false)}
-          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+          panelClassName="w-full max-w-md mx-4 pb-5"
         >
-            <h3 className="text-lg font-semibold text-foreground mb-4">確認</h3>
-            <p className="mb-4 text-foreground">
+            <DialogHeader icon={UsersIcon} title="確認" onClose={() => setShowCloseDialog(false)} />
+            <p className="px-5 text-[13.5px] leading-relaxed text-fg">
               ・編集中の台本で使用しないキャラクターをプルダウンから非表示にします。<br />
               ・非表示にするキャラクターのセリフはそのまま残ります。不要な場合はセリフを削除してください。
             </p>
-            <div className="flex justify-end space-x-2">
+            <div className="flex justify-end gap-2 mt-5 px-5">
               <button
                 onClick={() => setShowCloseDialog(false)}
-                className="px-4 py-2 text-muted-foreground hover:bg-accent rounded"
+                className={buttonClass('secondary')}
               >
                 キャンセル
               </button>
@@ -1450,7 +1512,7 @@ export default function CharacterManager({
                   setShowCloseDialog(false);
                   onClose();
                 }}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold"
+                className={buttonClass('primary')}
               >
                 OK
               </button>
@@ -1463,18 +1525,18 @@ export default function CharacterManager({
         <DialogFrame
           isOpen={!!unsavedAction}
           onCancel={() => setUnsavedAction(null)}
-          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+          panelClassName="w-full max-w-md mx-4 pb-5"
           overlayClassName="bg-black/50"
         >
-            <h3 className="text-lg font-semibold text-foreground mb-3">編集中の情報があります</h3>
-            <p className="text-sm text-foreground mb-4">
+            <DialogHeader icon={ExclamationTriangleIcon} title="編集中の情報があります" onClose={() => setUnsavedAction(null)} />
+            <p className="px-5 text-[13.5px] leading-relaxed text-fg">
               キャラクターの編集内容がまだ保存されていません。<br />
               保存せずに続行すると変更内容は破棄されます。
             </p>
-            <div className="flex flex-wrap justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2 mt-5 px-5">
               <button
                 onClick={() => setUnsavedAction(null)}
-                className="px-4 py-2 text-muted-foreground hover:bg-accent rounded"
+                className={buttonClass('secondary')}
               >
                 キャンセル
               </button>
@@ -1485,8 +1547,9 @@ export default function CharacterManager({
                   resetEditState();
                   action();
                 }}
-                className="px-4 py-2 border rounded text-destructive hover:bg-destructive/10"
+                className={buttonClass('destructive-weak')}
               >
+                <ExclamationTriangleIcon className="size-[15px]" strokeWidth={2} />
                 破棄して続行
               </button>
               <button
@@ -1498,7 +1561,7 @@ export default function CharacterManager({
                   action();
                 }}
                 disabled={!editCharacter?.name}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold disabled:opacity-50"
+                className={buttonClass('primary')}
               >
                 保存して続行
               </button>

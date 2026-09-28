@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Character } from '@/types';
+import { UsersIcon } from '@heroicons/react/24/outline';
 import CharacterGridAvatar from '@/components/common/CharacterGridAvatar';
+import DialogHeader from '@/components/common/DialogHeader';
 
 interface CharacterPickerProps {
   /** 現在のプロジェクトで有効なキャラクター（表示順・ト書きは含めない） */
@@ -123,9 +125,9 @@ export default function CharacterPicker({
 
   const gridItems = (
     <div
-      // パネルの左右パディング分だけ外側へ広げ、内側で同量を戻す。
+      // パネル自体は左右の余白を持たず、グリッド側で左右を同量空ける。
       // これでスクロールバーがパネル端に収まり、カードの左右余白が揃う。
-      className={`grid grid-cols-2 gap-2 overflow-y-auto -mx-4 px-4 ${
+      className={`grid grid-cols-2 gap-2 overflow-y-auto px-5 py-0.5 ${
         // 狭い画面は2列×4行のまま。それ以上では数字キー(0・1〜9)で選べる10件
         // ＝ト書き＋キャラ9名をスクロールせず出せるよう5行分を確保する。
         // 縦が短い環境ではみ出さないよう vh でも上限をかける。
@@ -142,20 +144,25 @@ export default function CharacterPicker({
             key={option.id || 'togaki'}
             ref={el => { itemRefs.current[index] = el; }}
             type="button"
-            className={`p-2 border rounded text-left text-xs flex items-center gap-2 ${index === activeIndex ? 'border-primary bg-primary/10 ring-1 ring-primary/40' : ''}`}
+            className={`p-2 rounded-xl text-left text-[13px] text-fg flex items-center gap-2 transition-colors ${
+              index === activeIndex
+                ? 'bg-primary-tint shadow-[inset_0_0_0_1.5px_var(--color-primary)] font-bold'
+                : 'bg-well'
+            }`}
             onClick={() => onSelect(option.id)}
             onMouseEnter={() => setActiveIndex(index)}
           >
             {option.character ? (
               <CharacterGridAvatar character={option.character} />
             ) : (
-              <div className="w-10 h-10 rounded-full border flex items-center justify-center text-xs font-bold bg-muted shrink-0">
+              // ツールバーのト書き追加ボタンと表記・色を揃える
+              <div className="size-10 rounded-full flex items-center justify-center text-[15px] font-bold leading-none bg-togaki-button text-togaki-button-fg shadow-[inset_0_0_0_1px_var(--color-hairline)] shrink-0">
                 ト
               </div>
             )}
             <span className="truncate flex-1">{option.name}</span>
             {numberKey && (
-              <span className="shrink-0 text-[10px] text-muted-foreground border rounded px-1 py-px">
+              <span className="shrink-0 min-w-5 text-center text-[10px] font-bold text-fg-sub bg-field rounded-full px-1.5 py-px">
                 {numberKey}
               </span>
             )}
@@ -165,17 +172,10 @@ export default function CharacterPicker({
     </div>
   );
 
-  const header = (
-    <div className="flex items-center justify-between mb-3">
-      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      <button type="button" className="text-xs px-2 py-1 rounded border" onClick={cancel}>
-        閉じる
-      </button>
-    </div>
-  );
+  const header = <DialogHeader icon={UsersIcon} title={title} onClose={cancel} />;
 
   const hint = (
-    <p className="text-[10px] text-muted-foreground mt-2">
+    <p className="text-[10.5px] text-fg-sub px-5 pt-2.5">
       ↑↓←→で移動 / Enterで決定 / 数字キーで直接選択 / Escでキャンセル
     </p>
   );
@@ -186,7 +186,7 @@ export default function CharacterPicker({
         <div
           ref={panelRef}
           tabIndex={-1}
-          className="w-full bg-background border-t rounded-t-xl p-4 focus:outline-none"
+          className="w-full bg-panel text-fg rounded-t-[22px] shadow-(--shadow-dialog) pb-[max(1.25rem,env(safe-area-inset-bottom))] focus:outline-none"
           onClick={e => e.stopPropagation()}
           onPointerDown={e => e.stopPropagation()}
           onMouseDown={e => e.stopPropagation()}
@@ -200,11 +200,11 @@ export default function CharacterPicker({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4" onClick={cancel}>
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={cancel}>
       <div
         ref={panelRef}
         tabIndex={-1}
-        className="w-full max-w-sm bg-popover border rounded-xl shadow-lg p-4 focus:outline-none"
+        className="w-full max-w-sm bg-panel text-fg rounded-[22px] shadow-(--shadow-dialog) pb-5 focus:outline-none"
         onClick={e => e.stopPropagation()}
         onPointerDown={e => e.stopPropagation()}
         onMouseDown={e => e.stopPropagation()}

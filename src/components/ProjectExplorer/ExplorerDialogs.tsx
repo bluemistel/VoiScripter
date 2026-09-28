@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { XMarkIcon, FolderIcon, DocumentTextIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
+import { FolderIcon, DocumentTextIcon, ArrowUturnLeftIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 import DialogFrame from '@/components/common/DialogFrame';
+import DialogHeader from '@/components/common/DialogHeader';
+import { buttonClass } from '@/components/common/Button';
 
 // 新規作成・名前変更で共用する名前入力ダイアログ
 interface NameInputDialogProps {
@@ -55,17 +57,12 @@ export function NameInputDialog({
     <DialogFrame
       isOpen={isOpen}
       onCancel={onClose}
-      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4"
+      panelClassName="w-full max-w-md mx-4"
     >
-      <div className="flex justify-between items-center p-4 border-b">
-        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-        <button onClick={onClose} className="p-1 hover:bg-accent rounded transition-colors">
-          <XMarkIcon className="w-5 h-5 text-foreground" />
-        </button>
-      </div>
-      <form onSubmit={handleSubmit} className="p-4 space-y-4">
+      <DialogHeader icon={PencilSquareIcon} title={title} onClose={onClose} />
+      <form onSubmit={handleSubmit} className="px-5 pb-5 space-y-5">
         <div>
-          <label className="block text-sm font-medium text-foreground mb-2">{label}</label>
+          <label className="block ui-section-label mb-2">{label}</label>
           <input
             type="text"
             value={name}
@@ -73,23 +70,23 @@ export function NameInputDialog({
               setName(e.target.value);
               setError('');
             }}
-            className="w-full p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
+            className="ui-input w-full"
             placeholder={placeholder}
             autoFocus
           />
-          {error && <p className="text-sm text-destructive mt-1">{error}</p>}
+          {error && <p className="text-xs text-destructive mt-2">{error}</p>}
         </div>
-        <div className="flex justify-end space-x-2">
+        <div className="flex justify-end gap-2 pt-1">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm text-muted-foreground hover:bg-accent rounded transition-colors"
+            className={buttonClass('secondary')}
           >
             キャンセル
           </button>
           <button
             type="submit"
-            className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
+            className={buttonClass('primary')}
           >
             {submitButtonText}
           </button>
@@ -114,26 +111,28 @@ export function DeleteProjectConfirmDialog({ isOpen, projectId, isCurrent, onCon
     <DialogFrame
       isOpen={isOpen}
       onCancel={onClose}
-      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+      panelClassName="w-full max-w-md mx-4 pb-5"
     >
-      <h3 className="text-lg font-semibold text-foreground mb-4">プロジェクトの削除</h3>
-      <p className="text-sm text-foreground mb-2">
+      <DialogHeader icon={TrashIcon} title="プロジェクトの削除" onClose={onClose} />
+      <div className="px-5">
+      <p className="text-[13.5px] text-fg leading-relaxed mb-2">
         プロジェクト「<span className="font-semibold">{projectId}</span>」を削除します。
         <span className="text-destructive font-semibold">この操作は元に戻せません。</span>
       </p>
       {isCurrent && (
-        <p className="text-sm text-muted-foreground mb-2">現在編集中のプロジェクトです。削除後は別のプロジェクトに切り替わります。</p>
+        <p className="text-xs text-fg-sub mb-2">現在編集中のプロジェクトです。削除後は別のプロジェクトに切り替わります。</p>
       )}
-      <div className="flex justify-end space-x-2 mt-4">
+      </div>
+      <div className="flex justify-end gap-2 mt-5 px-5">
         <button
           onClick={onClose}
-          className="px-4 py-2 text-sm text-muted-foreground hover:bg-accent rounded transition-colors"
+          className={buttonClass('secondary')}
         >
           キャンセル
         </button>
         <button
           onClick={() => { onConfirm(); onClose(); }}
-          className="px-4 py-2 text-sm bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 transition-colors"
+          className={buttonClass('destructive')}
         >
           削除
         </button>
@@ -166,12 +165,13 @@ export function DeleteFolderConfirmDialog({
     <DialogFrame
       isOpen={isOpen}
       onCancel={onClose}
-      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+      panelClassName="w-full max-w-md mx-4 pb-5"
     >
-      <h3 className="text-lg font-semibold text-foreground mb-4">フォルダの削除</h3>
+      <DialogHeader icon={TrashIcon} title="フォルダの削除" onClose={onClose} />
+      <div className="px-5">
       {hasContents ? (
         <>
-          <p className="text-sm text-foreground mb-3">
+          <p className="text-[13.5px] text-fg leading-relaxed mb-3">
             フォルダ「<span className="font-semibold">{folderName}</span>」と、その中の
             {childFolderNames.length > 0 && <span className="font-semibold">フォルダ{childFolderNames.length}個</span>}
             {childFolderNames.length > 0 && childProjectIds.length > 0 && '・'}
@@ -179,15 +179,15 @@ export function DeleteFolderConfirmDialog({
             をすべて削除します。
             <span className="text-destructive font-semibold">この操作は元に戻せません。</span>
           </p>
-          <div className="bg-muted rounded p-3 text-sm max-h-40 overflow-y-auto mb-4 space-y-1">
+          <div className="bg-well rounded-2xl p-3 text-sm max-h-40 overflow-y-auto mb-1 space-y-1">
             {childFolderNames.map((name, i) => (
-              <div key={`f-${i}`} className="flex items-center gap-2 text-foreground">
+              <div key={`f-${i}`} className="flex items-center gap-2 text-fg">
                 <FolderIcon className="w-4 h-4 shrink-0" />
                 <span className="truncate">{name}</span>
               </div>
             ))}
             {childProjectIds.map((id) => (
-              <div key={`p-${id}`} className="flex items-center gap-2 text-foreground">
+              <div key={`p-${id}`} className="flex items-center gap-2 text-fg">
                 <DocumentTextIcon className="w-4 h-4 shrink-0" />
                 <span className="truncate">{id}</span>
               </div>
@@ -195,20 +195,21 @@ export function DeleteFolderConfirmDialog({
           </div>
         </>
       ) : (
-        <p className="text-sm text-foreground mb-4">
+        <p className="text-[13.5px] text-fg leading-relaxed">
           フォルダ「<span className="font-semibold">{folderName}</span>」を削除します。（中身は空です）
         </p>
       )}
-      <div className="flex justify-end space-x-2">
+      </div>
+      <div className="flex justify-end gap-2 mt-5 px-5">
         <button
           onClick={onClose}
-          className="px-4 py-2 text-sm text-muted-foreground hover:bg-accent rounded transition-colors"
+          className={buttonClass('secondary')}
         >
           キャンセル
         </button>
         <button
           onClick={() => { onConfirm(); onClose(); }}
-          className="px-4 py-2 text-sm bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 transition-colors"
+          className={buttonClass('destructive')}
         >
           {hasContents ? 'すべて削除' : '削除'}
         </button>
@@ -240,25 +241,20 @@ export function MoveToFolderDialog({ isOpen, targetName, options, onMove, onClos
       isOpen={isOpen}
       onCancel={onClose}
       enableEnterShortcut={false}
-      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 flex flex-col max-h-[70vh]"
+      panelClassName="w-full max-w-md mx-4 flex flex-col max-h-[70vh]"
     >
-      <div className="flex justify-between items-center p-4 border-b">
-        <h2 className="text-lg font-semibold text-foreground truncate">「{targetName}」の移動先</h2>
-        <button onClick={onClose} className="p-1 hover:bg-accent rounded transition-colors shrink-0">
-          <XMarkIcon className="w-5 h-5 text-foreground" />
-        </button>
-      </div>
-      <div className="p-2 overflow-y-auto flex-1">
+      <DialogHeader icon={FolderIcon} title={<>「{targetName}」の移動先</>} onClose={onClose} />
+      <div className="px-3 pb-2 overflow-y-auto flex-1">
         {options.map((option) => (
           <button
             key={option.id ?? '__root__'}
             disabled={option.disabled}
             onClick={() => { onMove(option.id); onClose(); }}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded text-sm text-left text-foreground hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[13.5px] text-left text-fg hover:bg-field transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ paddingLeft: `${12 + option.depth * 20}px` }}
           >
             {option.id === null ? (
-              <ArrowUturnLeftIcon className="w-5 h-5 shrink-0 text-muted-foreground" />
+              <ArrowUturnLeftIcon className="w-5 h-5 shrink-0 text-fg-faint" />
             ) : (
               <FolderIcon className="w-5 h-5 shrink-0 text-secondary" />
             )}
@@ -266,10 +262,10 @@ export function MoveToFolderDialog({ isOpen, targetName, options, onMove, onClos
           </button>
         ))}
       </div>
-      <div className="flex justify-end p-3 border-t">
+      <div className="flex justify-end px-5 py-4 shadow-[0_-1px_0_var(--color-hairline)]">
         <button
           onClick={onClose}
-          className="px-4 py-2 text-sm text-muted-foreground hover:bg-accent rounded transition-colors"
+          className={buttonClass('secondary')}
         >
           キャンセル
         </button>

@@ -16,6 +16,44 @@ import { QRCodeSVG } from 'qrcode.react';
 import jsQR from 'jsqr';
 import { CHARACTER_SYNC_KEY_SUFFIX } from '@/utils/characterSync';
 import DialogFrame from '@/components/common/DialogFrame';
+import DialogHeader from '@/components/common/DialogHeader';
+import { buttonClass } from '@/components/common/Button';
+
+/**
+ * キャラクター設定（軽量版）を「前回の同期から変わったときだけ」送るための目印。
+ * 共有IDごとにこの端末に保存する（updatedAt は毎回変わるので比較から外す）。
+ */
+const characterSignatureKey = (syncId: string) => `voiscripter_characterSyncSignature_${syncId}`;
+
+const toCharacterSignature = (characterDataJson: string): string => {
+    try {
+        const { updatedAt: _updatedAt, ...rest } = JSON.parse(characterDataJson);
+        return JSON.stringify(rest);
+    } catch {
+        return characterDataJson;
+    }
+};
+
+const readCharacterSignature = (syncId: string): string | null => {
+    try {
+        return localStorage.getItem(characterSignatureKey(syncId));
+    } catch {
+        return null;
+    }
+};
+
+const writeCharacterSignature = (syncId: string, signature: string) => {
+    try {
+        localStorage.setItem(characterSignatureKey(syncId), signature);
+    } catch {
+        // 保存できない環境では毎回送信する（動作には影響しない）
+    }
+};
+
+/** QR表示・読取のトグル。ONのときは選択中の面（primary-tint＋primaryのリング） */
+const toggleButtonClass = (on: boolean) => on
+  ? 'inline-flex items-center justify-center whitespace-nowrap transition px-3 py-1.5 text-xs rounded-[11px] gap-1 font-semibold bg-primary-tint text-primary-text shadow-[inset_0_0_0_1.5px_var(--color-primary)]'
+  : buttonClass('secondary', 'sm');
 
 /** QRコードスキャナーコンポーネント（カメラ利用） */
 function QRScanner({ onScan, onClose }: { onScan: (data: string) => void; onClose: () => void }) {
@@ -109,24 +147,24 @@ function QRScanner({ onScan, onClose }: { onScan: (data: string) => void; onClos
     return (
         <div className="space-y-2">
             <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-foreground">QRコードをカメラにかざしてください</span>
+                <span className="text-sm font-medium text-fg">QRコードをカメラにかざしてください</span>
                 <button
                     onClick={() => {
                         stopCamera();
                         onClose();
                     }}
-                    className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
+                    className="p-1 text-fg-sub hover:text-fg rounded-lg transition-colors"
                     title="スキャナーを閉じる"
                 >
                     <XMarkIcon className="w-5 h-5" />
                 </button>
             </div>
             {error ? (
-                <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
+                <div className="px-3.5 py-3 bg-destructive-tint shadow-[inset_0_0_0_1.5px_var(--color-destructive-ring)] rounded-xl text-[13px] text-destructive">
                     {error}
                 </div>
             ) : (
-                <div className="relative rounded-md overflow-hidden border border-border bg-black">
+                <div className="relative rounded-2xl overflow-hidden ring-1 ring-hairline bg-black">
                     <video
                         ref={videoRef}
                         className="w-full"
@@ -152,7 +190,8 @@ interface DataSyncDialogProps {
     currentCharacterData?: string;
     syncId?: string;
     lastSyncedAt?: string;
-    onDataRestored: (data: string, syncId: string, remoteUpdatedAt?: string, password?: string) => void;
+    /** 台本を反映したら true（確認で取り消された・失敗したときは false） */
+    onDataRestored: (data: string, syncId: string, remoteUpdatedAt?: string, password?: string) => boolean | void | Promise<boolean | void>;
     onSyncSuccess?: (syncId: string, password?: string, remoteUpdatedAt?: string) => void;
     onCharactersRestored?: (data: string) => void;
 }
@@ -168,7 +207,7 @@ export default function DataSyncDialog({
     onSyncSuccess,
     onCharactersRestored,
 }: DataSyncDialogProps) {
-    const { syncToCloud, restoreFromCloud, generateUUID, isLoading, error } = useDataSync();
+    const { syncToCloud, restoreFromCloud, restoreFromCloudIfExists, generateUUID, isLoading, error } = useDataSync();
 
     const [uuid, setUuid] = useState('');
     const [password, setPassword] = useState('');
@@ -209,7 +248,21 @@ export default function DataSyncDialog({
             }
             const result = await syncToCloud(currentData, { uuid, password });
             onSyncSuccess?.(uuid, password, result.remoteUpdatedAt);
-            setSuccessMessage('クラウドへの同期が完了しました');
+
+            // キャラクター設定（軽量版）も続けて同期する。同期は回数に応じて待ち時間が伸びるため、
+            // 前回の同期から変更があったときだけ送る。
+            const characterSignature = currentCharacterData ? toCharacterSignature(currentCharacterData) : null;
+            if (!characterSignature || readCharacterSignature(uuid) === characterSignature) {
+                setSuccessMessage('クラウドへの同期が完了しました（キャラクター設定は前回から変更なし）');
+                return;
+            }
+            try {
+                await syncToCloud(currentCharacterData!, { uuid: `${uuid}${CHARACTER_SYNC_KEY_SUFFIX}`, password });
+                writeCharacterSignature(uuid, characterSignature);
+                setSuccessMessage('台本とキャラクター設定の同期が完了しました（アイコン画像は除く）');
+            } catch {
+                setSuccessMessage('台本の同期は完了しましたが、キャラクター設定の同期に失敗しました');
+            }
         } catch {
             // Error is handled by the hook
         }
@@ -236,42 +289,22 @@ export default function DataSyncDialog({
                 }
             }
             const restored = await restoreFromCloud({ uuid, password });
-            onDataRestored(restored.data, uuid, restored.remoteUpdatedAt, password);
-            setSuccessMessage('データの復元が完了しました');
-        } catch {
-            // Error is handled by the hook
-        }
-    };
+            const applied = await onDataRestored(restored.data, uuid, restored.remoteUpdatedAt, password);
+            if (applied === false) return;
 
-    const handleCharacterSync = async () => {
-        if (!password) {
-            alert('パスワードを入力してください');
-            return;
-        }
-        if (!currentCharacterData) {
-            alert('同期対象のキャラクターデータがありません');
-            return;
-        }
-
-        try {
-            setSuccessMessage('');
-            await syncToCloud(currentCharacterData, { uuid: `${uuid}${CHARACTER_SYNC_KEY_SUFFIX}`, password });
-            setSuccessMessage('キャラクター設定の同期が完了しました（アイコン除外）');
-        } catch {
-            // Error is handled by the hook
-        }
-    };
-
-    const handleCharacterRestore = async () => {
-        if (!uuid || !password) {
-            alert('UUIDとパスワードを入力してください');
-            return;
-        }
-        try {
-            setSuccessMessage('');
-            const restored = await restoreFromCloud({ uuid: `${uuid}${CHARACTER_SYNC_KEY_SUFFIX}`, password });
-            onCharactersRestored?.(restored.data);
-            setSuccessMessage('キャラクター設定の復元が完了しました（アイコン除外）');
+            // キャラクター設定（軽量版）も続けて復元する（まだ同期されていなければ何もしない）
+            try {
+                const restoredCharacters = await restoreFromCloudIfExists({ uuid: `${uuid}${CHARACTER_SYNC_KEY_SUFFIX}`, password });
+                if (restoredCharacters) {
+                    onCharactersRestored?.(restoredCharacters.data);
+                    writeCharacterSignature(uuid, toCharacterSignature(restoredCharacters.data));
+                    setSuccessMessage('台本とキャラクター設定の復元が完了しました（アイコン画像はローカルのものを使用）');
+                } else {
+                    setSuccessMessage('データの復元が完了しました');
+                }
+            } catch {
+                setSuccessMessage('台本の復元は完了しましたが、キャラクター設定の復元に失敗しました');
+            }
         } catch {
             // Error is handled by the hook
         }
@@ -310,33 +343,28 @@ export default function DataSyncDialog({
         <DialogFrame
             isOpen={isOpen}
             onCancel={onClose}
-            panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-lg p-6 mx-4"
+            panelClassName="w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto"
         >
-                {/* ヘッダー */}
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-bold text-foreground">データ同期 (E2EE)</h2>
-                    <div className="flex items-center gap-2">
+                <DialogHeader
+                    icon={CloudArrowUpIcon}
+                    title="データ同期 (E2EE)"
+                    onClose={onClose}
+                    actions={
                         <button
                             onClick={() => setShowGuide(true)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs border border-border rounded-md bg-muted text-foreground hover:bg-accent transition-colors"
+                            className={buttonClass('secondary', 'sm')}
                             title="データ同期の使い方"
                         >
-                            <InformationCircleIcon className="w-4 h-4" />
+                            <InformationCircleIcon className="size-4" />
                             使い方
                         </button>
-                        <button
-                            onClick={onClose}
-                            className="text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                            <XMarkIcon className="w-6 h-6" />
-                        </button>
-                    </div>
-                </div>
+                    }
+                />
 
-                <div className="space-y-4">
+                <div className="px-5 pb-5 space-y-5">
                     {/* UUID Field */}
                     <div>
-                        <label className="block text-sm font-semibold text-foreground mb-2">
+                        <label htmlFor="uuid-input" className="block text-[13.5px] font-bold text-fg mb-2">
                             共有ID (UUID)
                         </label>
                         <div className="flex gap-2">
@@ -348,13 +376,13 @@ export default function DataSyncDialog({
                                     setUuid(e.target.value);
                                     setShowQRCode(false);
                                 }}
-                                className="flex-1 px-3 py-2 border border-border rounded-md bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none font-mono text-sm"
+                                className="ui-input flex-1 min-w-0 font-mono"
                                 placeholder="共有IDを入力またはQRコードから読み取り"
                                 disabled={isLoading}
                             />
                             <button
                                 onClick={handleGenerateNewUUID}
-                                className="px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors text-sm font-semibold disabled:opacity-50"
+                                className={buttonClass('secondary')}
                                 disabled={isLoading}
                             >
                                 新規
@@ -365,7 +393,7 @@ export default function DataSyncDialog({
                         <div className="flex gap-2 mt-2">
                             <button
                                 onClick={handleCopyUUID}
-                                className="flex items-center gap-1 px-3 py-1.5 text-xs border border-border rounded-md bg-muted text-foreground hover:bg-accent transition-colors"
+                                className={buttonClass('secondary', 'sm')}
                                 title="共有IDをクリップボードにコピー"
                             >
                                 <ClipboardDocumentIcon className="w-4 h-4" />
@@ -376,11 +404,7 @@ export default function DataSyncDialog({
                                     setShowQRCode(!showQRCode);
                                     setShowScanner(false);
                                 }}
-                                className={`flex items-center gap-1 px-3 py-1.5 text-xs border border-border rounded-md transition-colors ${
-                                    showQRCode
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'bg-muted text-foreground hover:bg-accent'
-                                }`}
+                                className={toggleButtonClass(showQRCode)}
                                 title="QRコードを表示"
                             >
                                 <QrCodeIcon className="w-4 h-4" />
@@ -391,11 +415,7 @@ export default function DataSyncDialog({
                                     setShowScanner(!showScanner);
                                     setShowQRCode(false);
                                 }}
-                                className={`flex items-center gap-1 px-3 py-1.5 text-xs border border-border rounded-md transition-colors ${
-                                    showScanner
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'bg-muted text-foreground hover:bg-accent'
-                                }`}
+                                className={toggleButtonClass(showScanner)}
                                 title="QRコードをカメラで読み取り"
                             >
                                 <CameraIcon className="w-4 h-4" />
@@ -405,14 +425,17 @@ export default function DataSyncDialog({
 
                         {/* QRコード表示 */}
                         {showQRCode && uuid && (
-                            <div className="mt-3 flex flex-col items-center p-4 bg-white rounded-md border border-border">
-                                <QRCodeSVG
-                                    value={uuid}
-                                    size={180}
-                                    level="M"
-                                    marginSize={2}
-                                />
-                                <p className="text-xs text-gray-500 mt-2">
+                            <div className="mt-3 flex flex-col items-center p-4 bg-well rounded-2xl">
+                                {/* QRコードは読み取りやすさのため常に白地 */}
+                                <div className="p-2 bg-white rounded-xl">
+                                    <QRCodeSVG
+                                        value={uuid}
+                                        size={180}
+                                        level="M"
+                                        marginSize={2}
+                                    />
+                                </div>
+                                <p className="text-[11px] text-fg-sub mt-2">
                                     別デバイスでこのQRコードをスキャンしてください
                                 </p>
                             </div>
@@ -428,36 +451,36 @@ export default function DataSyncDialog({
                             </div>
                         )}
 
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="text-[11px] leading-[1.55] text-fg-sub mt-2">
                             公開情報: サーバーへの保存パスとして使用されます
                         </p>
                     </div>
 
                     {/* Password Field */}
                     <div>
-                        <label className="block text-sm font-semibold text-foreground mb-2 items-center gap-1">
-                            <KeyIcon className="w-4 h-4" />
+                        <label className="flex text-[13.5px] font-bold text-fg mb-2 items-center gap-1">
+                            <KeyIcon className="size-4 text-primary-text" />
                             合言葉 (Password)
                         </label>
                         <input
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                            className="ui-input w-full"
                             placeholder="秘密のパスワード"
                             disabled={isLoading}
                         />
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="text-[11px] leading-[1.55] text-fg-sub mt-2">
                             秘密情報: 暗号化鍵の生成にのみ使用されます (サーバー送信なし)
                         </p>
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex gap-3 pt-2">
+                    <div className="flex gap-2 pt-1">
                         <button
                             onClick={handleSync}
                             disabled={isLoading || !password}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold"
+                            className={`${buttonClass('primary')} flex-1 py-3`}
                         >
                             <CloudArrowUpIcon className="w-5 h-5" />
                             同期 (アップロード)
@@ -465,50 +488,32 @@ export default function DataSyncDialog({
                         <button
                             onClick={handleRestore}
                             disabled={isLoading || !uuid || !password}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold"
+                            className={`${buttonClass('secondary')} flex-1 py-3`}
                         >
                             <CloudArrowDownIcon className="w-5 h-5" />
                             復元 (ダウンロード)
                         </button>
                     </div>
 
-                    {/* Character Sync Buttons */}
-                    <div className="flex gap-3">
-                        <button
-                            onClick={handleCharacterSync}
-                            disabled={isLoading || !password || !currentCharacterData}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-border rounded-md bg-muted text-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-semibold"
-                        >
-                            キャラ同期(軽量)
-                        </button>
-                        <button
-                            onClick={handleCharacterRestore}
-                            disabled={isLoading || !uuid || !password}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-border rounded-md bg-muted text-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-semibold"
-                        >
-                            キャラ復元(軽量)
-                        </button>
-                    </div>
-
                     {/* Status Messages */}
                     {isLoading && (
-                        <div className="p-3 bg-primary/10 border border-primary/30 rounded-md text-sm text-foreground">
+                        <div className="px-3.5 py-3 bg-primary-tint rounded-xl text-[13px] text-fg">
                             処理中...
                         </div>
                     )}
                     {error && (
-                        <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
+                        <div className="px-3.5 py-3 bg-destructive-tint shadow-[inset_0_0_0_1.5px_var(--color-destructive-ring)] rounded-xl text-[13px] text-destructive">
                             ❌ {error}
                         </div>
                     )}
                     {successMessage && (
-                        <div className="p-3 bg-primary/10 border border-primary/30 rounded-md text-sm text-foreground">
+                        <div className="px-3.5 py-3 bg-primary-tint rounded-xl text-[13px] text-fg">
                             ✅ {successMessage}
                         </div>
                     )}
 
                     {/* Info Box */}
-                    <div className="p-3 bg-muted border border-border rounded-md text-xs text-muted-foreground">
+                    <div className="px-4 py-3.5 bg-well rounded-2xl text-[11px] leading-[1.55] text-fg-sub">
                         <strong>セキュリティ情報:</strong>
                         <ul className="list-disc list-inside mt-1 space-y-1">
                             <li>データはクライアント側で暗号化されます (E2EE)</li>
@@ -524,22 +529,14 @@ export default function DataSyncDialog({
             <DialogFrame
                 isOpen={showGuide}
                 onCancel={() => setShowGuide(false)}
-                panelClassName="w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-background border border-border rounded-xl shadow-xl"
+                panelClassName="w-full max-w-2xl max-h-[85vh] overflow-y-auto"
                 overlayClassName="z-60 bg-black/50 p-4"
                 enableEnterShortcut={false}
             >
-                    <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border p-4 flex items-center justify-between">
-                        <h3 className="text-base font-semibold text-foreground">データ同期の使い方</h3>
-                        <button
-                            type="button"
-                            onClick={() => setShowGuide(false)}
-                            className="p-1 rounded hover:bg-accent transition-colors"
-                            title="閉じる"
-                        >
-                            <XMarkIcon className="w-5 h-5 text-muted-foreground" />
-                        </button>
+                    <div className="sticky top-0 z-10 bg-panel/95 backdrop-blur">
+                        <DialogHeader icon={InformationCircleIcon} title="データ同期の使い方" onClose={() => setShowGuide(false)} />
                     </div>
-                    <div className="p-4 space-y-4 text-sm text-foreground">
+                    <div className="px-5 pb-5 space-y-4 text-[13.5px] leading-relaxed text-fg">
                         <p>
                             別の VoiScripter へ現在の台本を同期して、作業を引き継ぐことができます。
                             <br />
@@ -548,7 +545,7 @@ export default function DataSyncDialog({
 
                         <div>
                             <h4 className="font-semibold mb-1">同期元の操作（アップロード）</h4>
-                            <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                            <ol className="list-decimal list-inside space-y-1 text-fg-sub">
                                 <li>「新規」ボタンで共有IDを発行します。</li>
                                 <li>任意の合言葉（Password）を入力します。</li>
                                 <li>「同期（アップロード）」で台本データを送信します。</li>
@@ -557,7 +554,7 @@ export default function DataSyncDialog({
 
                         <div>
                             <h4 className="font-semibold mb-1">復元側の操作（ダウンロード）</h4>
-                            <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                            <ol className="list-decimal list-inside space-y-1 text-fg-sub">
                                 <li>共有IDを入力するか、QR読取で取り込みます。</li>
                                 <li>同期元と同じ合言葉（Password）を入力します。</li>
                                 <li>「復元（ダウンロード）」で台本データを取得します。</li>
@@ -566,15 +563,15 @@ export default function DataSyncDialog({
 
                         <div>
                             <h4 className="font-semibold mb-1">補足</h4>
-                            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                            <ul className="list-disc list-inside space-y-1 text-fg-sub">
                                 <li>同期成功後は、同じ共有IDで5分間隔の自動同期が有効になります。</li>
-                                <li>キャラクター設定は「キャラ同期（軽量）/ キャラ復元（軽量）」で同期できます（アイコン画像は同期対象外）。</li>
+                                <li>同期・復元では、キャラクター設定（アイコン画像を除く軽量版）もあわせて同期します。キャラクター設定は前回の同期から変更があったときだけ送信します。</li>
                             </ul>
                         </div>
 
                         <div>
                             <h4 className="font-semibold mb-1">注意点</h4>
-                            <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                            <ul className="list-disc list-inside space-y-1 text-fg-sub">
                                 <li>共有IDと合言葉の両方が一致しないと復元できません。</li>
                                 <li>データ破損を防ぐため、同じ台本を複数環境で同時編集しないでください。</li>
                                 <li>ストーリーパネル画像は軽量化のため同期されません（各端末のローカル管理です）。</li>

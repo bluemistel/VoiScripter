@@ -1,9 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, ReactNode } from 'react';
+import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
 import { Character, Scene, GroupCredits } from '@/types';
 import DialogFrame from '@/components/common/DialogFrame';
+import { DialogCloseButton } from '@/components/common/DialogHeader';
+import TabBar from '@/components/common/TabBar';
+import { buttonClass } from '@/components/common/Button';
 import CreditExportPanel from '@/components/CreditExportPanel';
+import { buildExportPreview } from '@/utils/exportPreview';
 
 interface CSVExportDialogProps {
   isOpen: boolean;
@@ -26,6 +31,76 @@ interface CSVExportDialogProps {
   onNotification: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
+type ContentType = 'full' | 'serif-only' | 'clipboard';
+type ExportTab = 'script' | 'backup' | 'credit';
+
+/** 区切り文字の候補 */
+const SEPARATOR_CANDIDATES = ['＞', '：', '＝', '／'];
+
+/** 選択肢のカード化（docs/ui-guidelines.md §6）: 選択中は primary-tint＋primary のリング */
+const selectedCardClass = 'bg-primary-tint shadow-[inset_0_0_0_1.5px_var(--color-primary)]';
+
+/** ステップ番号と見出し（①② は必須、③ は任意） */
+function StepHeading({ step, title, required, trailing }: { step: number; title: string; required: boolean; trailing?: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <span className={`size-[21px] shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold ${required ? 'bg-primary text-on-primary' : 'bg-field text-fg-sub'}`}>
+        {step}
+      </span>
+      <span className="text-[14.5px] font-bold text-fg">{title}</span>
+      <span className={`text-[10px] font-bold px-2 py-px rounded-full ${required ? 'bg-primary-tint text-primary-text' : 'bg-field text-fg-sub'}`}>
+        {required ? '必須' : '任意'}
+      </span>
+      {trailing && <span className="ml-auto">{trailing}</span>}
+    </div>
+  );
+}
+
+/** ③ 絞り込みのカード。チェックしたものだけ詳細エリアが開く（開閉はチェック状態から導出する） */
+function FilterCard({
+  title,
+  description,
+  checked,
+  disabled = false,
+  onChange,
+  children
+}: {
+  title: string;
+  description: ReactNode;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+  children?: ReactNode;
+}) {
+  const isOpen = checked && !disabled;
+  return (
+    <div className={`rounded-2xl transition-colors ${isOpen ? selectedCardClass : 'bg-well'} ${disabled ? 'opacity-50' : ''}`}>
+      <label className={`flex items-start gap-[11px] px-4 py-3 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+        <input
+          type="checkbox"
+          className="ui-checkbox mt-px"
+          checked={isOpen}
+          disabled={disabled}
+          onChange={e => onChange(e.target.checked)}
+        />
+        <span className="flex-1 min-w-0">
+          <span className="block text-[13.5px] font-bold text-fg">{title}</span>
+          <span className="block text-[11px] leading-[1.55] text-fg-sub mt-0.5">{description}</span>
+        </span>
+        {isOpen
+          ? <ChevronUpIcon className="size-4 shrink-0 mt-0.5 text-fg-faint" />
+          : <ChevronDownIcon className="size-4 shrink-0 mt-0.5 text-fg-faint" />}
+      </label>
+      {/* 下の余白はカード側の padding で取る（子の margin だとカードの外へ相殺され、詳細エリアが枠に接してしまう） */}
+      {isOpen && children && (
+        <div className="px-3 pb-3">
+          <div className="rounded-xl bg-panel p-3.5">{children}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CSVExportDialog({
   isOpen,
   onClose,
@@ -46,30 +121,26 @@ export default function CSVExportDialog({
   groupCredits,
   onNotification
 }: CSVExportDialogProps) {
-  type ExportType = 'full' | 'serif-only' | 'character-setting' | 'project' | 'preset-separator';
-  const [exportType, setExportType] = useState<ExportType>('full');
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  // ① 出力する内容 / ② ファイル形式 / ③ 出力範囲の絞り込み
+  const [contentType, setContentType] = useState<ContentType>('full');
+  const [fileFormat, setFileFormat] = useState<'csv' | 'txt'>('csv');
   const [useGroupExport, setUseGroupExport] = useState(false);
-  const [includeTogaki, setIncludeTogaki] = useState(false);
-  const [exportSelectedOnly, setExportSelectedOnly] = useState(false);
-  const [exportToClipboard, setExportToClipboard] = useState(false);
-  const [activeTab, setActiveTab] = useState<'script' | 'backup' | 'credit'>('script');
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [useSceneExport, setUseSceneExport] = useState(false);
   const [sceneCheckboxes, setSceneCheckboxes] = useState<string[]>([]);
-  const [fileFormat, setFileFormat] = useState<'csv' | 'txt'>('csv');
+  const [exportSelectedOnly, setExportSelectedOnly] = useState(false);
+  const [usePresetSeparator, setUsePresetSeparator] = useState(false);
   const [presetSeparator, setPresetSeparator] = useState<string>('＞');
+  // ①の内容に付随するオプション
+  const [includeTogaki, setIncludeTogaki] = useState(false);
   const [includeUserPreset, setIncludeUserPreset] = useState(false);
+  const [activeTab, setActiveTab] = useState<ExportTab>('script');
+  const [backupTarget, setBackupTarget] = useState<'project' | 'character-setting'>('project');
 
-  // このuseEffectを削除して、ト書き含めるの切り替えでグループごとエクスポートがリセットされないようにする
-
-  // キャラクター設定選択時にト書き含めるをリセット
-  useEffect(() => {
-    if (exportType === 'character-setting') {
-      setIncludeTogaki(false);
-      setExportSelectedOnly(false);
-      setExportToClipboard(false);
-    }
-  }, [exportType]);
+  const exportToClipboard = contentType === 'clipboard';
+  // 既存の出力処理に渡す形式（区切り文字形式はファイル出力のときだけ有効）
+  const exportType: 'full' | 'serif-only' | 'preset-separator' =
+    usePresetSeparator && !exportToClipboard ? 'preset-separator' : contentType === 'full' ? 'full' : 'serif-only';
 
   // 選択ブロックがない場合は選択ブロックのみエクスポートを無効化
   useEffect(() => {
@@ -83,6 +154,7 @@ export default function CSVExportDialog({
     if (useGroupExport && selectedGroups.length === 0) {
       setSelectedGroups([...groups]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useGroupExport, groups]);
 
   // シーンエクスポートのチェックボックス制御
@@ -93,6 +165,7 @@ export default function CSVExportDialog({
     if (!useSceneExport) {
       setSceneCheckboxes([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useSceneExport, scenes]);
 
   // グループ選択状態に基づいて「すべて選択」チェックボックスの状態を計算
@@ -104,28 +177,16 @@ export default function CSVExportDialog({
 
   // 「すべて選択」チェックボックスのクリック処理
   const handleSelectAllToggle = () => {
-    const currentState = getSelectAllState();
-    if (currentState === true) {
-      // すべて選択済みの場合、すべての選択を解除
+    if (getSelectAllState() === true) {
       setSelectedGroups([]);
     } else {
-      // 部分選択または未選択の場合、すべて選択
       setSelectedGroups([...groups]);
     }
   };
 
-  // タブ切り替え時にエクスポートタイプをリセット
-  useEffect(() => {
-    if (activeTab === 'backup') {
-      setExportType('project');
-    } else {
-      setExportType('full');
-    }
-  }, [activeTab]);
-
   const handleGroupToggle = (group: string) => {
-    setSelectedGroups(prev => 
-      prev.includes(group) 
+    setSelectedGroups(prev =>
+      prev.includes(group)
         ? prev.filter(g => g !== group)
         : [...prev, group]
     );
@@ -139,6 +200,15 @@ export default function CSVExportDialog({
       setSceneCheckboxes([]);
     } else {
       setSceneCheckboxes(scenes.map(s => s.id));
+    }
+  };
+
+  const handleContentChange = (next: ContentType) => {
+    setContentType(next);
+    // クリップボード出力はシーン単位・区切り文字形式に未対応
+    if (next === 'clipboard') {
+      setUseSceneExport(false);
+      setUsePresetSeparator(false);
     }
   };
 
@@ -160,400 +230,419 @@ export default function CSVExportDialog({
   const handleClose = () => {
     setSelectedGroups([]);
     setUseGroupExport(false);
-    setExportType('full');
+    setContentType('full');
+    setUsePresetSeparator(false);
     setExportSelectedOnly(false);
-    setExportToClipboard(false);
     setActiveTab('script');
+    setBackupTarget('project');
     setFileFormat('csv');
     setPresetSeparator('＞');
     setIncludeUserPreset(false);
     onClose();
   };
 
+  const handleScriptExport = () => {
+    if (exportType === 'preset-separator') {
+      onExportPresetSeparator(
+        presetSeparator || '＞',
+        includeTogaki,
+        exportSelectedOnly,
+        fileFormat,
+        useGroupExport,
+        selectedGroups,
+        useSceneExport,
+        sceneCheckboxes
+      );
+      handleClose();
+    } else if (useGroupExport && selectedGroups.length > 0) {
+      handleExport(exportType, includeTogaki);
+    } else if (useSceneExport && sceneCheckboxes.length > 0 && !exportToClipboard) {
+      onExportSceneCSV(sceneCheckboxes, exportType, includeTogaki, exportSelectedOnly, fileFormat, includeUserPreset);
+      handleClose();
+    } else {
+      handleExport(exportType, includeTogaki);
+    }
+  };
+
+  const handleBackupExport = () => {
+    if (backupTarget === 'character-setting') {
+      onExportCharacterCSV();
+    } else {
+      onExportProjectJson();
+    }
+    handleClose();
+  };
+
+  // 出力プレビューと件数（現在の設定に追従）
+  const preview = useMemo(() => buildExportPreview({
+    project: project || { scenes: [] },
+    characters,
+    content: contentType,
+    includeTogaki,
+    includeUserPreset: includeUserPreset && exportType !== 'preset-separator',
+    presetSeparator: exportType === 'preset-separator' ? (presetSeparator || '＞') : undefined,
+    sceneIds: useSceneExport && !exportToClipboard ? sceneCheckboxes : undefined,
+    groups: useGroupExport ? selectedGroups : undefined,
+    selectedBlockIds: exportSelectedOnly ? selectedBlockIds : undefined
+  }), [project, characters, contentType, includeTogaki, includeUserPreset, exportType, presetSeparator, useSceneExport, exportToClipboard, sceneCheckboxes, useGroupExport, selectedGroups, exportSelectedOnly, selectedBlockIds]);
+
+  // 区切り文字の「この設定での出力」例（常に区切り文字形式で2行）
+  const separatorExample = useMemo(() => buildExportPreview({
+    project: project || { scenes: [] },
+    characters,
+    content: 'full',
+    includeTogaki: false,
+    includeUserPreset: false,
+    presetSeparator: presetSeparator || '＞'
+  }, 2).lines, [project, characters, presetSeparator]);
+
+  // 台本内で使われているキャラクター（グループ詳細のチップ表示用）
+  const usedCharacterIds = useMemo(() => {
+    const ids = new Set<string>();
+    (project?.scenes || []).forEach((scene: Scene) => {
+      (scene.scripts[0]?.blocks || []).forEach(block => { if (block.characterId) ids.add(block.characterId); });
+    });
+    return ids;
+  }, [project]);
+
+  const appliedFilterCount = [useGroupExport, useSceneExport && !exportToClipboard, exportSelectedOnly, usePresetSeparator && !exportToClipboard].filter(Boolean).length;
+  const needsGroupSelection = useGroupExport && selectedGroups.length === 0;
+  const needsSceneSelection = useSceneExport && !exportToClipboard && sceneCheckboxes.length === 0;
+
+  const contentOptions: { id: ContentType; title: string; description: string }[] = [
+    { id: 'full', title: '話者とセリフの両方', description: '〈話者,セリフ〉のカンマ区切り。合成音声ソフトにそのままインポートできます。' },
+    { id: 'serif-only', title: 'セリフのみ', description: 'インポートに未対応のソフト向け。' },
+    { id: 'clipboard', title: 'クリップボードにコピー', description: 'ファイルを作らず、別のソフトへ直接貼り付けます。' }
+  ];
+
+  const renderScriptTab = () => (
+    <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden md:grid md:grid-cols-[384px_1fr]">
+      {/* 左: 必須（出力する内容・ファイル形式）。下端のプレビューとエクスポートは固定し、上だけスクロールする */}
+      <div className="md:flex md:flex-col md:min-h-0">
+        <div className="p-5 md:flex-1 md:min-h-0 md:overflow-y-auto">
+        <StepHeading step={1} title="出力する内容" required />
+        <div className="space-y-1.5" role="radiogroup" aria-label="出力する内容">
+          {contentOptions.map(option => {
+            const isSelected = contentType === option.id;
+            return (
+              <label
+                key={option.id}
+                className={`flex items-start gap-[11px] px-3.5 py-3 rounded-2xl cursor-pointer transition-colors ${isSelected ? selectedCardClass : 'hover:bg-well'}`}
+              >
+                <input
+                  type="radio"
+                  name="exportContent"
+                  className="ui-radio mt-px"
+                  checked={isSelected}
+                  onChange={() => handleContentChange(option.id)}
+                />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[13.5px] font-bold text-fg">{option.title}</span>
+                  <span className="block text-[11px] leading-[1.55] text-fg-sub mt-0.5">{option.description}</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+        {/* 出力内容に付随するオプション（ラジオの選択肢と区別できるよう、ウェル面で1グループにまとめる） */}
+        <div className="mt-2.5 px-3.5 py-3 rounded-2xl bg-well space-y-2.5">
+          <label className="flex items-center gap-[11px] text-[13px] font-semibold text-fg cursor-pointer">
+            <input type="checkbox" className="ui-checkbox" checked={includeTogaki} onChange={e => setIncludeTogaki(e.target.checked)} />
+            ト書きを含めて出力
+          </label>
+          {!exportToClipboard && (
+            <label className={`flex items-start gap-[11px] text-[13px] font-semibold text-fg ${exportType === 'preset-separator' ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+              <input
+                type="checkbox"
+                className="ui-checkbox mt-px"
+                checked={includeUserPreset && exportType !== 'preset-separator'}
+                disabled={exportType === 'preset-separator'}
+                onChange={e => setIncludeUserPreset(e.target.checked)}
+              />
+              <span>
+                ユーザープリセット名を3列目に追加
+                <span className="block text-[11px] font-normal leading-[1.55] text-fg-sub mt-0.5">
+                  CeVIO AI 等での読み込みを想定した形式です{exportType === 'preset-separator' && '（区切り文字出力時は選択不可）'}
+                </span>
+              </span>
+            </label>
+          )}
+        </div>
+
+        {!exportToClipboard && (
+          <div className="mt-6">
+            <StepHeading step={2} title="ファイル形式" required />
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { id: 'csv', label: '.csv', description: '表計算・合成音声ソフト' },
+                { id: 'txt', label: '.txt', description: 'テキストエディタ' }
+              ] as const).map(format => (
+                <button
+                  key={format.id}
+                  type="button"
+                  onClick={() => setFileFormat(format.id)}
+                  aria-pressed={fileFormat === format.id}
+                  className={`text-left rounded-2xl px-3.5 py-3 transition-colors ${fileFormat === format.id ? selectedCardClass : 'bg-well hover:bg-field'}`}
+                >
+                  <span className="block font-mono text-[15px] font-bold text-fg">{format.label}</span>
+                  <span className="block text-[11px] text-fg-sub mt-0.5">{format.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        </div>
+
+        {/* 出力プレビューとエクスポートは左列の下端に固定 */}
+        <div className="px-5 pb-5 pt-1 md:pt-4 md:shadow-[0_-1px_0_var(--color-hairline)]">
+          <div className="ui-section-label mb-2">出力プレビュー</div>
+          <pre className="rounded-[11px] bg-well px-3.5 py-2.5 font-mono text-[11.5px] leading-[1.7] text-fg-sub whitespace-pre overflow-x-auto min-h-[4.6rem]">
+            {preview.lines.length > 0 ? preview.lines.join('\n') : '（出力対象のブロックがありません）'}
+          </pre>
+          <div className="flex items-center justify-between gap-3 mt-4">
+            <span className="text-xs text-fg-faint">
+              {preview.blockCount.toLocaleString()} ブロック ・ {preview.charCount.toLocaleString()} 字
+            </span>
+            <button
+              type="button"
+              onClick={handleScriptExport}
+              disabled={needsGroupSelection || needsSceneSelection}
+              className={`${buttonClass('primary')} px-6 py-3 text-sm`}
+            >
+              {exportToClipboard ? 'クリップボードに出力' : 'エクスポート'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 右: 任意（出力範囲を絞り込む） */}
+      <div className="p-5 md:overflow-y-auto md:shadow-[inset_1px_0_0_var(--color-hairline)]">
+        <StepHeading
+          step={3}
+          title="出力範囲を絞り込む"
+          required={false}
+          trailing={<span className="text-[11px] text-fg-faint whitespace-nowrap">{appliedFilterCount} / 4 適用中</span>}
+        />
+        <p className="text-[11px] leading-[1.55] text-fg-sub -mt-1 mb-3">
+          すべてオフのままで、台本全体が合成音声ソフト向けの形式で出力されます。
+        </p>
+        <div className="space-y-2">
+          <FilterCard
+            title="グループごとにエクスポート"
+            description="グループ単位でファイルを分けて出力します"
+            checked={useGroupExport}
+            onChange={setUseGroupExport}
+          >
+            {groups.length === 0 ? (
+              <p className="text-[13px] text-fg-sub">グループがありません</p>
+            ) : (
+              <>
+                <label className="flex items-center gap-[11px] pb-2.5 mb-2.5 shadow-[0_1px_0_var(--color-hairline)] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="ui-checkbox"
+                    ref={el => { if (el) el.indeterminate = getSelectAllState() === 'indeterminate'; }}
+                    checked={getSelectAllState() === true}
+                    onChange={handleSelectAllToggle}
+                  />
+                  <span className="flex-1 text-[13px] font-bold text-fg">出力するグループ</span>
+                  <span className="text-[11px] text-fg-faint">{selectedGroups.length} / {groups.length}</span>
+                </label>
+                <div className="space-y-2.5 max-h-60 overflow-y-auto">
+                  {groups.map(group => {
+                    const members = characters.filter(c => c.group === group);
+                    const usedMembers = members.filter(c => usedCharacterIds.has(c.id));
+                    return (
+                      <label key={group} className="flex items-start gap-[11px] cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="ui-checkbox mt-px"
+                          checked={selectedGroups.includes(group)}
+                          onChange={() => handleGroupToggle(group)}
+                        />
+                        <span className="flex-1 min-w-0">
+                          <span className="text-[13px] font-bold text-fg">{group}</span>
+                          <span className="ml-1.5 text-[10.5px] text-fg-faint">{members.length}人</span>
+                          {/* 台本内で使われているこのグループのキャラクター */}
+                          <span className="flex flex-wrap gap-1 mt-1">
+                            {usedMembers.length > 0 ? usedMembers.map(c => (
+                              <span key={c.id} className="text-[10.5px] px-2 py-px rounded-full bg-field text-fg-sub">{c.name}</span>
+                            )) : (
+                              <span className="text-[10.5px] text-fg-faint">台本内で未使用</span>
+                            )}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {needsGroupSelection && (
+                  <p className="text-destructive text-[11px] mt-2">グループを選択してください</p>
+                )}
+              </>
+            )}
+          </FilterCard>
+
+          <FilterCard
+            title="特定のシーンのみ出力"
+            description={exportToClipboard ? 'クリップボード出力時は使えません' : '選んだシーンだけを出力します'}
+            checked={useSceneExport}
+            disabled={exportToClipboard}
+            onChange={checked => {
+              setUseSceneExport(checked);
+              if (checked) setExportSelectedOnly(false);
+            }}
+          >
+            <label className="flex items-center gap-[11px] pb-2.5 mb-2.5 shadow-[0_1px_0_var(--color-hairline)] cursor-pointer">
+              <input
+                type="checkbox"
+                className="ui-checkbox"
+                checked={sceneCheckboxes.length === scenes.length}
+                onChange={handleSelectAllScenes}
+              />
+              <span className="flex-1 text-[13px] font-bold text-fg">すべてのシーン</span>
+              <span className="text-[11px] text-fg-faint">{sceneCheckboxes.length} / {scenes.length}</span>
+            </label>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {scenes.map(scene => {
+                // シーン内のグループ名を抽出
+                const sceneGroups = Array.from(new Set((scene.scripts[0]?.blocks || [])
+                  .map(b => characters.find(c => c.id === b.characterId)?.group || null)
+                  .filter(g => g && g !== 'なし')));
+                return (
+                  <label key={scene.id} className="flex items-center gap-[11px] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="ui-checkbox"
+                      checked={sceneCheckboxes.includes(scene.id)}
+                      onChange={() => handleSceneToggle(scene.id)}
+                    />
+                    <span className="text-[13px] text-fg">
+                      {scene.name}
+                      {sceneGroups.length > 0 && (
+                        <span className="ml-2 text-[11px] text-fg-faint">（{sceneGroups.join(',')}）</span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            {needsSceneSelection && (
+              <p className="text-destructive text-[11px] mt-2">シーンを選択してください</p>
+            )}
+          </FilterCard>
+
+          <FilterCard
+            title="選択中のブロックのみ出力"
+            description={
+              selectedBlockIds.length === 0
+                ? 'エディタでブロックを選択すると使えます'
+                : useSceneExport
+                  ? '特定のシーン出力時は使えません'
+                  : `エディタで選択している ${selectedBlockIds.length} ブロックが対象です`
+            }
+            checked={exportSelectedOnly}
+            disabled={selectedBlockIds.length === 0 || useSceneExport}
+            onChange={setExportSelectedOnly}
+          />
+
+          <FilterCard
+            title="プリセット名と区切り文字で出力"
+            description={exportToClipboard ? 'クリップボード出力時は使えません' : 'VOICEROID2・A.I.VOICE などのテキスト読み込み向け'}
+            checked={usePresetSeparator}
+            disabled={exportToClipboard}
+            onChange={checked => {
+              setUsePresetSeparator(checked);
+              if (checked) setIncludeUserPreset(false);
+            }}
+          >
+            <label htmlFor="presetSeparator" className="block ui-section-label mb-2">区切り文字</label>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <input
+                id="presetSeparator"
+                type="text"
+                value={presetSeparator}
+                onChange={e => setPresetSeparator(e.target.value)}
+                maxLength={5}
+                className="ui-input w-[52px] px-1 text-center text-[15px] font-bold"
+              />
+              {SEPARATOR_CANDIDATES.map(candidate => (
+                <button
+                  key={candidate}
+                  type="button"
+                  onClick={() => setPresetSeparator(candidate)}
+                  className={`size-8 rounded-[10px] text-[13px] font-bold transition-colors ${presetSeparator === candidate ? `${selectedCardClass} text-primary-text` : 'bg-field text-fg-sub hover:text-fg'}`}
+                  title={`「${candidate}」を使う`}
+                >
+                  {candidate}
+                </button>
+              ))}
+            </div>
+            <div className="ui-section-label mt-3.5 mb-2">この設定での出力</div>
+            <pre className="rounded-[11px] bg-well px-3.5 py-2.5 font-mono text-[11.5px] leading-[1.7] text-fg-sub whitespace-pre overflow-x-auto">
+              {separatorExample.length > 0 ? separatorExample.join('\n') : '（出力対象のブロックがありません）'}
+            </pre>
+          </FilterCard>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderBackupTab = () => (
+    <div className="p-5 overflow-y-auto">
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        {([
+          { id: 'project', label: 'プロジェクト', description: 'JSON（台本全体）' },
+          { id: 'character-setting', label: 'キャラクター', description: 'CSV（全キャラクター設定）' }
+        ] as const).map(target => (
+          <button
+            key={target.id}
+            type="button"
+            onClick={() => setBackupTarget(target.id)}
+            aria-pressed={backupTarget === target.id}
+            className={`text-left rounded-2xl px-3.5 py-3 transition-colors ${backupTarget === target.id ? selectedCardClass : 'bg-well hover:bg-field'}`}
+          >
+            <span className="block text-[13.5px] font-bold text-fg">{target.label}</span>
+            <span className="block text-[11px] text-fg-sub mt-0.5">{target.description}</span>
+          </button>
+        ))}
+      </div>
+      <p className="text-[11px] leading-[1.7] text-fg-sub">
+        {backupTarget === 'project'
+          ? '現在選択中のプロジェクト全体をJSONファイルとしてエクスポートします。インポートで復元できます。'
+          : '全キャラクターの設定（アイコン・グループ・プリセット・素材クレジット・表情差分）をCSVでエクスポートします。インポートで復元できます。'}
+      </p>
+      <button type="button" onClick={handleBackupExport} className={`${buttonClass('primary')} w-full mt-5 py-3 text-sm`}>
+        エクスポート
+      </button>
+    </div>
+  );
+
   return (
     <DialogFrame
       isOpen={isOpen}
       onCancel={handleClose}
-      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col transition-opacity duration-300"
-      overlayClassName="transition-opacity duration-300 p-4"
+      panelClassName={`w-full ${activeTab === 'script' ? 'max-w-[960px] md:h-[min(760px,90vh)]' : 'max-w-md'} max-h-[90vh] overflow-hidden flex flex-col`}
+      overlayClassName="p-4"
     >
-        <div className="flex-shrink-0 p-6 pb-4">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-foreground">エクスポート</h3>
-            <button
-              onClick={handleClose}
-              className="text-muted-foreground hover:text-foreground text-2xl"
-              title="閉じる"
-            >
-              ×
-            </button>
-          </div>
+      {/* タブ行（台本 / バックアップ / クレジット）＋閉じる */}
+      <TabBar<ExportTab>
+        items={[
+          { id: 'script', label: '台本' },
+          { id: 'backup', label: 'バックアップ' },
+          { id: 'credit', label: 'クレジット' }
+        ]}
+        activeId={activeTab}
+        onChange={setActiveTab}
+        className="pt-3"
+        trailing={<DialogCloseButton onClick={handleClose} />}
+      />
 
-          {/* タブ切り替え */}
-          <div className="flex border-b mb-4">
-            <button
-              onClick={() => setActiveTab('script')}
-              className={`flex-1 px-4 py-2 font-medium transition-colors ${
-                activeTab === 'script'
-                  ? 'text-primary border-b-2 border-primary'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              台本
-            </button>
-            <button
-              onClick={() => setActiveTab('backup')}
-              className={`flex-1 px-4 py-2 font-medium transition-colors ${
-                activeTab === 'backup'
-                  ? 'text-primary border-b-2 border-primary'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              バックアップ
-            </button>
-            <button
-              onClick={() => setActiveTab('credit')}
-              className={`flex-1 px-4 py-2 font-medium transition-colors ${
-                activeTab === 'credit'
-                  ? 'text-primary border-b-2 border-primary'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              クレジット
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-6 pb-6">
-
-        {/* 台本タブの内容 */}
-        {activeTab === 'script' && (
-          <>
-            {/* エクスポートタイプ選択 */}
-            <div className="mb-4">
-              <span className="text-foreground mb-2 font-semibold">エクスポート形式(UTF-8)</span>
-              <div className="space-y-2">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="exportType"
-                    value="full"
-                    checked={exportType === 'full' && !exportToClipboard}
-                    onChange={(e) => {
-                      setExportType(e.target.value as ExportType);
-                      setExportToClipboard(false);
-                    }}
-                    className="text-primary"
-                  />
-                  <span className="text-foreground">話者とセリフの両方をエクスポート<br /><span className="text-xs text-muted-foreground">〈話者,セリフ〉のカンマ区切りの形式で出力します。</span></span>
-                  
-                </label>
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="exportType"
-                    value="serif-only"
-                    checked={exportType === 'serif-only' && !exportToClipboard}
-                    onChange={(e) => {
-                      setExportType(e.target.value as ExportType);
-                      setExportToClipboard(false);
-                    }}
-                    className="text-primary"
-                  />
-                  <span className="text-foreground">セリフのみをエクスポート<br /><span className="text-xs text-muted-foreground">セリフのみ出力します。インポート未対応のソフト向け。</span></span>
-                </label>
-                                 <label className="flex items-center space-x-2 cursor-pointer">
-                   <input
-                     type="radio"
-                     name="exportType"
-                     value="clipboard"
-                     checked={exportToClipboard}
-                     onChange={(e) => {
-                       setExportToClipboard(e.target.checked);
-                       if (e.target.checked) {
-                         setExportType('serif-only');
-                         setUseSceneExport(false);
-                       }
-                     }}
-                     className="text-primary"
-                   />
-                   <span className="text-foreground">クリップボードにセリフをコピーする<br /><span className="text-xs text-muted-foreground">別のソフトへ貼り付ける場合に使用します。</span></span>
-                 </label>
-                <label className="flex items-start space-x-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="exportType"
-                    value="preset-separator"
-                    checked={exportType === 'preset-separator' && !exportToClipboard}
-                    onChange={(e) => {
-                      setExportType(e.target.value as ExportType);
-                      setExportToClipboard(false);
-                      setIncludeUserPreset(false);
-                    }}
-                    className="text-primary mt-0.5"
-                  />
-                  <span className="text-foreground">
-                    プリセット名とユーザー指定の区切り文字で出力
-                    <br /><span className="text-xs text-muted-foreground">※VOICEROID、A.I.VOICEのテキスト読み込みを想定した形式です</span>
-                    {exportType === 'preset-separator' && !exportToClipboard && (
-                      <span className="flex items-center space-x-2 mt-1" onClick={e => e.stopPropagation()}>
-                        <span className="text-xs text-foreground">区切り文字:</span>
-                        <input
-                          type="text"
-                          value={presetSeparator}
-                          onChange={e => setPresetSeparator(e.target.value)}
-                          onPointerDown={e => e.stopPropagation()}
-                          onMouseDown={e => e.stopPropagation()}
-                          className="w-16 p-1 border rounded bg-background text-foreground text-sm focus:ring-1 focus:ring-primary/50 focus:outline-none"
-                          maxLength={5}
-                        />
-                      </span>
-                    )}
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            {/* ファイル形式選択 */}
-            {!exportToClipboard && (
-              <div className="mb-4">
-                <label className="block text-foreground mb-2 font-semibold">
-                  ファイル形式
-                </label>
-                <select
-                  value={fileFormat}
-                  onChange={(e) => setFileFormat(e.target.value as 'csv' | 'txt')}
-                  className="w-full p-2 border rounded bg-background text-foreground border-border focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20"
-                >
-                  <option value="csv">.csv (CSV形式で保存)</option>
-                  <option value="txt">.txt (テキスト形式で保存)</option>
-                </select>
-              </div>
-            )}
-
-            {/* エクスポート用のオプション選択チェックボックス */}            
-            <span className="text-foreground mb-2 font-semibold">エクスポートオプション</span>
-            <div className="p-2 mr-4">
-              {/* シーン単位エクスポートオプション */}
-              <label className={`flex items-center space-x-2 cursor-pointer mb-2 ${exportToClipboard ? 'opacity-50' : ''}`}>
-                <input
-                  type="checkbox"
-                  checked={useSceneExport}
-                  onChange={(e) => {
-                    setUseSceneExport(e.target.checked);
-                    if (e.target.checked) {
-                      setExportSelectedOnly(false);
-                    }
-                  }}
-                  className="text-primary"
-                  disabled={exportToClipboard}
-                />
-                <span className={`font-medium ${exportToClipboard ? 'text-muted-foreground' : 'text-foreground'}`}>特定のシーンのみCSVを出力</span>
-                {exportToClipboard && (
-                  <span className="ml-2 text-xs text-muted-foreground">※クリップボード出力時は未対応</span>
-                )}
-              </label>
-              {useSceneExport && !exportToClipboard && (
-                <div className="mb-1 border rounded-lg p-2">
-                  <label className="flex items-center space-x-2 cursor-pointer mb-1">
-                    <input
-                      type="checkbox"
-                      checked={sceneCheckboxes.length === scenes.length}
-                      onChange={handleSelectAllScenes}
-                      className="text-primary"
-                    />
-                    <span className="text-foreground text-sm font-medium">すべてのシーンにチェック</span>
-                  </label>
-                  <div className="max-h-25 overflow-y-auto text-foreground-muted rounded p-2 space-y-0.5">
-                    {scenes.map(scene => {
-                      // シーン内のグループ名を抽出
-                      const sceneGroups = Array.from(new Set((scene.scripts[0]?.blocks || [])
-                        .map(b => {
-                          const char = characters.find(c => c.id === b.characterId);
-                          return char?.group || null;
-                        })
-                        .filter(g => g && g !== 'なし')));
-                      return (
-                        <label key={scene.id} className="flex items-center space-x-2 cursor-pointer p-1 hover:bg-accent rounded">
-                          <input
-                            type="checkbox"
-                            checked={sceneCheckboxes.includes(scene.id)}
-                            onChange={() => handleSceneToggle(scene.id)}
-                            className="text-primary"
-                          />
-                          <span className="text-foreground text-sm">{scene.name}
-                            {sceneGroups.length > 0 && (
-                              <span className="ml-2 text-xs text-muted-foreground">（{sceneGroups.join(',')}）</span>
-                            )}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                  {sceneCheckboxes.length === 0 && (
-                    <p className="text-destructive text-xs mt-1">シーンを選択してください</p>
-                  )}
-                </div>
-              )}
-
-              {/* ト書きを含めて出力チェックボックス */}            
-              <label className="flex items-center space-x-2 cursor-pointer mb-2">
-                <input
-                  type="checkbox"
-                  checked={includeTogaki}
-                  onChange={e => setIncludeTogaki(e.target.checked)}
-                  className="text-primary"
-                />
-                <span className="font-medium text-foreground">
-                  ト書きを含めて出力
-                </span>
-              </label>
-
-              {/* 選択ブロックのみエクスポート */}
-              <label className={`flex items-center space-x-2 cursor-pointer mb-2 ${(selectedBlockIds.length === 0 || useSceneExport) ? 'opacity-50' : ''}`}>
-                <input
-                  type="checkbox"
-                  checked={exportSelectedOnly}
-                  onChange={e => setExportSelectedOnly(e.target.checked)}
-                  className="text-primary"
-                  disabled={selectedBlockIds.length === 0 || useSceneExport}
-                />
-                <span className={`font-medium ${(selectedBlockIds.length === 0 || useSceneExport) ? 'text-muted-foreground' : 'text-foreground'}`}>
-                  選択ブロックのみエクスポート {selectedBlockIds.length > 0 && `(${selectedBlockIds.length}個)`}
-                  {useSceneExport && (
-                    <span className="ml-2 text-xs text-muted-foreground"><br />※特定のシーン出力時は未対応</span>
-                  )}
-                </span>
-              </label>
-
-
-
-              {/* ユーザープリセット名をエクスポートに追加する */}
-              {!exportToClipboard && (
-                <label className={`flex items-start space-x-2 cursor-pointer mb-2 ${exportType === 'preset-separator' ? 'opacity-50' : ''}`}>
-                  <input
-                    type="checkbox"
-                    checked={includeUserPreset}
-                    onChange={e => setIncludeUserPreset(e.target.checked)}
-                    className="text-primary mt-0.5"
-                    disabled={exportType === 'preset-separator'}
-                  />
-                  <span className={`font-medium ${exportType === 'preset-separator' ? 'text-muted-foreground' : 'text-foreground'}`}>
-                    ユーザープリセット名をエクスポートに追加する
-                    <br /><span className="text-xs text-muted-foreground font-normal">
-                      CSVの3列目にプリセット名を出力します。CeVIO AI等での読み込みを想定した形式です。
-                      {exportType === 'preset-separator' && '（区切り文字出力時は選択不可）'}
-                    </span>
-                  </span>
-                </label>
-              )}
-
-              {/* グループごとにエクスポートオプション */}
-              <label className="flex items-center space-x-2 cursor-pointer mb-2">
-                <input
-                  type="checkbox"
-                  checked={useGroupExport}
-                  onChange={(e) => setUseGroupExport(e.target.checked)}
-                  className="text-primary"
-                />
-                <span className="font-medium text-foreground">
-                  グループごとにエクスポート
-                </span>
-              </label>
-
-              {/* グループ選択 */}
-              {useGroupExport && (
-                <div className="mb-1 border text-foreground-muted rounded-lg p-2">                  
-                  {/* すべて選択チェックボックス */}
-                  {groups.length > 0 && (
-                    <label className="flex items-center space-x-2 cursor-pointer p-1 hover:bg-accent rounded pb-2">
-                      <input
-                        type="checkbox"
-                        ref={(el) => {
-                          if (el) {
-                            el.indeterminate = getSelectAllState() === 'indeterminate';
-                          }
-                        }}
-                        checked={getSelectAllState() === true}
-                        onChange={handleSelectAllToggle}
-                        className="text-primary"
-                      />
-                      <span className="text-foreground text-sm font-medium">エクスポートするグループを選択</span>
-                    </label>
-                  )}
-                  
-                  <div className="max-h-25 overflow-y-auto text-foreground-muted rounded p-2 space-y-0.5">
-                    {groups.length === 0 ? (
-                      <p className="text-muted-foreground text-sm">グループがありません</p>
-                    ) : (
-                      groups.map(group => (
-                        <label key={group} className="flex items-center space-x-2 cursor-pointer p-1 hover:bg-accent rounded">
-                          <input
-                            type="checkbox"
-                            checked={selectedGroups.includes(group)}
-                            onChange={() => handleGroupToggle(group)}
-                            className="text-primary"
-                          />
-                          <span className="text-foreground text-sm">{group}</span>
-                          <span className="text-muted-foreground text-xs">
-                            ({characters.filter(c => c.group === group).length}人)
-                          </span>
-                        </label>
-                      ))
-                    )}
-                  </div>
-                  {selectedGroups.length === 0 && useGroupExport && (
-                    <p className="text-destructive text-xs mt-1">グループを選択してください</p>
-                  )}
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-{/* バックアップタブの内容（プロジェクト / キャラクターをトグルで切り替え） */}
-        {activeTab === 'backup' && (
-          <div className="mb-4">
-            {/* 対象の切り替えトグル */}
-            <div className="flex border rounded-lg overflow-hidden mb-4">
-              <button
-                onClick={() => setExportType('project')}
-                className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                  exportType === 'project'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent'
-                }`}
-              >
-                プロジェクト
-              </button>
-              <button
-                onClick={() => setExportType('character-setting')}
-                className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                  exportType === 'character-setting'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent'
-                }`}
-              >
-                キャラクター
-              </button>
-            </div>
-
-            {exportType === 'project' ? (
-              <div className="space-y-1">
-                <span className="text-foreground font-semibold">プロジェクト全体をJSONでエクスポート</span>
-                <span className="block text-sm text-muted-foreground">現在選択中のプロジェクト全体をJSONファイルとしてエクスポートします。インポートで復元できます。</span>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                <span className="text-foreground font-semibold">キャラクター設定のエクスポート</span>
-                <span className="block text-sm text-muted-foreground">全キャラクターの設定（アイコン・グループ・プリセット・素材クレジット・表情差分）をCSVでエクスポートします。インポートで復元できます。</span>
-              </div>
-            )}
-          </div>
-        )}
-
-{/* クレジットタブの内容 */}
-        {activeTab === 'credit' && (
+      {activeTab === 'script' && renderScriptTab()}
+      {activeTab === 'backup' && renderBackupTab()}
+      {activeTab === 'credit' && (
+        <div className="p-5 overflow-y-auto">
           <CreditExportPanel
             project={project}
             characters={characters}
@@ -562,47 +651,8 @@ export default function CSVExportDialog({
             selectedSceneId={selectedSceneId}
             onNotification={onNotification}
           />
-        )}
-
-        {/* エクスポートボタン（クレジットタブはパネル内のボタンを使用） */}
-        {activeTab !== 'credit' && (
-        <div className="flex flex-col space-y-2 mt-4">
-          <button
-            onClick={() => {
-              if (exportType === 'character-setting') {
-                onExportCharacterCSV();
-                handleClose();
-              } else if (exportType === 'project') {
-                onExportProjectJson();
-                handleClose();
-              } else if (exportType === 'preset-separator' && !exportToClipboard) {
-                onExportPresetSeparator(
-                  presetSeparator || '＞',
-                  includeTogaki,
-                  exportSelectedOnly,
-                  fileFormat,
-                  useGroupExport,
-                  selectedGroups,
-                  useSceneExport,
-                  sceneCheckboxes
-                );
-                handleClose();
-              } else if (useGroupExport && selectedGroups.length > 0) {
-                handleExport(exportType as 'full' | 'serif-only', includeTogaki);
-              } else if (useSceneExport && sceneCheckboxes.length > 0 && !exportToClipboard) {
-                onExportSceneCSV(sceneCheckboxes, exportType as 'full' | 'serif-only', includeTogaki, exportSelectedOnly, fileFormat, includeUserPreset);
-                handleClose();
-              } else if (exportType === 'full' || exportType === 'serif-only' || exportToClipboard) {
-                handleExport(exportType as 'full' | 'serif-only', includeTogaki);
-              }
-            }}
-            className="w-full px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold"
-          >
-            {exportToClipboard ? 'クリップボードに出力' : 'エクスポート'}
-          </button>
         </div>
-        )}
-        </div>
+      )}
     </DialogFrame>
   );
-} 
+}

@@ -22,11 +22,13 @@ import { CSS } from '@dnd-kit/utilities';
 import { Script, ScriptBlock, Character, Emotion, StorySeparatorSegment, StorySeparatorImage } from '@/types';
 import { loadStoryPanelAsset, removeStoryPanelAsset, saveStoryPanelAsset } from '@/utils/storyPanelAssets';
 import { getEmotionKeys, getEmotionIconUrl, getPresetIdForEmotion, getEmotionForPreset } from '@/utils/emotionUtils';
-import { getReadableTextColor } from '@/utils/colorUtils';
+import { bubbleFill, nameBadgeText, nameLabelText } from '@/utils/colorUtils';
 import { buildChatSideMap } from '@/utils/chatUtils';
 import { createScriptBlock } from '@/utils/blockFactory';
 import CharacterPicker from '@/components/CharacterPicker';
-import CharacterGridAvatar from '@/components/common/CharacterGridAvatar';
+import DialogFrame from '@/components/common/DialogFrame';
+import DialogHeader from '@/components/common/DialogHeader';
+import Button from '@/components/common/Button';
 import type { BubbleTheme } from '@/hooks/useSettings';
 import {
   ArrowUpIcon,
@@ -41,13 +43,15 @@ import {
   ChevronDoubleRightIcon,
   ChevronDownIcon,
   ChevronUpIcon,
-  PencilSquareIcon
+  ChevronUpDownIcon,
+  PencilSquareIcon,
+  PlusIcon,
+  UsersIcon
 } from '@heroicons/react/24/outline';
 
 interface ScriptEditorProps {
   script: Script;
   onUpdateBlock: (blockId: string, updates: Partial<ScriptBlock>) => void;
-  onAddBlock: () => void;
   onDeleteBlock: (blockId: string) => void;
   onDeleteBlocks?: (blockIds: string[]) => void;
   onInsertBlock: (block: ScriptBlock, index: number) => void;
@@ -81,6 +85,8 @@ interface ScriptEditorProps {
   onDragMovePosition?: (x: number, y: number) => void;
   onActiveBlockChange?: (blockId: string) => void;
   addBlockSpeakerPicker?: boolean;
+  /** フキダシの塗り（キャラ色の薄塗り）の濃さをテーマに合わせるため */
+  isDarkMode?: boolean;
   /** ピッカー起動関数を親（キーボードショートカット側）へ渡すための登録口 */
   setRequestSpeakerPicker?: (fn: (mode: 'append' | 'insertBelow', anchorIndex: number) => void) => void;
 }
@@ -92,19 +98,49 @@ interface SortableBlockProps {
   onUpdate: (updates: Partial<ScriptBlock>) => void;
   onDelete: () => void;
   onDuplicate: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
   onClick: (event: React.MouseEvent) => void;
   onTextareaFocus?: () => void;
   enterOnlyBlockAdd?: boolean;
   simpleMode?: boolean;
   bubbleTheme?: BubbleTheme;
+  isDarkMode?: boolean;
   currentProjectId?: string;
   script: Script;
   onInsertBlock: (block: ScriptBlock, index: number) => void;
   insertIdx: React.MutableRefObject<number>;
   /** ピッカーモード時、ブロック追加の代わりに話者選択を要求する */
   onRequestSpeakerPicker?: (anchorIndex: number) => void;
+  /** 複数ブロックを選択中（話者の切り替えは単一ブロックの操作なので切替ボタンを出さない） */
+  isMultiSelection?: boolean;
+}
+
+/** 既定のキャラクター色（アイコン背景が未設定のとき） */
+const FALLBACK_CHARACTER_COLOR = '#9ca3af';
+
+/** セリフ・ト書き共通の textarea の土台 */
+const TEXTAREA_BASE = 'block resize-none overflow-hidden text-fg placeholder:text-fg-faint focus:outline-none';
+
+/** 本文サイズは設定のフォントサイズ（既定16px）を基準に、表示モードごとの差分で決める */
+const editorFontSize = (offsetPx = 0) =>
+  offsetPx === 0 ? 'var(--editor-font-size, 16px)' : `calc(var(--editor-font-size, 16px) ${offsetPx > 0 ? '+' : '-'} ${Math.abs(offsetPx)}px)`;
+
+/**
+ * ブロック内の操作ボタン用。ドラッグ開始（dnd-kit）・ブロック選択の切り替え・
+ * textarea のフォーカス喪失をいずれも起こさない。
+ */
+const blockControlGuards = {
+  onPointerDown: (e: React.PointerEvent) => e.stopPropagation(),
+  onMouseDown: (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); },
+  onTouchStart: (e: React.TouchEvent) => e.stopPropagation()
+};
+
+/** アバターの寸法（表示モードごと） */
+interface AvatarSpec {
+  size: number;
+  nameClass: string;
+  switchSize: number;
+  switchIconSize: number;
+  switchOffset: number;
 }
 
 function SortableBlock({
@@ -114,8 +150,6 @@ function SortableBlock({
   onUpdate,
   onDelete,
   onDuplicate,
-  onMoveUp,
-  onMoveDown,
   onClick,
   onTextareaFocus,
   textareaRef,
@@ -123,12 +157,14 @@ function SortableBlock({
   isMultiDragGhost = false,
   enterOnlyBlockAdd = false,
   simpleMode = false,
-  bubbleTheme = 'classic',
+  bubbleTheme = 'pop',
+  isDarkMode = false,
   currentProjectId,
   script,
   onInsertBlock,
   insertIdx,
-  onRequestSpeakerPicker
+  onRequestSpeakerPicker,
+  isMultiSelection = false
 }: SortableBlockProps & { textareaRef: (el: HTMLTextAreaElement | null) => void; isSelected: boolean; isMultiDragGhost?: boolean }) {
   const {
     attributes,
@@ -170,9 +206,10 @@ function SortableBlock({
 
   // textareaのfocus状態を管理
   const [isTextareaFocused, setIsTextareaFocused] = useState(false);
-  const [isMobileCharacterPickerOpen, setIsMobileCharacterPickerOpen] = useState(false);
+  const [isSpeakerPickerOpen, setIsSpeakerPickerOpen] = useState(false);
   const [isEmotionPickerOpen, setIsEmotionPickerOpen] = useState(false);
   const [isMobileView, setIsMobileView] = useState(false);
+  const focusBeforeSpeakerPickerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -194,7 +231,7 @@ function SortableBlock({
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
-  }, [block.text, simpleMode, bubbleTheme, isMobileView]);
+  }, [block.text, block.characterId, simpleMode, bubbleTheme, isMobileView]);
 
   const selectableCharacters = characters.filter(c =>
     c.id === '' ||
@@ -202,51 +239,39 @@ function SortableBlock({
     !c.disabledProjects ||
     !c.disabledProjects.includes(currentProjectId)
   );
-
-  const renderCharacterVisual = () => {
-    if (!character) return null;
-    const sizeClass = simpleMode ? 'w-8 h-8' : 'w-16 h-16 sm:w-16 sm:h-16 md:w-16 md:h-16';
-    // 感情差分アイコン（未設定・削除済みの感情は normal にフォールバック）
-    const iconUrl = getEmotionIconUrl(character, block.emotion);
-    if (iconUrl) {
-      return (
-        <img
-          src={iconUrl}
-          alt={character.name}
-          className={`${sizeClass} rounded-full object-cover mt-0 ${simpleMode ? 'mr-1' : 'mr-2'} transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
-        />
-      );
-    }
-    return (
-      <div
-        className={`${sizeClass} rounded-full flex items-center justify-center text-center mt-0 ${simpleMode ? 'mr-1' : 'mr-2'} overflow-hidden transition-all duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
-        style={{ backgroundColor: character.backgroundColor || '#e5e7eb' }}
-      >
-        <span
-          className={`${simpleMode ? 'text-[8px]' : 'text-xs sm:text-xs md:text-xs'} font-bold text-foreground px-1 ${simpleMode ? 'max-w-[30px]' : 'max-w-[60px] sm:max-w-[70px] md:max-w-[80px]'} whitespace-no-wrap overflow-hidden${character.name.length > 8 ? ' text-ellipsis' : ''}`}
-          style={{
-            textShadow: `
-              -1px -1px 0 var(--color-background),
-               1px -1px 0 var(--color-background),
-              -1px  1px 0 var(--color-background),
-               1px  1px 0 var(--color-background)
-            `
-          }}
-        >
-          {character.name.length > 8 ? character.name.slice(0, 8) + '…' : character.name}
-        </span>
-      </div>
-    );
-  };
+  // 話者切り替えピッカーの選択肢（ト書きはピッカー側で先頭に付く）
+  const speakerPickerCharacters = selectableCharacters.filter(c => c.id !== '');
 
   const handleSelectCharacter = (characterId: string) => {
     onUpdate({ characterId, emotion: 'normal', userPresetId: undefined });
-    setIsMobileCharacterPickerOpen(false);
+  };
+
+  const openSpeakerPicker = () => {
+    focusBeforeSpeakerPickerRef.current = document.activeElement as HTMLElement | null;
+    setIsEmotionPickerOpen(false);
+    setIsSpeakerPickerOpen(true);
+  };
+
+  // 話者を選んだら、そのまま入力できるよう本文へフォーカスする
+  const handleSpeakerPicked = (characterId: string) => {
+    setIsSpeakerPickerOpen(false);
+    if (characterId !== block.characterId) handleSelectCharacter(characterId);
+    setTimeout(() => localTextareaRef.current?.focus(), 0);
+  };
+
+  const closeSpeakerPicker = () => {
+    const target = focusBeforeSpeakerPickerRef.current;
+    setIsSpeakerPickerOpen(false);
+    setTimeout(() => target?.focus?.(), 0);
   };
 
   // このキャラクターの感情ラベル一覧（normal のみなら感情ピッカーは出さない）
   const emotionKeys = character ? getEmotionKeys(character) : [];
   const hasEmotionVariants = emotionKeys.length > 1;
+  // 未設定・削除済みの感情は標準として扱う
+  const currentEmotion: Emotion = emotionKeys.includes(block.emotion) ? block.emotion : 'normal';
+  const presets = character?.userPresets ?? [];
+  const selectedPreset = presets.find(p => p.id === block.userPresetId);
 
   // 感情を選択（アイコン側）→ 連動するプリセットも同時に切り替える。
   // 連動プリセットを持たない表情（標準など）を選んだ場合はプリセットも解除して整合させる。
@@ -268,11 +293,11 @@ function SortableBlock({
     if (!character) return null;
     const iconUrl = getEmotionIconUrl(character, emotion);
     return iconUrl ? (
-      <img src={iconUrl} alt={emotion} className="w-9 h-9 rounded-full object-cover border shrink-0" />
+      <img src={iconUrl} alt={emotion} className="size-9 rounded-full object-cover ring-1 ring-hairline shrink-0" />
     ) : (
       <div
-        className="w-9 h-9 rounded-full border shrink-0"
-        style={{ backgroundColor: character.backgroundColor || '#e5e7eb' }}
+        className="size-9 rounded-full ring-1 ring-hairline shrink-0"
+        style={{ backgroundColor: character.backgroundColor || FALLBACK_CHARACTER_COLOR }}
       />
     );
   };
@@ -312,43 +337,438 @@ function SortableBlock({
     };
   };
 
-  // フキダシテーマ（シンプルモード・ト書きには適用しない）
-  const activeTheme: BubbleTheme = (!simpleMode && !isTogaki) ? bubbleTheme : 'classic';
-  const charColor = character?.backgroundColor || '#9ca3af';
+  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // DnDキーボードセンサーへの伝播を防ぎ、IME確定Enterで並び替えモードに入らないようにする。
+    // Ctrl+Shift+Enter だけはグローバルショートカット（ト書き追加）へ通す。
+    if ((e.key === 'Enter' || e.key === ' ') && !(e.ctrlKey && e.shiftKey)) {
+      e.stopPropagation();
+    }
+    if (isImeComposingKey(e)) {
+      return;
+    }
+    // チェックボックスの状態に応じてEnter操作のみで切り替え
+    const shouldAddBlock = enterOnlyBlockAdd
+      ? (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey)  // Enter入力のみモード
+      : (e.key === 'Enter' && e.ctrlKey && !e.shiftKey);  // 従来のCtrl+Enterモード
+
+    if (shouldAddBlock) {
+      e.preventDefault();
+      const currentIndex = script.blocks.findIndex(b => b.id === block.id);
+      // ピッカーモード時は追加前に話者を選ばせる
+      if (onRequestSpeakerPicker) {
+        onRequestSpeakerPicker(currentIndex);
+        return;
+      }
+      const { characterId, emotion } = buildBlockFromLastSpeaker();
+      insertIdx.current = currentIndex + 1; // 挿入インデックスを設定
+      onInsertBlock(createScriptBlock(characterId, emotion, characters), currentIndex + 1);
+    }
+  };
+
+  // セリフ・ト書き・全表示モードで共通の textarea の振る舞い
+  const textareaBehavior = {
+    ref: setTextareaRef,
+    value: block.text,
+    rows: 1,
+    onChange: (e: ChangeEvent<HTMLTextAreaElement>) => onUpdate({ text: e.target.value }),
+    onKeyDown: handleTextareaKeyDown,
+    onPointerDown: (e: React.PointerEvent) => e.stopPropagation(),
+    onMouseDown: (e: React.MouseEvent) => e.stopPropagation(),
+    onTouchStart: (e: React.TouchEvent) => e.stopPropagation(),
+    onFocus: () => { setIsTextareaFocused(true); onTextareaFocus?.(); },
+    onBlur: () => setIsTextareaFocused(false),
+    onInput: (e: React.FormEvent<HTMLTextAreaElement>) => {
+      const target = e.target as HTMLTextAreaElement;
+      target.style.height = 'auto';
+      target.style.height = target.scrollHeight + 'px';
+      keepTextareaAboveToolbar(target);
+    }
+  };
+
+  const variant: 'simple' | BubbleTheme = simpleMode ? 'simple' : bubbleTheme;
+  // 選択中（明示的に選択 or 入力中）のブロックだけ、話者切替ボタンや既定値のチップを出す
+  const isActive = isSelected || isTextareaFocused;
+  const charColor = character?.backgroundColor || FALLBACK_CHARACTER_COLOR;
+  // 既定値（標準の表情・プリセット未選択）の表示は、ホバー中か選択中だけ出す
+  const revealOnHover = isActive ? '' : 'opacity-0 group-hover/block:opacity-100 focus-visible:opacity-100';
 
   // チャットテーマ: キャラの左右振り分けと連続発言判定
-  const isChatRight = activeTheme === 'chat' && !!character &&
+  const isChatRight = variant === 'chat' && !!character &&
     buildChatSideMap(characters).get(character.id) === 'right';
   const showChatName = (() => {
-    if (activeTheme !== 'chat' || !character) return false;
+    if (variant !== 'chat' || !character) return false;
     const blockIndex = script.blocks.findIndex(b => b.id === block.id);
     return blockIndex <= 0 || script.blocks[blockIndex - 1].characterId !== block.characterId;
   })();
 
-  // テーマごとのフキダシ（textarea）のクラスとスタイル
-  const bubbleClass = simpleMode
-    ? 'rounded-lg p-1 bg-transparent'
-    : activeTheme === 'pop'
-      ? 'rounded-[14px] p-2 bg-card/95 min-h-[60px]'
-      : activeTheme === 'cinema'
-        ? 'rounded-lg p-2 bg-transparent min-h-[40px]'
-        : activeTheme === 'chat'
-          ? 'p-2 bg-card/95 min-h-[60px]'
-          : 'rounded-2xl p-2 bg-card/95 shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20 min-h-[60px]';
-  const bubbleStyle: React.CSSProperties = simpleMode
-    ? { borderRadius: '8px' }
-    : activeTheme === 'pop'
-      ? { borderRadius: '14px', border: `2px solid ${charColor}` }
-      : activeTheme === 'cinema'
-        ? { borderRadius: '8px' }
-        : activeTheme === 'chat'
-          // 左右ともパーソナルカラーの淡色（複数キャラ登場を想定し、送信者=白のLINE風強制はしない）
-          ? {
-              borderRadius: isChatRight ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-              backgroundColor: `${charColor}33`,
-              border: `1px solid ${charColor}55`
-            }
-          : { borderRadius: '20px 20px 20px 0' };
+  const renderAvatar = ({ size, nameClass, switchSize, switchIconSize, switchOffset }: AvatarSpec) => {
+    if (!character) return null;
+    // 感情差分アイコン（未設定・削除済みの感情は normal にフォールバック）
+    const iconUrl = getEmotionIconUrl(character, block.emotion);
+    const displayName = character.name.length > 8 ? character.name.slice(0, 8) + '…' : character.name;
+    return (
+      <div className="relative shrink-0" style={{ width: size, height: size }}>
+        <button
+          type="button"
+          className={`block size-full rounded-full cursor-pointer transition-[outline] duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
+          onClick={(e) => { e.stopPropagation(); openSpeakerPicker(); }}
+          // アバターはドラッグの掴み所でもあるため pointerdown は止めない（ドラッグ後のclickは dnd-kit が抑止する）
+          onMouseDown={(e) => e.preventDefault()}
+          title="話者を切り替え"
+        >
+          {iconUrl ? (
+            <img src={iconUrl} alt={character.name} className="size-full rounded-full object-cover" />
+          ) : (
+            <span
+              className="size-full rounded-full flex items-center justify-center overflow-hidden"
+              style={{ backgroundColor: charColor }}
+            >
+              <span
+                className={`${nameClass} font-bold leading-tight text-center px-1 break-all line-clamp-2`}
+                style={{ color: nameBadgeText(charColor) }}
+              >
+                {displayName}
+              </span>
+            </span>
+          )}
+        </button>
+        {isActive && !isMultiSelection && (
+          <button
+            type="button"
+            tabIndex={-1}
+            className="absolute rounded-full bg-panel shadow-(--shadow-popover) flex items-center justify-center"
+            style={{ width: switchSize, height: switchSize, right: -switchOffset, bottom: -switchOffset }}
+            onClick={(e) => { e.stopPropagation(); openSpeakerPicker(); }}
+            {...blockControlGuards}
+            title="話者を切り替え"
+          >
+            <ChevronUpDownIcon style={{ width: switchIconSize, height: switchIconSize, color: charColor }} strokeWidth={2} />
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  // ト書きを話者ブロックへ切り替える入口（ト書きにはアバターが無いため）
+  const renderTogakiSwitch = (className: string) => (
+    <button
+      type="button"
+      className={`shrink-0 rounded-md p-1 text-fg-faint transition-colors hover:text-fg hover:bg-well ${className}`}
+      onClick={(e) => { e.stopPropagation(); openSpeakerPicker(); }}
+      {...blockControlGuards}
+      title="話者を切り替え"
+    >
+      <UsersIcon className="size-3.5" />
+    </button>
+  );
+
+  // 複製・削除のホバーパレット（レイアウトを動かさないよう absolute で重ねる。モバイルはツールバーに任せる）
+  const renderHoverPalette = (positionClass: string, compact = false) => {
+    if (isMobileView) return null;
+    const buttonClass = compact ? 'size-6 rounded-[7px] [&>svg]:size-3.5' : 'size-7 rounded-lg [&>svg]:size-4';
+    return (
+      <div
+        className={`absolute z-[3] flex opacity-0 pointer-events-none transition-opacity duration-[160ms] ease-in-out group-hover/block:opacity-100 group-hover/block:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto ${
+          compact ? 'gap-px p-px rounded-lg bg-canvas' : 'gap-0.5 p-[3px] rounded-[11px] bg-panel shadow-(--shadow-popover)'
+        } ${positionClass}`}
+      >
+        <button
+          type="button"
+          className={`${buttonClass} flex items-center justify-center text-fg-sub transition-colors hover:bg-field hover:text-fg`}
+          onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+          {...blockControlGuards}
+          title="ブロックを複製"
+        >
+          <DocumentDuplicateIcon />
+        </button>
+        <button
+          type="button"
+          className={`${buttonClass} flex items-center justify-center text-destructive transition-colors hover:bg-destructive-tint`}
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          {...blockControlGuards}
+          title="ブロックを削除"
+        >
+          <TrashIcon />
+        </button>
+      </div>
+    );
+  };
+
+  const renderEmotionPopover = (alignRight: boolean) => isEmotionPickerOpen && (
+    <>
+      <div
+        className="fixed inset-0 z-40"
+        onClick={(e) => { e.stopPropagation(); setIsEmotionPickerOpen(false); }}
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      />
+      <div
+        className={`absolute ${alignRight ? 'right-0' : 'left-0'} top-full mt-1.5 z-50 w-44 max-h-64 overflow-y-auto p-1.5 bg-panel rounded-xl ring-1 ring-hairline shadow-(--shadow-popover)`}
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {emotionKeys.map(emotion => (
+          <button
+            key={emotion}
+            type="button"
+            onClick={(e) => { e.stopPropagation(); handleSelectEmotion(emotion); }}
+            className={`w-full flex items-center gap-2 p-1.5 rounded-lg text-left text-xs transition-colors ${
+              currentEmotion === emotion ? 'bg-primary-tint text-primary-text font-bold' : 'text-fg hover:bg-field'
+            }`}
+          >
+            {renderEmotionOption(emotion)}
+            <span className="truncate">{emotion === 'normal' ? '標準' : emotion}</span>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+
+  /**
+   * 感情・プリセットの表示と切り替え口。
+   * chip: 話者名バッジの右隣のチップ（クラシック/ポップ/チャット）、text: 小さな文字（シネマ/シンプル）
+   */
+  const renderMetaControls = (look: 'chip' | 'text', alignRight = false) => {
+    if (!character) return null;
+    const baseClass = look === 'chip'
+      ? 'relative text-[10px] leading-normal px-[9px] py-px rounded-full bg-panel text-fg-sub whitespace-nowrap max-w-40 truncate transition-opacity'
+      : 'relative text-[10px] leading-normal text-fg-sub whitespace-nowrap max-w-40 truncate transition-opacity hover:text-fg';
+    const chipStyle = look === 'chip' ? { border: `1.5px solid ${charColor}` } : undefined;
+    return (
+      <>
+        {hasEmotionVariants && (
+          <span className="relative flex">
+            <button
+              type="button"
+              className={`${baseClass} cursor-pointer ${currentEmotion === 'normal' && !isEmotionPickerOpen ? revealOnHover : ''}`}
+              style={chipStyle}
+              onClick={(e) => { e.stopPropagation(); setIsEmotionPickerOpen(v => !v); }}
+              {...blockControlGuards}
+              title="表情を選択"
+            >
+              {currentEmotion === 'normal' ? '標準' : currentEmotion}
+            </button>
+            {renderEmotionPopover(alignRight)}
+          </span>
+        )}
+        {presets.length > 0 && (
+          <span
+            className={`${baseClass} ${selectedPreset ? '' : revealOnHover} has-[select:focus-visible]:opacity-100`}
+            style={chipStyle}
+            title="Alt+Shift+↑↓:プリセットを切り替え"
+          >
+            {selectedPreset?.name ?? 'プリセット'}
+            {/* 見た目はチップのまま、クリックで既存のプリセット選択（ネイティブのリスト）を開く */}
+            <select
+              value={block.userPresetId || ''}
+              onChange={e => handleSelectPreset(e.target.value || undefined)}
+              className="absolute inset-0 size-full opacity-0 cursor-pointer"
+              aria-label="プリセット"
+              onPointerDown={e => e.stopPropagation()}
+              onMouseDown={e => e.stopPropagation()}
+              onTouchStart={e => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
+            >
+              <option value="">プリセットなし</option>
+              {presets.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </span>
+        )}
+      </>
+    );
+  };
+
+  // 話者名バッジ（キャラ色の塗り＋濃色文字。背景色のリングで下の枠線から抜く）
+  const renderNameBadge = (ringColorVar: string) => character && (
+    <span
+      className="text-[11px] font-bold leading-normal px-2.5 py-px rounded-full whitespace-nowrap max-w-40 truncate select-none"
+      style={{ backgroundColor: charColor, color: nameBadgeText(charColor), boxShadow: `0 0 0 2px ${ringColorVar}` }}
+    >
+      {character.name}
+    </span>
+  );
+
+  // ---- 表示モードごとの本体 ----
+  let rootClass = '';
+  let body: React.ReactNode = null;
+
+  if (variant === 'simple') {
+    // 1行1ブロック。話者名は出さず、キャラ色はテキスト左の細い罫だけ
+    rootClass = `flex items-center gap-2 py-[5px] px-2 rounded-[10px] ${isActive ? 'ring-1 ring-primary/35' : ''}`;
+    body = (
+      <>
+        {isTogaki ? (
+          <div className="w-8 shrink-0 flex justify-center">
+            {renderTogakiSwitch(isActive ? '' : 'opacity-0 group-hover/block:opacity-100 focus-visible:opacity-100')}
+          </div>
+        ) : (
+          renderAvatar({ size: 32, nameClass: 'text-[8px]', switchSize: 15, switchIconSize: 10, switchOffset: 3 })
+        )}
+        <div
+          className="flex-1 min-w-0"
+          style={isTogaki ? { paddingLeft: 11 } : { borderLeft: `2px solid ${charColor}`, paddingLeft: 9 }}
+        >
+          <textarea
+            {...textareaBehavior}
+            placeholder={isTogaki ? 'ト書きを入力' : 'セリフを入力'}
+            className={`${TEXTAREA_BASE} w-full bg-transparent p-0${isTogaki ? ' italic' : ''}`}
+            style={{ height: 'auto', fontSize: editorFontSize(isTogaki ? -2 : -1), lineHeight: 1.45 }}
+          />
+        </div>
+        {!isTogaki && (
+          <div className="shrink-0 flex items-center gap-2">
+            {renderMetaControls('text', true)}
+          </div>
+        )}
+        {renderHoverPalette('top-1/2 -translate-y-1/2 right-1.5', true)}
+      </>
+    );
+  } else if (variant === 'cinema') {
+    // 脚本風。フキダシの枠と塗りを外し、キャラ色は本文左の罫で示す
+    rootClass = `rounded-[14px] ${isActive ? 'ring-1 ring-primary/35' : ''} ${
+      isTogaki ? 'flex items-center justify-center py-0.5 px-3' : 'flex items-start gap-3.5 py-2.5 px-3'
+    }`;
+    body = isTogaki ? (
+      <>
+        {renderTogakiSwitch(`absolute left-2 top-1/2 -translate-y-1/2 ${isActive ? '' : 'opacity-0 group-hover/block:opacity-100 focus-visible:opacity-100'}`)}
+        <textarea
+          {...textareaBehavior}
+          placeholder="ト書きを入力"
+          className={`${TEXTAREA_BASE} w-full bg-transparent p-0 italic text-center tracking-[.06em]`}
+          style={{ height: 'auto', fontSize: editorFontSize(-2), lineHeight: 1.7 }}
+        />
+        {renderHoverPalette('top-1/2 -translate-y-1/2 right-3')}
+      </>
+    ) : (
+      <>
+        {renderAvatar({ size: 44, nameClass: 'text-[9px]', switchSize: 19, switchIconSize: 12, switchOffset: 4 })}
+        <div className="flex-1 min-w-0 pl-3.5" style={{ borderLeft: `3px solid ${charColor}` }}>
+          <div className="flex items-baseline gap-[9px] mb-[5px] min-w-0">
+            <span
+              className="text-[11px] font-bold tracking-[.22em] whitespace-nowrap truncate select-none"
+              style={{ color: nameLabelText(charColor, isDarkMode) }}
+            >
+              {character?.name}
+            </span>
+            {renderMetaControls('text')}
+          </div>
+          <textarea
+            {...textareaBehavior}
+            placeholder="セリフを入力"
+            className={`${TEXTAREA_BASE} w-full bg-transparent p-0`}
+            style={{ height: 'auto', fontSize: editorFontSize(1), lineHeight: 1.9 }}
+          />
+        </div>
+        {renderHoverPalette('top-2.5 right-3')}
+      </>
+    );
+  } else if (variant === 'chat') {
+    // 左右振り分けのチャット。連続発言ではアバターと名前を省略する
+    if (isTogaki) {
+      rootClass = `flex justify-center py-1 px-2.5 rounded-[18px] ${isActive ? 'bg-block' : ''}`;
+      body = (
+        <>
+          {renderTogakiSwitch(`absolute left-2 top-1/2 -translate-y-1/2 ${isActive ? '' : 'opacity-0 group-hover/block:opacity-100 focus-visible:opacity-100'}`)}
+          <textarea
+            {...textareaBehavior}
+            placeholder="ト書きを入力"
+            className={`${TEXTAREA_BASE} w-auto min-w-[8em] max-w-[74%] [field-sizing:content] py-[5px] px-4 rounded-full bg-field italic text-center`}
+            style={{ height: 'auto', fontSize: editorFontSize(-3), lineHeight: 1.5 }}
+          />
+          {renderHoverPalette('top-1/2 -translate-y-1/2 right-2.5')}
+        </>
+      );
+    } else {
+      rootClass = `flex items-start gap-2.5 ${isChatRight ? 'flex-row-reverse' : ''} ${showChatName ? 'p-2.5' : 'px-2.5'} rounded-[18px] ${isActive ? 'bg-block' : ''}`;
+      const bubbleRadius = isChatRight ? '18px 18px 6px 18px' : '18px 18px 18px 6px';
+      body = (
+        <>
+          {showChatName
+            ? renderAvatar({ size: 44, nameClass: 'text-[9px]', switchSize: 19, switchIconSize: 12, switchOffset: 4 })
+            : <div className="w-11 shrink-0" />}
+          <div className="relative flex-1 min-w-0 max-w-[74%]">
+            {/* 連続発言では名前を省略。感情・プリセットは選択中だけ出す */}
+            {(showChatName || isActive) && (
+              <div className={`absolute -top-2 ${isChatRight ? 'right-3.5' : 'left-3.5'} z-[2] flex items-center gap-[5px] max-w-[calc(100%-28px)]`}>
+                {isChatRight && renderMetaControls('chip', true)}
+                {showChatName && renderNameBadge(isActive ? 'var(--color-block)' : 'var(--color-canvas)')}
+                {!isChatRight && renderMetaControls('chip')}
+              </div>
+            )}
+            <textarea
+              {...textareaBehavior}
+              placeholder="セリフを入力"
+              className={`${TEXTAREA_BASE} w-full`}
+              style={{
+                height: 'auto',
+                fontSize: editorFontSize(),
+                lineHeight: 1.6,
+                padding: showChatName ? '15px 15px 13px' : '13px 15px',
+                borderRadius: bubbleRadius,
+                border: `1.5px solid ${charColor}`,
+                backgroundColor: bubbleFill(charColor, isDarkMode)
+              }}
+            />
+          </div>
+          {renderHoverPalette(`top-[9px] ${isChatRight ? 'left-2.5' : 'right-2.5'}`)}
+        </>
+      );
+    }
+  } else {
+    // ポップ（基準）。ブロック面の上にフキダシを載せ、話者名はフキダシ上辺のバッジ
+    if (isTogaki) {
+      rootClass = `flex items-center gap-1.5 py-[13px] pl-3 pr-4 rounded-[18px] bg-field ${
+        isActive ? 'shadow-(--shadow-block-selected)' : 'shadow-[inset_0_0_0_1px_var(--color-hairline)]'
+      }`;
+      body = (
+        <>
+          {renderTogakiSwitch('')}
+          <textarea
+            {...textareaBehavior}
+            placeholder="ト書きを入力"
+            className={`${TEXTAREA_BASE} w-full flex-1 min-w-0 bg-transparent p-0 italic`}
+            style={{ height: 'auto', fontSize: editorFontSize(-1), lineHeight: 1.55 }}
+          />
+          {renderHoverPalette('top-1/2 -translate-y-1/2 right-2.5')}
+        </>
+      );
+    } else {
+      rootClass = `flex ${isMobileView ? 'items-start gap-2.5' : 'items-center gap-3'} p-3 rounded-[20px] bg-block ${
+        isActive ? 'shadow-(--shadow-block-selected)' : 'shadow-(--shadow-block)'
+      }`;
+      body = (
+        <>
+          {renderAvatar(isMobileView
+            // 縁取りを付けない分（外周4px）だけ大きくする
+            ? { size: 56, nameClass: 'text-[10px]', switchSize: 20, switchIconSize: 12, switchOffset: 4 }
+            : { size: 60, nameClass: 'text-[11px]', switchSize: 21, switchIconSize: 13, switchOffset: 4 })}
+          <div className="relative flex-1 min-w-0">
+            <div className="absolute -top-2 left-3.5 z-[2] flex items-center gap-[5px] max-w-[calc(100%-28px)]">
+              {renderNameBadge('var(--color-block)')}
+              {renderMetaControls('chip')}
+            </div>
+            <textarea
+              {...textareaBehavior}
+              placeholder="セリフを入力"
+              className={`${TEXTAREA_BASE} w-full rounded-[18px]`}
+              style={{
+                height: 'auto',
+                fontSize: editorFontSize(),
+                lineHeight: 1.55,
+                padding: isMobileView ? '16px 14px 14px' : '16px 16px 14px',
+                border: `2px solid ${charColor}`,
+                backgroundColor: bubbleFill(charColor, isDarkMode)
+              }}
+            />
+          </div>
+          {renderHoverPalette('top-[11px] right-3')}
+        </>
+      );
+    }
+  }
 
   return (
     <>
@@ -357,445 +777,21 @@ function SortableBlock({
       {...attributes}
       {...listeners}
       style={style}
-      className={`flex items-start ${simpleMode ? 'space-x-1 p-0.5 rounded-lg' : 'space-x-1 sm:space-x-2 p-1 sm:p-2 rounded-xl bg-card/80 shadow-(--separator-shadow-block)'} mb-${simpleMode ? '0' : '2'} transition-colors cursor-grab touch-manipulation ${simpleMode ? (isSelected || isTextareaFocused ? 'ring-1 ring-primary/30' : '') : (isSelected || isTextareaFocused ? 'ring-2 ring-primary/50' : 'ring-[0.5px] ring-foreground/10 dark:ring-white/15')}`}
+      // 感情ピッカーを開いている間は後続ブロックより手前に出す
+      className={`relative group/block cursor-grab touch-manipulation focus:outline-none ${isEmotionPickerOpen ? 'z-20' : ''} ${rootClass}`}
       onClick={onClick}
       data-block-index={script.blocks.findIndex(b => b.id === block.id)}
     >
-      <div className="flex-1">
-        {isTogaki ? (
-          <div className="flex items-center space-x-2">
-            <textarea
-              ref={setTextareaRef}
-              value={block.text}
-              onChange={e => onUpdate({ text: e.target.value })}
-              placeholder="ト書きを入力"
-              className={`w-full ${simpleMode ? 'p-1 rounded-lg bg-transparent' : 'p-2 pt-2 rounded-2xl min-h-[40px] bg-muted/70 shadow-(--separator-shadow-input) ring-1 ring-foreground/15 dark:ring-white/20'} text-foreground ${simpleMode ? '' : 'focus:ring-1 focus:ring-primary/40'} italic focus:outline-none resize-none overflow-hidden`}
-              rows={1}
-              style={{ height: 'auto', borderRadius: simpleMode ? '8px' : '20px 20px 20px 0', fontSize: 'var(--editor-font-size, 14px)', lineHeight: simpleMode ? '1.4' : undefined, minHeight: simpleMode ? 'calc(var(--editor-font-size, 14px) * 1.4 + 8px)' : undefined }}
-              onPointerDown={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              onTouchStart={(e) => e.stopPropagation()}
-              onFocus={() => { setIsTextareaFocused(true); onTextareaFocus?.(); }}
-              onBlur={() => setIsTextareaFocused(false)}
-              onKeyDown={e => {
-                // DnDキーボードセンサーへの伝播を防ぎ、IME確定Enterで並び替えモードに入らないようにする。
-                // Ctrl+Shift+Enter だけはグローバルショートカット（ト書き追加）へ通す。
-                if ((e.key === 'Enter' || e.key === ' ') && !(e.ctrlKey && e.shiftKey)) {
-                  e.stopPropagation();
-                }
-                if (isImeComposingKey(e)) {
-                  return;
-                }
-                // チェックボックスの状態に応じてEnter操作のみで切り替え
-                const shouldAddBlock = enterOnlyBlockAdd
-                  ? (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey)  // Enter入力のみモード
-                  : (e.key === 'Enter' && e.ctrlKey && !e.shiftKey);  // 従来のCtrl+Enterモード
-
-                if (shouldAddBlock) {
-                  e.preventDefault();
-                  const currentIndex = script.blocks.findIndex(b => b.id === block.id);
-                  // ピッカーモード時は追加前に話者を選ばせる
-                  if (onRequestSpeakerPicker) {
-                    onRequestSpeakerPicker(currentIndex);
-                    return;
-                  }
-                  const { characterId, emotion } = buildBlockFromLastSpeaker();
-                  const newBlock: ScriptBlock = {
-                    id: Date.now().toString(),
-                    characterId,
-                    emotion,
-                    text: ''
-                  };
-                  insertIdx.current = currentIndex + 1; // 挿入インデックスを設定
-                  onInsertBlock(newBlock, currentIndex + 1);
-                }
-              }}
-              onInput={e => {
-                const target = e.target as HTMLTextAreaElement;
-                target.style.height = 'auto';
-                target.style.height = target.scrollHeight + 'px';
-                keepTextareaAboveToolbar(target);
-              }}
-            />
-
-            {/* キャラ選択リストとアイコン群を横並びに */}
-            {!simpleMode && (
-            <div className="order-3 flex flex-col justify-between items-center h-16 mr-0.5 sm:mr-1 md:mr-2 mt-0">
-              {!isMobileView && (
-                <select
-                  value={block.characterId}
-                  onChange={e => onUpdate({ characterId: e.target.value, emotion: 'normal', userPresetId: undefined })}
-                  className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-24 sm:w-28 md:w-32 lg:w-36 mb-1"
-                  style={{ height: '2.5rem' }}
-                >
-                  <option value="">ト書きを入力</option>
-                  {selectableCharacters.map(c => (
-                    <option key={c.id || 'togaki'} value={c.id}>{c.name || 'ト書き'}</option>
-                  ))}
-                </select>
-              )}
-              <div className="flex flex-row justify-items-center space-x-0.5 sm:space-x-0.5 md:space-x-0.5 mt-0">
-                {!isMobileView && (
-                  <>
-                <button
-                      onClick={onMoveUp}
-                      className="p-1 rounded hover:bg-accent"
-                      title="Ctrl+↑:ブロックを上に移動"
-                      style={{ height: '2.25rem', width: '2.25rem' }}
-                    >
-                      <ArrowUpIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
-                    </button>
-                    <button
-                      onClick={onMoveDown}
-                      className="p-1 rounded hover:bg-accent"
-                      title="Ctrl+↓:ブロックを下に移動"
-                      style={{ height: '2.25rem', width: '2.25rem' }}
-                    >
-                      <ArrowDownIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
-                    </button>
-                  </>
-                )}
-                {!isMobileView && (
-                  <>
-                    <button
-                      onClick={onDuplicate}
-                      className="p-1 rounded hover:bg-accent"
-                      title="Ctrl+B:ブロックを複製"
-                      style={{ height: '2.25rem', width: '2.25rem' }}
-                    >
-                      <DocumentDuplicateIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
-                    </button>
-                    <button
-                      onClick={onDelete}
-                      className="p-1 text-destructive hover:bg-destructive/10 rounded"
-                      title="Alt+B:ブロックを削除"
-                      style={{ height: '2.25rem', width: '2.25rem' }}
-                    >
-                      <TrashIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6" />
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-            )}
-          </div>
-
-        ) : (
-          <div className="flex items-start space-x-2">
-            {/* 左列: キャラアイコン（表情差分があればクリックで表情ピッカー。チャットテーマ右側キャラはアイコンを右に） */}
-            <div className={`shrink-0 relative${isChatRight ? ' order-2' : ''}`}>
-              {isMobileView ? (
-                <button
-                  type="button"
-                  className="rounded-full p-0.5"
-                  onClick={() => setIsMobileCharacterPickerOpen(true)}
-                  title="話者を選択"
-                >
-                  {renderCharacterVisual()}
-                </button>
-              ) : hasEmotionVariants ? (
-                <button
-                  type="button"
-                  className="rounded-full cursor-pointer"
-                  onClick={(e) => { e.stopPropagation(); setIsEmotionPickerOpen(v => !v); }}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  title="クリックで表情を選択"
-                >
-                  {renderCharacterVisual()}
-                </button>
-              ) : (
-                renderCharacterVisual()
-              )}
-              {!isMobileView && hasEmotionVariants && isEmotionPickerOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setIsEmotionPickerOpen(false); }} />
-                  <div
-                    className={`absolute ${isChatRight ? 'right-0' : 'left-0'} top-full mt-1 z-50 bg-popover border rounded-lg shadow-lg p-2 w-44 max-h-64 overflow-y-auto`}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onMouseDown={(e) => e.stopPropagation()}
-                  >
-                    {emotionKeys.map(emotion => (
-                      <button
-                        key={emotion}
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleSelectEmotion(emotion); }}
-                        className={`w-full flex items-center gap-2 p-1.5 rounded hover:bg-accent text-left text-xs ${block.emotion === emotion ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}`}
-                      >
-                        {renderEmotionOption(emotion)}
-                        <span className="truncate">{emotion === 'normal' ? '標準' : emotion}</span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-            <div
-              className={`relative flex-1 pl-2${isChatRight ? ' order-1' : ''}`}
-              style={activeTheme === 'cinema' ? { borderLeft: `3px solid ${charColor}`, paddingLeft: '10px' } : undefined}
-            >
-              {/* チャット: 話者名（連続発言時は省略） */}
-              {activeTheme === 'chat' && character && showChatName && (
-                <p className={`text-[10px] text-muted-foreground mb-0.5 select-none ${isChatRight ? 'text-right pr-1' : 'pl-1'}`}>
-                  {character.name}
-                </p>
-              )}
-              {/* シネマ: フキダシなしの脚本風キャラ名ラベル */}
-              {activeTheme === 'cinema' && character && (
-                <p
-                  className="text-[11px] font-medium tracking-widest mb-0.5 select-none"
-                  style={{ color: `color-mix(in srgb, ${charColor} 65%, var(--color-foreground))` }}
-                >
-                  {character.name}
-                </p>
-              )}
-              {/* フキダシ基準の配置ラッパー（名前チップ・三角形・プリセット選択はフキダシに追従させる） */}
-              <div className={`relative${activeTheme === 'pop' ? ' mt-2' : ''}`}>
-              {/* ポップ: フキダシに食い込むキャラ名チップ */}
-              {activeTheme === 'pop' && character && (
-                <span
-                  className="absolute top-[-9px] left-4 z-10 text-[10px] font-medium px-2 py-px rounded-full select-none pointer-events-none max-w-[10rem] truncate"
-                  style={{ backgroundColor: charColor, color: getReadableTextColor(charColor) }}
-                >
-                  {character.name}
-                </span>
-              )}
-              <textarea
-                ref={setTextareaRef}
-                value={block.text}
-                onChange={e => onUpdate({ text: e.target.value })}
-                onKeyDown={e => {
-                  // DnDキーボードセンサーへの伝播を防ぎ、IME確定Enterで並び替えモードに入らないようにする。
-                  // Ctrl+Shift+Enter だけはグローバルショートカット（ト書き追加）へ通す。
-                  if ((e.key === 'Enter' || e.key === ' ') && !(e.ctrlKey && e.shiftKey)) {
-                    e.stopPropagation();
-                  }
-                  if (isImeComposingKey(e)) {
-                    return;
-                  }
-                  // チェックボックスの状態に応じてEnter操作のみで切り替え
-                  const shouldAddBlock = enterOnlyBlockAdd
-                    ? (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey)  // Enter入力のみモード
-                    : (e.key === 'Enter' && e.ctrlKey && !e.shiftKey);  // 従来のCtrl+Enterモード
-
-                  if (shouldAddBlock) {
-                    e.preventDefault();
-                    const currentIndex = script.blocks.findIndex(b => b.id === block.id);
-                    // ピッカーモード時は追加前に話者を選ばせる
-                    if (onRequestSpeakerPicker) {
-                      onRequestSpeakerPicker(currentIndex);
-                      return;
-                    }
-                    const { characterId, emotion } = buildBlockFromLastSpeaker();
-                    const newBlock: ScriptBlock = {
-                      id: Date.now().toString(),
-                      characterId,
-                      emotion,
-                      text: ''
-                    };
-                    insertIdx.current = currentIndex + 1; // 挿入インデックスを設定
-                    onInsertBlock(newBlock, currentIndex + 1);
-                  }
-                }}
-                placeholder="セリフを入力"
-                className={`${bubbleClass} w-full text-foreground ${simpleMode ? '' : 'focus:ring-1 focus:ring-primary/40'} focus:outline-none resize-none overflow-hidden${!simpleMode && !isMobileView && character?.userPresets?.length ? ' pr-[7.5rem]' : ''}`}
-                rows={1}
-                style={{ height: 'auto', ...bubbleStyle, fontSize: 'var(--editor-font-size, 14px)', lineHeight: simpleMode ? '1.4' : undefined, minHeight: simpleMode ? 'calc(var(--editor-font-size, 14px) * 1.4 + 8px)' : undefined }}
-                onPointerDown={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onTouchStart={(e) => e.stopPropagation()}
-                onFocus={() => { setIsTextareaFocused(true); onTextareaFocus?.(); }}
-                onBlur={() => setIsTextareaFocused(false)}
-                onInput={e => {
-                  const target = e.target as HTMLTextAreaElement;
-                  target.style.height = 'auto';
-                  target.style.height = target.scrollHeight + 'px';
-                  keepTextareaAboveToolbar(target);
-                }}
-              />
-              {/* フキダシの三角形（クラシックのみ） */}
-              {!simpleMode && activeTheme === 'classic' && (
-                <div className="absolute left-[-4px] top-6 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-400 dark:border-r-gray-500"></div>
-              )}
-              {/* プリセット名表示（シンプルモード: 選択時のみテキスト表示） */}
-              {simpleMode && block.userPresetId && character?.userPresets && character.userPresets.length > 0 && (() => {
-                const preset = character.userPresets.find(p => p.id === block.userPresetId);
-                return preset ? (
-                  <span className="absolute top-0.5 right-1 text-[10px] text-muted-foreground/70 pointer-events-none select-none truncate max-w-[6rem]">
-                    {preset.name}
-                  </span>
-                ) : null;
-              })()}
-              {/* プリセット選択（デスクトップ: テキストエリア内右上に絶対配置） */}
-              {!simpleMode && !isMobileView && character?.userPresets && character.userPresets.length > 0 && (
-                <select
-                  value={block.userPresetId || ''}
-                  onChange={e => handleSelectPreset(e.target.value || undefined)}
-                  className="absolute top-2 right-2 border rounded-lg bg-background/90 text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 text-xs truncate"
-                  style={{ width: '7rem', height: '1.625rem', padding: '0 4px' }}
-                  title="Alt+Shift+↑↓:プリセットを切り替え"
-                  onPointerDown={e => e.stopPropagation()}
-                  onMouseDown={e => e.stopPropagation()}
-                >
-                  <option value="">プリセット</option>
-                  {character.userPresets.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              )}
-              </div>
-            </div>
-            {/* キャラ選択リストとアイコン群を横並びに */}
-            {!simpleMode && (
-            <div className="order-3 flex flex-col justify-between items-center h-16 mr-0.5 sm:mr-1 md:mr-2 mt-0">
-              {!isMobileView && (
-                <select
-                  value={block.characterId}
-                  onChange={e => onUpdate({ characterId: e.target.value, emotion: 'normal', userPresetId: undefined })}
-                  className="ml-1 p-2 pl-3 border rounded bg-background text-foreground focus:ring-1 focus:ring-ring text-xs w-24 sm:w-28 md:w-32 lg:w-36 mb-1"
-                  style={{ height: '2.5rem' }}
-                  title="Alt+↑↓:話者を切り替え"
-                >
-                  <option value="">ト書きを入力</option>
-                  {selectableCharacters.map(c => (
-                    <option key={c.id || 'togaki'} value={c.id}>{c.name || 'ト書き'}</option>
-                  ))}
-                </select>
-              )}
-              <div className="flex flex-row justify-items-center space-x-0.5 sm:space-x-0.5 md:space-x-0.5 mt-0">
-                {!isMobileView && (
-                  <>
-                    <button
-                      onClick={onMoveUp}
-                      className="p-1 rounded hover:bg-accent"
-                      title="Ctrl+↑:ブロックを上に移動"
-                      style={{ height: '2.25rem', width: '2.25rem' }}
-                    >
-                      <ArrowUpIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
-                    </button>
-                    <button
-                      onClick={onMoveDown}
-                      className="p-1 rounded hover:bg-accent"
-                      title="Ctrl+↓:ブロックを下に移動"
-                      style={{ height: '2.25rem', width: '2.25rem' }}
-                    >
-                      <ArrowDownIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
-                    </button>
-                  </>
-                )}
-                {!isMobileView && (
-                  <>
-                    <button
-                      onClick={onDuplicate}
-                      className="p-1 rounded hover:bg-accent"
-                      title="Ctrl+B:ブロックを複製"
-                      style={{ height: '2.25rem', width: '2.25rem' }}
-                    >
-                      <DocumentDuplicateIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6 text-foreground" />
-                    </button>
-                    <button
-                      onClick={onDelete}
-                      className="p-1 text-destructive hover:bg-destructive/10 rounded"
-                      title="Alt+B:ブロックを削除"
-                      style={{ height: '2.25rem', width: '2.25rem' }}
-                    >
-                      <TrashIcon className="w-5 h-5 sm:w-5 sm:h-5 md:w-6 md:h-6" />
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-            )}
-          </div>
-        )}
-      </div>
+      {body}
     </div>
-    {isMobileView && isMobileCharacterPickerOpen && (
-      <div className="fixed inset-0 z-50 bg-black/40 flex items-end" onClick={() => setIsMobileCharacterPickerOpen(false)}>
-        <div
-          className="w-full bg-background border-t rounded-t-xl p-4"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-foreground">話者を選択</h3>
-            <button
-              type="button"
-              className="text-xs px-2 py-1 rounded border"
-              onClick={() => setIsMobileCharacterPickerOpen(false)}
-            >
-              閉じる
-            </button>
-          </div>
-          {/* 表情選択（横スクロール） */}
-          {hasEmotionVariants && (
-            <div className="mb-3">
-              <p className="text-xs text-muted-foreground mb-1.5">表情</p>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {emotionKeys.map(emotion => (
-                  <button
-                    key={emotion}
-                    type="button"
-                    className={`shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs ${block.emotion === emotion ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border text-muted-foreground'}`}
-                    onClick={() => handleSelectEmotion(emotion)}
-                  >
-                    {renderEmotionOption(emotion)}
-                    {emotion === 'normal' ? '標準' : emotion}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {/* プリセット選択（横スクロール） */}
-          {character?.userPresets && character.userPresets.length > 0 && (
-            <div className="mb-3">
-              <p className="text-xs text-muted-foreground mb-1.5">プリセット</p>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                <button
-                  type="button"
-                  className={`shrink-0 px-3 py-1 rounded-full border text-xs ${!block.userPresetId ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border text-muted-foreground'}`}
-                  onClick={() => handleSelectPreset(undefined)}
-                >
-                  -
-                </button>
-                {character.userPresets.map(p => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className={`shrink-0 px-3 py-1 rounded-full border text-xs ${block.userPresetId === p.id ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border text-muted-foreground'}`}
-                    onClick={() => handleSelectPreset(p.id)}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {/* 話者グリッド（最大4段≒8体表示） */}
-          <div className="grid grid-cols-2 gap-2 overflow-y-auto max-h-[260px]">
-            <button
-              type="button"
-              className={`p-2 border rounded text-left text-xs flex items-center gap-2 ${!block.characterId ? 'border-primary bg-primary/5' : ''}`}
-              onClick={() => handleSelectCharacter('')}
-            >
-              <div className="w-10 h-10 rounded-full border flex items-center justify-center text-xs font-bold bg-muted">ト</div>
-              ト書き
-            </button>
-            {selectableCharacters
-              .filter(c => c.id !== '')
-              .map(c => (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={`p-2 border rounded text-left text-xs flex items-center gap-2 ${block.characterId === c.id ? 'border-primary bg-primary/5' : ''}`}
-                  onClick={() => handleSelectCharacter(c.id)}
-                >
-                  <CharacterGridAvatar character={c} />
-                  {c.name}
-                </button>
-              ))}
-          </div>
-        </div>
-      </div>
+    {isSpeakerPickerOpen && (
+      <CharacterPicker
+        characters={speakerPickerCharacters}
+        initialCharacterId={block.characterId}
+        onSelect={handleSpeakerPicked}
+        onClose={closeSpeakerPicker}
+        title="話者を切り替え"
+      />
     )}
     </>
   );
@@ -808,7 +804,6 @@ const MAX_PANEL_WIDTH = 520;
 export default function ScriptEditor({
   script,
   onUpdateBlock,
-  onAddBlock,
   onDeleteBlock,
   onDeleteBlocks,
   onInsertBlock,
@@ -831,7 +826,7 @@ export default function ScriptEditor({
   enterOnlyBlockAdd = false,
   reverseToolbarOrder = false,
   simpleMode = false,
-  bubbleTheme = 'classic',
+  bubbleTheme = 'pop',
   currentProjectId,
   onUpdateScript,
   onUndo,
@@ -842,6 +837,7 @@ export default function ScriptEditor({
   onDragMovePosition,
   onActiveBlockChange,
   addBlockSpeakerPicker = false,
+  isDarkMode = false,
   setRequestSpeakerPicker
 }: ScriptEditorProps) {
   const sensors = useSensors(
@@ -2209,18 +2205,13 @@ export default function ScriptEditor({
     const insertIndex = currentIndex >= 0 ? currentIndex + 1 : script.blocks.length;
     const { characterId, emotion } = getLastSpeakerTemplate(currentIndex);
 
-    const newBlock: ScriptBlock = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      characterId,
-      emotion,
-      text: ''
-    };
+    const newBlock = createScriptBlock(characterId, emotion, characters);
     insertIdx.current = insertIndex;
     onInsertBlock(newBlock, insertIndex);
     setTimeout(() => {
       setManualFocusTargetFn({ index: insertIndex, id: newBlock.id });
     }, 10);
-  }, [getLastSpeakerTemplate, getPrimarySelectedIndex, onInsertBlock, script.blocks.length, setManualFocusTargetFn]);
+  }, [characters, getLastSpeakerTemplate, getPrimarySelectedIndex, onInsertBlock, script.blocks.length, setManualFocusTargetFn]);
 
   const handleAddTogakiBelowSelected = useCallback(() => {
     const currentIndex = getPrimarySelectedIndex();
@@ -2275,14 +2266,14 @@ export default function ScriptEditor({
       ? template.emotion
       : 'normal';
 
-    const newBlock = createScriptBlock(characterId, emotion);
+    const newBlock = createScriptBlock(characterId, emotion, characters);
     insertIdx.current = insertIndex;
     onInsertBlock(newBlock, insertIndex);
     setSpeakerPickerRequest(null);
     setTimeout(() => {
       setManualFocusTargetFn({ index: insertIndex, id: newBlock.id });
     }, 10);
-  }, [getLastSpeakerTemplate, onInsertBlock, script.blocks.length, setManualFocusTargetFn, speakerPickerRequest]);
+  }, [characters, getLastSpeakerTemplate, onInsertBlock, script.blocks.length, setManualFocusTargetFn, speakerPickerRequest]);
 
   const primarySelectedBlockId = useMemo(() => selectedBlockIds[0] || null, [selectedBlockIds]);
   const primarySelectedIndex = useMemo(() => {
@@ -2334,6 +2325,21 @@ export default function ScriptEditor({
     onDeleteBlock(primarySelectedBlockId);
   }, [onDeleteBlock, primarySelectedBlockId, primarySelectedIndex]);
 
+  // フローティングツールバー: タッチ操作では44pxのタップ領域、狭い画面では区切り線と1つ移動を省く
+  const isTouchToolbar = isMobileLayout;
+  const isCompactToolbar = !isTabletOrLarger;
+  const toolbarButtonClass = `${isTouchToolbar ? 'size-11 [&>svg]:size-[21px]' : 'size-8.5 [&>svg]:size-[19px]'} shrink-0 rounded-full flex items-center justify-center text-fg-sub transition-colors hover:bg-field hover:text-fg disabled:opacity-40 disabled:pointer-events-none`;
+  const toolbarDivider = isCompactToolbar ? null : <span className="w-px h-5 mx-1 shrink-0 bg-hairline" aria-hidden="true" />;
+
+  // ブロック間の間隔（シンプルは行を詰め、シネマは脚本らしく広めに取る）
+  const blockGapClass = simpleMode
+    ? 'mb-px'
+    : bubbleTheme === 'cinema'
+      ? 'mb-5'
+      : bubbleTheme === 'chat'
+        ? 'mb-3'
+        : 'mb-2.5';
+
   return (
     <>
       <input
@@ -2346,7 +2352,7 @@ export default function ScriptEditor({
       {!isMobileLayout && (
         <button
           type="button"
-          className="fixed z-30 p-2 rounded-full shadow-lg hover:bg-muted/90 transition-all"
+          className="fixed z-30 p-2 rounded-full bg-panel text-fg-sub ring-1 ring-hairline shadow-(--shadow-popover) hover:text-fg transition-all"
           style={{
             top: '118px',
             left: isStoryPanelOpen ? `${panelWidth + 8}px` : '8px',
@@ -2363,13 +2369,13 @@ export default function ScriptEditor({
       )}
       <div className="script-editor-container min-h-auto">
         {script.blocks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 text-center text-muted-foreground">
+          <div className="flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 text-center text-fg-sub">
             <p className="text-sm sm:text-base md:text-lg mb-4">1.右上のキャラクターのアイコンから登場キャラクターを追加します。</p>
             <p className="text-sm sm:text-base md:text-lg mb-4">2.「+ブロックを追加」からテキストブロックを追加し、キャラクターを選択するとセリフを入力できます。</p>
             <p className="text-sm sm:text-base md:text-lg mb-4">3.右上のエクスポートから台本をCSV形式で出力できます。グループ設定ごとにCSVファイルを分割出力することができます。</p>
             <p className="text-sm sm:text-base md:text-lg mb-4">4.より詳しい操作方法は設定＞ヘルプをご覧ください。</p>
             {isStoryPanelOpen && (
-              <p className="text-xs text-muted-foreground mt-2">
+              <p className="text-xs text-fg-sub mt-2">
                 ストーリーセパレートを使うにはテキストブロックを2つ以上作成してください。
               </p>
             )}
@@ -2379,12 +2385,12 @@ export default function ScriptEditor({
             {isStoryPanelOpen && (
               <>
                 <div
-                  className="fixed left-0 z-30 border-r bg-muted/30 shrink-0 overflow-hidden flex flex-col"
+                  className="fixed left-0 z-30 bg-canvas shadow-[1px_0_0_var(--color-hairline)] shrink-0 overflow-hidden flex flex-col"
                   style={{ width: panelWidth, top: '64px', height: 'calc(100vh - 64px)' }}
                 >
-                  <div className="flex items-center justify-between p-2 px-3 border-b bg-muted/60 shrink-0">
-                    <span className="text-sm font-semibold text-foreground">ストーリーセパレート</span>
-                    <span className="text-xs text-muted-foreground">幅 {Math.round(panelWidth)}px</span>
+                  <div className="flex items-center justify-between p-2 px-3 bg-well shadow-[0_1px_0_var(--color-hairline)] shrink-0">
+                    <span className="text-sm font-semibold text-fg">ストーリーセパレート</span>
+                    <span className="text-xs text-fg-sub">幅 {Math.round(panelWidth)}px</span>
                   </div>
                   <div className="flex-1 flex flex-col items-center justify-center p-4 overflow-hidden">
                     {(() => {
@@ -2407,7 +2413,7 @@ export default function ScriptEditor({
                         <div className="relative w-full" style={{ height: `${imageHeight + 80}px` }}>
                           {prevImage && prevSegment && (
                             <div
-                              className="absolute left-0 right-0 mx-auto rounded-lg overflow-hidden border opacity-40 cursor-pointer hover:opacity-60 transition-opacity"
+                              className="absolute left-0 right-0 mx-auto rounded-lg overflow-hidden ring-1 ring-hairline opacity-40 cursor-pointer hover:opacity-60 transition-opacity"
                               style={{
                                 width: `${imageWidth * 0.85}px`,
                                 top: '-30%',
@@ -2427,13 +2433,13 @@ export default function ScriptEditor({
                           
                           <div className="absolute left-0 right-0 z-10" style={{ top: prevImage ? '10%' : '0' }}>
                             <div className="flex items-center justify-between mb-2 px-1">
-                              <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                              <span className="text-xs font-medium text-fg-sub flex items-center gap-1.5">
                                 {segmentIndex + 1} / {orderedSegments.length}
                                 {currentSegment.label && (
-                                  <span className="ml-1.5 text-foreground/80">{currentSegment.label}</span>
+                                  <span className="ml-1.5 text-fg/80">{currentSegment.label}</span>
                                 )}
                                 {currentImageMissing && (
-                                  <span className="px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                                  <span className="px-1.5 py-0.5 rounded-full bg-destructive-tint text-destructive shadow-[inset_0_0_0_1px_var(--color-destructive-ring)]">
                                     ローカル画像未配置
                                   </span>
                                 )}
@@ -2441,7 +2447,7 @@ export default function ScriptEditor({
                             </div>
                             {currentImage ? (
                               <div
-                                className={`relative group rounded-lg overflow-hidden border shadow-lg transition ${dragOverSegmentId === currentSegment.id ? 'ring-2 ring-primary/60 bg-primary/5' : ''}`}
+                                className={`relative group rounded-lg overflow-hidden ring-1 ring-hairline shadow-(--shadow-popover) transition ${dragOverSegmentId === currentSegment.id ? 'ring-2 ring-primary/60 bg-primary/5' : ''}`}
                                 onDragOver={(e) => handlePanelImageDragOver(e, currentSegment.id)}
                                 onDragLeave={() => setDragOverSegmentId(null)}
                                 onDrop={(e) => handlePanelImageDrop(e, currentSegment.id)}
@@ -2464,7 +2470,7 @@ export default function ScriptEditor({
                             ) : (
                               <button
                                 type="button"
-                                className={`w-full border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-sm text-muted-foreground hover:bg-muted/40 transition shadow-lg ${dragOverSegmentId === currentSegment.id ? 'ring-2 ring-primary/60 bg-primary/5 border-primary/60' : ''}`}
+                                className={`w-full border-2 border-dashed border-hairline rounded-xl bg-well flex flex-col items-center justify-center text-sm text-fg-sub hover:text-fg transition ${dragOverSegmentId === currentSegment.id ? 'ring-2 ring-primary/60 bg-primary-tint border-primary/60' : ''}`}
                                 style={{ height: `${imageHeight}px` }}
                                 onClick={() => openImagePicker(currentSegment.id)}
                                 onDragOver={(e) => handlePanelImageDragOver(e, currentSegment.id)}
@@ -2484,7 +2490,7 @@ export default function ScriptEditor({
                           
                           {nextImage && nextSegment && (
                             <div
-                              className="absolute left-0 right-0 mx-auto rounded-lg overflow-hidden border opacity-40 cursor-pointer hover:opacity-60 transition-opacity"
+                              className="absolute left-0 right-0 mx-auto rounded-lg overflow-hidden ring-1 ring-hairline opacity-40 cursor-pointer hover:opacity-60 transition-opacity"
                               style={{
                                 width: `${imageWidth * 0.85}px`,
                                 bottom: '-30%',
@@ -2507,7 +2513,7 @@ export default function ScriptEditor({
                   </div>
                 </div>
                 <div
-                  className="hidden lg:block fixed w-1 bg-border cursor-col-resize z-30"
+                  className="hidden lg:block fixed w-1 bg-hairline hover:bg-primary/40 cursor-col-resize z-30"
                   style={{ height: 'calc(100vh - 64px)', top: '64px', left: `${panelWidth}px` }}
                   onMouseDown={handleResizeStart}
                   role="separator"
@@ -2516,7 +2522,8 @@ export default function ScriptEditor({
               </>
             )}
             <div className={`flex-1 story-main-column ${isStoryPanelOpen ? 'lg:ml-0' : ''}`} style={isStoryPanelOpen ? { marginLeft: `${panelWidth + 4}px` } : {}}>
-              <div className="bg-card rounded-lg shadow p-[clamp(0.5rem,1.2vw,1rem)] mb-24 relative h-full flex flex-col justify-between">
+              {/* ブロックはキャンバスに直接並べる（外側のカード面は置かない） */}
+              <div className="p-[clamp(0.5rem,1.2vw,1rem)] mb-24 relative h-full flex flex-col justify-between">
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
@@ -2543,7 +2550,7 @@ export default function ScriptEditor({
                                 <div className="flex items-center">
                                   <input
                                     type="text"
-                                    className="text-xs px-2 py-1 border border-primary rounded-l-lg bg-background text-foreground w-28 outline-none focus:ring-1 focus:ring-primary"
+                                    className="text-xs px-2 py-1 rounded-l-lg bg-field text-fg w-28 outline-none shadow-[0_0_0_2px_var(--color-primary)]"
                                     value={editingLabelValue}
                                     onChange={(e) => setEditingLabelValue(e.target.value)}
                                     onKeyDown={(e) => {
@@ -2558,7 +2565,7 @@ export default function ScriptEditor({
                               ) : (
                                 <div className="flex items-center">
                                   <div
-                                    className="relative flex items-center text-xs font-medium text-muted-foreground bg-muted pl-2 pr-3 py-1 select-none border border-muted-foreground/20"
+                                    className="relative flex items-center text-xs font-medium text-fg-sub bg-field pl-2 pr-3 py-1 select-none"
                                     style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 0 100%)' }}
                                   >
                                     {firstSegment.label ? (
@@ -2573,7 +2580,7 @@ export default function ScriptEditor({
                                   {firstSegmentMissingImage && (
                                     <button
                                       type="button"
-                                      className="ml-1 px-1.5 py-0.5 text-[10px] rounded border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition"
+                                      className="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-destructive-tint text-destructive shadow-[inset_0_0_0_1px_var(--color-destructive-ring)] transition hover:brightness-95"
                                       onClick={() => openImagePicker(firstSegment.id)}
                                       title="ローカル画像を再リンク"
                                     >
@@ -2582,7 +2589,7 @@ export default function ScriptEditor({
                                   )}
                                   <button
                                     type="button"
-                                    className="p-0.5 text-muted-foreground/50 hover:text-foreground transition opacity-0 group-hover/bookmark:opacity-100 ml-1"
+                                    className="p-0.5 text-fg-sub/50 hover:text-fg transition opacity-0 group-hover/bookmark:opacity-100 ml-1"
                                     onClick={() => startEditingLabel(firstSegment.id, firstSegment.label || '')}
                                     title="見出しを編集"
                                   >
@@ -2604,7 +2611,7 @@ export default function ScriptEditor({
                         !!existingSegment?.imageRef?.assetId && !localSegmentImages[existingSegment.id];
                       
                       return (
-                        <div key={block.id} className="mb-1 last:mb-0">
+                        <div key={block.id} className={`${blockGapClass} last:mb-0`}>
                           <SortableBlock
                             block={block}
                             characters={characters}
@@ -2626,36 +2633,16 @@ export default function ScriptEditor({
                                 setManualFocusTargetFn({ index: index + 1, id: newBlock.id });
                               }, 10);
                             }}
-                            onMoveUp={() => {
-                              if (index > 0) {
-                                onMoveBlock(index, index - 1);
-                                setTimeout(() => {
-                                  const targetRef = textareaRefs.current[index - 1];
-                                  if (targetRef) {
-                                    ensureBlockVisible(index - 1, 50);
-                                  }
-                                }, 50);
-                              }
-                            }}
-                            onMoveDown={() => {
-                              if (index < script.blocks.length - 1) {
-                                onMoveBlock(index, index + 1);
-                                setTimeout(() => {
-                                  const targetRef = textareaRefs.current[index + 1];
-                                  if (targetRef) {
-                                    ensureBlockVisible(index + 1, 50);
-                                  }
-                                }, 50);
-                              }
-                            }}
                             textareaRef={el => textareaRefs.current[index] = el}
                             isSelected={selectedBlockIds.includes(block.id)}
+                            isMultiSelection={selectedBlockIds.length > 1}
                             isMultiDragGhost={!!activeDragId && activeDragId !== block.id && selectedBlockIds.length > 1 && selectedBlockIds.includes(block.id)}
                             onClick={(event) => handleBlockClick(block.id, index, event)}
                             onTextareaFocus={() => onActiveBlockChange?.(block.id)}
                             enterOnlyBlockAdd={enterOnlyBlockAdd}
                             simpleMode={simpleMode}
                             bubbleTheme={bubbleTheme}
+                            isDarkMode={isDarkMode}
                             currentProjectId={currentProjectId}
                             script={script}
                             onInsertBlock={onInsertBlock}
@@ -2673,7 +2660,7 @@ export default function ScriptEditor({
                                   <div className="flex items-center">
                                     <input
                                       type="text"
-                                      className="text-xs px-2 py-1 border border-primary rounded-l-lg bg-background text-foreground w-28 outline-none focus:ring-1 focus:ring-primary"
+                                      className="text-xs px-2 py-1 rounded-l-lg bg-field text-fg w-28 outline-none shadow-[0_0_0_2px_var(--color-primary)]"
                                       value={editingLabelValue}
                                       onChange={(e) => setEditingLabelValue(e.target.value)}
                                       onKeyDown={(e) => {
@@ -2688,7 +2675,7 @@ export default function ScriptEditor({
                                 ) : (
                                   <div className="flex items-center">
                                     <div
-                                      className="relative flex items-center text-xs font-medium text-muted-foreground bg-muted pl-2 pr-3 py-1 select-none border border-muted-foreground/20"
+                                      className="relative flex items-center text-xs font-medium text-fg-sub bg-field pl-2 pr-3 py-1 select-none"
                                       style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 0 100%)' }}
                                     >
                                       {existingSegment.label ? (
@@ -2703,7 +2690,7 @@ export default function ScriptEditor({
                                     {hasMissingLocalImage && (
                                       <button
                                         type="button"
-                                        className="ml-1 px-1.5 py-0.5 text-[10px] rounded border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition"
+                                        className="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-destructive-tint text-destructive shadow-[inset_0_0_0_1px_var(--color-destructive-ring)] transition hover:brightness-95"
                                         onClick={() => openImagePicker(existingSegment.id)}
                                         title="ローカル画像を再リンク"
                                       >
@@ -2712,7 +2699,7 @@ export default function ScriptEditor({
                                     )}
                                     <button
                                       type="button"
-                                      className="p-0.5 text-muted-foreground/50 hover:text-foreground transition opacity-0 group-hover/bookmark:opacity-100 ml-1"
+                                      className="p-0.5 text-fg-sub/50 hover:text-fg transition opacity-0 group-hover/bookmark:opacity-100 ml-1"
                                       onClick={() => startEditingLabel(existingSegment.id, existingSegment.label || '')}
                                       title="見出しを編集"
                                     >
@@ -2724,7 +2711,7 @@ export default function ScriptEditor({
                               <div className="flex-1 border-t border-dashed border-primary/40 mx-1"></div>
                               <button
                                 type="button"
-                                className="p-1.5 rounded-full bg-background text-foreground shadow hover:bg-accent transition shrink-0"
+                                className="p-1.5 rounded-full bg-panel text-fg-sub shadow-(--shadow-popover) hover:text-fg transition shrink-0"
                                 onMouseDown={handleStartMoveLine(existingSegment.id)}
                                 onClick={(e) => {
                                   e.preventDefault();
@@ -2756,7 +2743,7 @@ export default function ScriptEditor({
                             <div className="flex justify-center my-0 group/sep-add">
                               <button
                                 type="button"
-                                className="opacity-0 group-hover/sep-add:opacity-100 transition-opacity inline-flex items-center justify-center w-8 h-8 sm:w-6 sm:h-6 rounded-full border border-dashed border-muted-foreground/30 text-muted-foreground/50 hover:bg-accent hover:text-foreground hover:border-solid"
+                                className="opacity-0 group-hover/sep-add:opacity-100 transition-opacity inline-flex items-center justify-center w-8 h-8 sm:w-6 sm:h-6 rounded-full border border-dashed border-muted-foreground/30 text-fg-sub/50 hover:bg-accent hover:text-fg hover:border-solid"
                                 onMouseDown={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
@@ -2779,22 +2766,22 @@ export default function ScriptEditor({
                     {activeDragId && selectedBlockIds.length > 1 && selectedBlockIds.includes(activeDragId) && (() => {
                       const dragBlocks = script.blocks.filter(b => selectedBlockIds.includes(b.id));
                       return (
-                        <div className="bg-card rounded-lg shadow-lg border border-primary/30 p-2 max-w-[600px] opacity-90">
+                        <div className="bg-panel rounded-2xl ring-1 ring-primary/30 shadow-(--shadow-popover) p-2 max-w-[600px] opacity-90">
                           {dragBlocks.slice(0, 5).map((b, i) => {
                             const char = characters.find(c => c.id === b.characterId);
                             return (
-                              <div key={b.id} className={`flex items-center gap-2 px-2 py-1 ${i > 0 ? 'border-t border-border/50' : ''}`}>
+                              <div key={b.id} className={`flex items-center gap-2 px-2 py-1 ${i > 0 ? 'shadow-[0_-1px_0_var(--color-hairline)]' : ''}`}>
                                 {char ? (
-                                  <span className="text-xs font-medium text-muted-foreground shrink-0 w-16 truncate">{char.name}</span>
+                                  <span className="text-xs font-medium text-fg-sub shrink-0 w-16 truncate">{char.name}</span>
                                 ) : (
-                                  <span className="text-xs text-muted-foreground/60 shrink-0 w-16">ト書き</span>
+                                  <span className="text-xs text-fg-sub/60 shrink-0 w-16">ト書き</span>
                                 )}
-                                <span className="text-sm text-foreground truncate">{b.text || '(空)'}</span>
+                                <span className="text-sm text-fg truncate">{b.text || '(空)'}</span>
                               </div>
                             );
                           })}
                           {dragBlocks.length > 5 && (
-                            <div className="text-xs text-muted-foreground text-center py-1">
+                            <div className="text-xs text-fg-sub text-center py-1">
                               ...他 {dragBlocks.length - 5} ブロック
                             </div>
                           )}
@@ -2817,68 +2804,57 @@ export default function ScriptEditor({
         </div>
       )}
       {segmentToDelete && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-background rounded-lg shadow-lg p-6 w-full max-w-sm">
-            <h3 className="text-lg font-semibold text-foreground mb-3">セパレートラインを削除しますか？</h3>
-            <p className="text-sm text-muted-foreground mb-4">
+        <DialogFrame
+          isOpen={!!segmentToDelete}
+          onCancel={() => setSegmentToDelete(null)}
+          panelClassName="w-full max-w-sm mx-4"
+        >
+          <DialogHeader icon={ScissorsIcon} title="セパレートラインを削除しますか？" onClose={() => setSegmentToDelete(null)} />
+          <div className="px-5 pb-5">
+            <p className="text-[13px] leading-relaxed text-fg-sub">
               このラインに紐付いた画像も同時に削除されます。元に戻す場合はアンドゥをご利用ください。
             </p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setSegmentToDelete(null)}
-                className="px-4 py-2 rounded-full border text-sm"
-              >
-                キャンセル
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDeleteSegment}
-                className="px-4 py-2 rounded-full bg-destructive text-destructive-foreground text-sm"
-              >
-                削除する
-              </button>
+            <div className="flex justify-end gap-2 mt-5">
+              <Button variant="secondary" onClick={() => setSegmentToDelete(null)}>キャンセル</Button>
+              <Button variant="destructive" onClick={handleConfirmDeleteSegment}>削除する</Button>
             </div>
           </div>
-        </div>
+        </DialogFrame>
       )}
       {imageToDelete && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-background rounded-lg shadow-lg p-6 w-full max-w-sm">
-            <h3 className="text-lg font-semibold text-foreground mb-3">画像を削除しますか？</h3>
-            <p className="text-sm text-muted-foreground mb-4">
+        <DialogFrame
+          isOpen={!!imageToDelete}
+          onCancel={() => setImageToDelete(null)}
+          panelClassName="w-full max-w-sm mx-4"
+        >
+          <DialogHeader icon={PhotoIcon} title="画像を削除しますか？" onClose={() => setImageToDelete(null)} />
+          <div className="px-5 pb-5">
+            <p className="text-[13px] leading-relaxed text-fg-sub">
               この画像はストーリーパネルから削除されます。元に戻す場合はアンドゥをご利用ください。
             </p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setImageToDelete(null)}
-                className="px-4 py-2 rounded-full border text-sm"
-              >
-                キャンセル
-              </button>
-              <button
-                type="button"
+            <div className="flex justify-end gap-2 mt-5">
+              <Button variant="secondary" onClick={() => setImageToDelete(null)}>キャンセル</Button>
+              <Button
+                variant="destructive"
                 onClick={() => {
                   handleRemoveSegmentImage(imageToDelete.segmentId);
                   setImageToDelete(null);
                 }}
-                className="px-4 py-2 rounded-full bg-destructive text-destructive-foreground text-sm"
               >
                 削除する
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </DialogFrame>
       )}
       {isTabletOrLarger && (
         <button
           type="button"
           onClick={() => setIsToolbarCollapsed(prev => !prev)}
-          className="fixed right-3 bottom-6 z-50 h-10 w-10 rounded-lg border bg-background/95 backdrop-blur shadow flex items-center justify-center hover:bg-muted"
+          className="fixed right-3 bottom-6 z-50 size-10 rounded-full bg-panel/96 backdrop-blur shadow-(--shadow-toolbar) flex items-center justify-center text-fg-sub transition-colors hover:text-fg"
           title={isToolbarCollapsed ? 'ツールバーを表示' : 'ツールバーを非表示'}
         >
-          {isToolbarCollapsed ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}
+          {isToolbarCollapsed ? <ChevronUpIcon className="size-5" /> : <ChevronDownIcon className="size-5" />}
         </button>
       )}
       <div
@@ -2888,100 +2864,76 @@ export default function ScriptEditor({
         <div className="inline-flex items-center gap-2 max-w-[calc(100vw-1rem)] pointer-events-auto">
           <div
             data-floating-toolbar="true"
-            className={`bg-background/95 backdrop-blur border rounded-2xl shadow-lg px-2 py-2 inline-flex items-center gap-1 overflow-x-auto whitespace-nowrap transition-transform duration-300 max-w-[calc(100vw-1rem)] ${reverseToolbarOrder ? 'flex-row-reverse' : ''} ${isTabletOrLarger && isToolbarCollapsed ? 'translate-y-[140%] pointer-events-none' : 'translate-y-0'}`}
+            className={`bg-panel/96 backdrop-blur rounded-full shadow-(--shadow-toolbar) inline-flex items-center overflow-x-auto no-scrollbar whitespace-nowrap transition-transform duration-300 max-w-[calc(100vw-1rem)] ${
+              isTouchToolbar ? 'p-1 gap-0' : 'p-1.5 gap-0.5'
+            } ${reverseToolbarOrder ? 'flex-row-reverse' : ''} ${isTabletOrLarger && isToolbarCollapsed ? 'translate-y-[140%] pointer-events-none' : 'translate-y-0'}`}
           >
-          <button
-            type="button"
-            onClick={handleScrollTop}
-            className="h-10 w-10 rounded-lg border flex items-center justify-center shrink-0"
-            title="最上段へ"
-          >
-            <ArrowUpIcon className="w-5 h-5" />
+          <button type="button" onClick={handleScrollTop} className={toolbarButtonClass} title="最上段へ">
+            <ChevronUpIcon />
           </button>
-          <button
-            type="button"
-            onClick={handleScrollBottom}
-            className="h-10 w-10 rounded-lg border flex items-center justify-center shrink-0"
-            title="最下段へ"
-          >
-            <ArrowDownIcon className="w-5 h-5" />
+          <button type="button" onClick={handleScrollBottom} className={toolbarButtonClass} title="最下段へ">
+            <ChevronDownIcon />
           </button>
-          <button
-            type="button"
-            onClick={onUndo}
-            disabled={!canUndo}
-            className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
-            title="元に戻す"
-          >
-            <ArrowUturnLeftIcon className="w-5 h-5" />
+          {toolbarDivider}
+          <button type="button" onClick={onUndo} disabled={!canUndo} className={toolbarButtonClass} title="元に戻す">
+            <ArrowUturnLeftIcon />
           </button>
+          <button type="button" onClick={onRedo} disabled={!canRedo} className={toolbarButtonClass} title="やり直し">
+            <ArrowUturnRightIcon />
+          </button>
+          {toolbarDivider}
+          {/* 1つ移動は幅の狭いモバイルでは出さない（ドラッグで並び替えできるため） */}
+          {!isCompactToolbar && (
+            <>
+              <button
+                type="button"
+                onClick={() => handleMoveSelectedBlock('up')}
+                disabled={!canMoveSelectedUp}
+                className={toolbarButtonClass}
+                title="選択ブロックを上に移動"
+              >
+                <ArrowUpIcon />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleMoveSelectedBlock('down')}
+                disabled={!canMoveSelectedDown}
+                className={toolbarButtonClass}
+                title="選択ブロックを下に移動"
+              >
+                <ArrowDownIcon />
+              </button>
+            </>
+          )}
           <button
             type="button"
-            onClick={onRedo}
-            disabled={!canRedo}
-            className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
-            title="やり直し"
+            onClick={handleDuplicateSelectedBlock}
+            disabled={!canOperateSelectedBlock}
+            className={toolbarButtonClass}
+            title="選択ブロックを複製"
           >
-            <ArrowUturnRightIcon className="w-5 h-5" />
+            <DocumentDuplicateIcon />
           </button>
           <button
             type="button"
             onClick={handleDeleteSelectedBlock}
             disabled={!canOperateSelectedBlock}
-            className="h-10 w-10 rounded-lg border flex items-center justify-center text-destructive disabled:opacity-40 shrink-0"
+            className={`${toolbarButtonClass} !text-destructive hover:!bg-destructive-tint`}
             title="選択ブロックを削除"
           >
-            <TrashIcon className="w-5 h-5" />
+            <TrashIcon />
           </button>
-          <button
-            type="button"
-            onClick={handleDuplicateSelectedBlock}
-            disabled={!canOperateSelectedBlock}
-            className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
-            title="選択ブロックを複製"
-          >
-            <DocumentDuplicateIcon className="w-5 h-5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => handleMoveSelectedBlock('up')}
-            disabled={!canMoveSelectedUp}
-            className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
-            title="選択ブロックを上に移動"
-          >
-            <ArrowUpIcon className="w-5 h-5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => handleMoveSelectedBlock('down')}
-            disabled={!canMoveSelectedDown}
-            className="h-10 w-10 rounded-lg border flex items-center justify-center disabled:opacity-40 shrink-0"
-            title="選択ブロックを下に移動"
-          >
-            <ArrowDownIcon className="w-5 h-5" />
-          </button>
+          {toolbarDivider}
+          {/* ト書き追加: アイコンではなく「ト」の文字（話者ピッカーのト書きと表記を揃える） */}
           <button
             type="button"
             onClick={handleAddTogakiBelowSelected}
-            className="h-10 px-2 rounded-lg bg-muted text-muted-foreground border text-xs font-medium whitespace-nowrap shrink-0"
+            className={`${isTouchToolbar ? 'size-11 text-[17px]' : 'size-8.5 text-[15px]'} shrink-0 rounded-full flex items-center justify-center font-bold leading-none bg-togaki-button text-togaki-button-fg shadow-[inset_0_0_0_1px_var(--color-hairline)] transition-[filter] hover:brightness-95`}
             title="現在のブロック直下にト書きを追加"
           >
-            ト書
+            ト
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (addBlockSpeakerPicker) {
-                requestAddBlock('append', -1);
-                return;
-              }
-              onAddBlock();
-            }}
-            className="h-10 px-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium whitespace-nowrap shrink-0"
-            title={addBlockSpeakerPicker ? '最下段に新規ブロック追加（話者を選択）' : '最下段に新規ブロック追加'}
-          >
-            末追
-          </button>
+          {/* ブロック追加: 選択中ブロックの直下（未選択なら最下段）。最下段への追加は Ctrl+B でも可能 */}
           <button
             type="button"
             onClick={() => {
@@ -2991,10 +2943,13 @@ export default function ScriptEditor({
               }
               handleAddBlockBelowSelected();
             }}
-            className="h-10 px-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium whitespace-nowrap shrink-0"
-            title={addBlockSpeakerPicker ? '直下に新規ブロック追加（話者を選択）' : '直下に新規ブロック追加'}
+            className={`${isTouchToolbar ? 'size-11 justify-center' : 'h-8.5 px-3.5 gap-[5px] ml-0.5'} shrink-0 rounded-full flex items-center bg-primary text-on-primary shadow-[0_4px_12px_-4px_var(--color-primary)] transition-[filter] hover:brightness-105`}
+            title={addBlockSpeakerPicker
+              ? '新規ブロックを追加（話者を選択。選択中ブロックの直下、未選択なら最下段）'
+              : '新規ブロックを追加（選択中ブロックの直下、未選択なら最下段）'}
           >
-            直追
+            <PlusIcon className={isTouchToolbar ? 'size-5.5' : 'size-[17px]'} strokeWidth={2.2} />
+            {!isTouchToolbar && <span className="text-xs font-bold">ブロック</span>}
           </button>
           </div>
         </div>

@@ -1,7 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { ScissorsIcon } from '@heroicons/react/24/outline';
 import DialogFrame from '@/components/common/DialogFrame';
+import DialogHeader from '@/components/common/DialogHeader';
+import { buttonClass } from '@/components/common/Button';
 
 // icon-cropper (自作Webアプリ) の簡易移植版。
 // 背景透明化・縁取り機能は除外し、ドラッグ/ホイール/ピンチで位置とズームを
@@ -200,18 +203,19 @@ export default function IconCropperDialog({ isOpen, file, onCancel, onApply }: I
     <DialogFrame
       isOpen={isOpen}
       onCancel={onCancel}
-      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-sm mx-4 p-6"
+      panelClassName="w-full max-w-sm mx-4 pb-5"
       overlayClassName="bg-black/60"
       enableEnterShortcut={false}
     >
-        <h3 className="text-lg font-semibold text-foreground mb-1">アイコンの切り抜き</h3>
-        <p className="text-xs text-muted-foreground mb-3">
+        <DialogHeader icon={ScissorsIcon} title="アイコンの切り抜き" onClose={onCancel} />
+        <div className="px-5">
+        <p className="text-[11px] leading-[1.55] text-fg-sub mb-3">
           ドラッグで移動、ホイール/ピンチで拡大縮小。点線の円は丸アイコン表示時の目安です。
         </p>
 
         <canvas
           ref={canvasRef}
-          className="w-full aspect-square border rounded cursor-move touch-none select-none"
+          className="w-full aspect-square rounded-2xl bg-well ring-1 ring-hairline cursor-move touch-none select-none"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -222,7 +226,7 @@ export default function IconCropperDialog({ isOpen, file, onCancel, onApply }: I
         />
 
         <div className="flex items-center gap-2 mt-3">
-          <span className="text-xs text-muted-foreground shrink-0">ズーム</span>
+          <span className="ui-section-label shrink-0">ズーム</span>
           <input
             type="range"
             min={0.05}
@@ -230,20 +234,20 @@ export default function IconCropperDialog({ isOpen, file, onCancel, onApply }: I
             step={0.01}
             value={Math.min(4, scale)}
             onChange={e => setScale(parseFloat(e.target.value))}
-            className="flex-1"
+            className="flex-1 accent-primary"
           />
         </div>
 
-        <div className="flex flex-wrap justify-end gap-2 mt-4">
+        <div className="flex flex-wrap justify-end gap-2 mt-5">
           <button
             onClick={onCancel}
-            className="px-3 py-2 text-sm text-muted-foreground hover:bg-accent rounded"
+            className={buttonClass('secondary')}
           >
             キャンセル
           </button>
           <button
             onClick={handleUseOriginal}
-            className="px-3 py-2 text-sm border rounded text-foreground hover:bg-accent"
+            className={buttonClass('secondary')}
             title="切り抜かずに元の画像をそのまま登録します"
           >
             そのまま使用
@@ -251,10 +255,11 @@ export default function IconCropperDialog({ isOpen, file, onCancel, onApply }: I
           <button
             onClick={handleApply}
             disabled={!loadedImage}
-            className="px-3 py-2 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+            className={buttonClass('primary')}
           >
             切り抜いて使用
           </button>
+        </div>
         </div>
     </DialogFrame>
   );

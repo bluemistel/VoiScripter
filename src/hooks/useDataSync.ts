@@ -180,10 +180,11 @@ export function useDataSync() {
     );
 
     /**
-     * Download and decrypt data from server
+     * Download and decrypt data from server.
+     * allowMissing のときは未保存（404）をエラーにせず null を返す（任意の付随データの取得用）。
      */
-    const restoreFromCloud = useCallback(
-        async (credentials: SyncCredentials): Promise<SyncRestoreResult> => {
+    const restoreInternal = useCallback(
+        async (credentials: SyncCredentials, allowMissing: boolean): Promise<SyncRestoreResult | null> => {
             setState({ isLoading: true, error: null, lastSyncTime: null });
 
             try {
@@ -196,6 +197,10 @@ export function useDataSync() {
                 });
 
                 if (!response.ok) {
+                    if (response.status === 404 && allowMissing) {
+                        setState({ isLoading: false, error: null, lastSyncTime: null });
+                        return null;
+                    }
                     if (response.status === 404) {
                         throw new Error('データが見つかりません');
                     }
@@ -233,6 +238,22 @@ export function useDataSync() {
         []
     );
 
+    const restoreFromCloud = useCallback(
+        async (credentials: SyncCredentials): Promise<SyncRestoreResult> => {
+            const result = await restoreInternal(credentials, false);
+            // 404 は restoreInternal 内で例外になるため、ここで null になることはない
+            if (!result) throw new Error('データが見つかりません');
+            return result;
+        },
+        [restoreInternal]
+    );
+
+    /** 保存されていなければ null を返す（エラー表示にしない）。キャラクター設定など任意のデータの復元用 */
+    const restoreFromCloudIfExists = useCallback(
+        (credentials: SyncCredentials) => restoreInternal(credentials, true),
+        [restoreInternal]
+    );
+
     /**
      * Generate a new UUID for sync
      */
@@ -244,6 +265,7 @@ export function useDataSync() {
         ...state,
         syncToCloud,
         restoreFromCloud,
+        restoreFromCloudIfExists,
         generateUUID,
     };
 }

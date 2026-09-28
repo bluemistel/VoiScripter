@@ -1,4 +1,5 @@
 import { Project, ScriptBlock, Character } from '@/types';
+import { createScriptBlock } from '@/utils/blockFactory';
 
 export interface BlockOperationsHook {
   handleAddBlock: (project: Project, selectedSceneId: string | null, characters: Character[]) => Project;
@@ -31,13 +32,8 @@ export const useBlockOperations = (): BlockOperationsHook => {
     const charId = lastSerif?.characterId || characters[0]?.id || '';
     const emotion = lastSerif?.emotion || 'normal';
     
-    const newBlock: ScriptBlock = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      characterId: charId,
-      emotion,
-      text: ''
-    };
-    
+    const newBlock = createScriptBlock(charId, emotion, characters);
+
     return {
       ...project,
       scenes: project.scenes.map(scene =>

@@ -134,6 +134,24 @@ describe('useDataSync', () => {
 
             expect(result.current.error).toContain('データが見つかりません');
         });
+
+        it('restoreFromCloudIfExists は未保存（404）なら null を返し、エラーにしない', async () => {
+            (global.fetch as any).mockResolvedValue(new Response('Not Found', { status: 404 }));
+
+            const { result } = renderHook(() => useDataSync());
+
+            let restored: unknown = 'not-called';
+            await act(async () => {
+                restored = await result.current.restoreFromCloudIfExists({
+                    uuid: 'nonexistent-uuid__characters_v1',
+                    password: 'test-password'
+                });
+            });
+
+            expect(restored).toBeNull();
+            expect(result.current.error).toBeNull();
+            expect(result.current.isLoading).toBe(false);
+        });
     });
 
     describe('state management', () => {

@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { MagnifyingGlassIcon, ArrowUpIcon, ArrowDownIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, ArrowUpIcon, ArrowDownIcon } from '@heroicons/react/24/outline';
+import DialogHeader from '@/components/common/DialogHeader';
+import { buttonClass } from '@/components/common/Button';
 import { Project, ScriptBlock, Scene } from '@/types';
 
 export interface SearchResult {
@@ -154,7 +156,7 @@ export default function SearchDialog({
     <div className="fixed inset-0 bg-black/40 z-50" onPointerDown={handleOverlayClick}>
       <div
         ref={dialogRef}
-        className={`bg-background border rounded-lg shadow-lg p-4 sm:p-6 ${isMobileView ? 'w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)]' : 'w-full max-w-2xl'} absolute`}
+        className={`bg-panel text-fg rounded-[22px] shadow-(--shadow-dialog) ${isMobileView ? 'w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)]' : 'w-full max-w-2xl'} absolute`}
         style={{
           left: `${position.x}px`,
           top: `${position.y}px`,
@@ -188,24 +190,28 @@ export default function SearchDialog({
         }}
       >
         <div
-          className={`flex items-center justify-between mb-4 select-none ${isMobileView ? '' : 'cursor-move'}`}
+          className={`select-none ${isMobileView ? '' : 'cursor-move'}`}
           onMouseDown={handleMouseDown}
         >
-          <h3 className="text-lg font-semibold text-foreground flex items-center">
-            <MagnifyingGlassIcon className="w-5 h-5 mr-2" />
-            検索
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
-            title="閉じる (Esc)"
-          >
-            <XMarkIcon className="w-6 h-6" />
-          </button>
+          <DialogHeader
+            icon={MagnifyingGlassIcon}
+            title="検索"
+            onClose={onClose}
+            // ドラッグできることを示すグリップ（2×4のドット）。モバイルは移動しないので出さない
+            leading={!isMobileView && (
+              <span className="grid grid-cols-4 gap-[2.5px] mr-1" aria-hidden="true">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <span key={i} className="size-[2.5px] rounded-full bg-fg-faint" />
+                ))}
+              </span>
+            )}
+          />
         </div>
 
+        <div className="px-5 pb-5">
         <div className="mb-4">
-          <div className="relative">
+          <div className="relative mb-3">
+            <MagnifyingGlassIcon className="absolute left-[15px] top-1/2 -translate-y-1/2 size-[17px] text-primary-text pointer-events-none" />
             <input
               ref={inputRef}
               type="text"
@@ -218,11 +224,11 @@ export default function SearchDialog({
               onFocus={() => setShowHistory(true)}
               onBlur={() => setTimeout(() => setShowHistory(false), 200)}
               placeholder="検索する単語を入力..."
-              className="w-full p-2 border rounded mb-3 text-foreground bg-background pr-8 focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+              className="ui-input w-full text-[15px] py-3 pl-11"
               autoFocus
             />
             {showHistory && searchHistory.length > 0 && (
-              <div className="absolute top-full left-0 right-0 bg-background border rounded shadow-lg z-10 max-h-60 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-1.5 bg-panel rounded-xl ring-1 ring-hairline shadow-(--shadow-popover) z-10 max-h-60 overflow-y-auto py-1">
                 {searchHistory.slice(0, 10).map((historyItem, index) => (
                   <button
                     key={index}
@@ -231,7 +237,7 @@ export default function SearchDialog({
                       setShowHistory(false);
                       inputRef.current?.focus();
                     }}
-                    className="w-full text-left px-4 py-2 hover:bg-accent text-foreground text-sm"
+                    className="w-full text-left px-4 py-2 hover:bg-field text-fg text-[13.5px]"
                   >
                     {historyItem}
                   </button>
@@ -240,12 +246,12 @@ export default function SearchDialog({
             )}
           </div>
 
-          <label className="flex items-center text-sm text-foreground">
+          <label className="inline-flex items-center gap-[11px] text-[13.5px] text-fg cursor-pointer">
             <input
               type="checkbox"
               checked={searchAllScenes}
               onChange={(e) => setSearchAllScenes(e.target.checked)}
-              className="mr-2"
+              className="ui-checkbox"
             />
             すべてのシーンを検索する
           </label>
@@ -253,17 +259,19 @@ export default function SearchDialog({
 
         {searchQuery.trim() && (
           <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-foreground">
+            {/* 件数と前へ／次へを1つの帯にまとめる */}
+            <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-primary-tint">
+              <div className="text-[13px] text-fg-sub">
                 {totalResults > 0 ? (
                   <span>
-                    {currentResultIndex + 1} / {totalResults} 件見つかりました
+                    <span className="text-lg font-bold text-primary-text mr-1">{currentResultIndex + 1}</span>
+                    / {totalResults} 件見つかりました
                   </span>
                 ) : (
-                  <span className="text-muted-foreground">見つかりませんでした</span>
+                  <span>見つかりませんでした</span>
                 )}
               </div>
-              <div className="flex space-x-2">
+              <div className="flex gap-2 shrink-0">
                 <button
                   onClick={() => {
                     onNavigatePrevious();
@@ -273,10 +281,10 @@ export default function SearchDialog({
                     }
                   }}
                   disabled={totalResults === 0}
-                  className="px-3 py-1 bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                  className={buttonClass('secondary-outline', 'sm')}
                   title="前へ (Shift+Enter)"
                 >
-                  <ArrowUpIcon className="w-4 h-4 mr-1" />
+                  <ArrowUpIcon className="size-4" />
                   前へ
                 </button>
                 <button
@@ -288,19 +296,24 @@ export default function SearchDialog({
                     }
                   }}
                   disabled={totalResults === 0}
-                  className="px-3 py-1 bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                  className={buttonClass('secondary-outline', 'sm')}
                   title="次へ (Enter)"
                 >
                   次へ
-                  <ArrowDownIcon className="w-4 h-4 ml-1" />
+                  <ArrowDownIcon className="size-4" />
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        <div className="text-xs text-muted-foreground">
-          <p>ショートカット: Ctrl+F で検索、Enter で次へ、Shift+Enter で前へ、Esc で閉じる</p>
+        <div className="flex flex-wrap gap-1.5" aria-label="ショートカット">
+          {['Ctrl+F 検索', 'Enter 次へ', 'Shift+Enter 前へ', 'Esc 閉じる'].map(label => (
+            <span key={label} className="px-2.5 py-1 rounded-full bg-field text-[11px] text-fg-sub whitespace-nowrap">
+              {label}
+            </span>
+          ))}
+        </div>
         </div>
       </div>
     </div>

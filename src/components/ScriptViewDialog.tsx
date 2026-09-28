@@ -5,7 +5,11 @@ import { Project, Character } from '@/types';
 import { SearchResult } from '@/components/SearchDialog';
 import { getEmotionIconUrl } from '@/utils/emotionUtils';
 import { buildChatSideMap } from '@/utils/chatUtils';
+import { ChatBubbleBottomCenterTextIcon } from '@heroicons/react/24/outline';
+import { bubbleFill, nameBadgeText } from '@/utils/colorUtils';
 import DialogFrame from '@/components/common/DialogFrame';
+import DialogHeader from '@/components/common/DialogHeader';
+import TabBar from '@/components/common/TabBar';
 
 type ViewTab = 'chat' | 'lines';
 
@@ -16,6 +20,8 @@ interface ScriptViewDialogProps {
   characters: Character[];
   selectedSceneId: string | null;
   onNavigateToResult: (result: SearchResult, shouldScroll: boolean) => void;
+  /** フキダシの薄塗りの濃さをテーマに合わせるため */
+  isDarkMode?: boolean;
 }
 
 interface ChatItem {
@@ -40,7 +46,8 @@ export default function ScriptViewDialog({
   project,
   characters,
   selectedSceneId,
-  onNavigateToResult
+  onNavigateToResult,
+  isDarkMode = false
 }: ScriptViewDialogProps) {
   const [activeTab, setActiveTab] = useState<ViewTab>('chat');
   const [allScenes, setAllScenes] = useState(false);
@@ -142,14 +149,15 @@ export default function ScriptViewDialog({
 
   const renderChatIcon = (item: ChatItem) => {
     const character = item.character;
-    if (!character || !item.showHeader) return <div className="w-9 h-9 shrink-0" />;
+    if (!character || !item.showHeader) return <div className="size-9 shrink-0" />;
     const iconUrl = getEmotionIconUrl(character, item.block.emotion);
+    const color = character.backgroundColor || '#e5e7eb';
     return iconUrl ? (
-      <img src={iconUrl} alt={character.name} className="w-9 h-9 rounded-full border object-cover shrink-0" />
+      <img src={iconUrl} alt={character.name} className="size-9 rounded-full object-cover shrink-0" />
     ) : (
       <div
-        className="w-9 h-9 rounded-full border shrink-0 flex items-center justify-center text-[10px] font-bold text-foreground"
-        style={{ backgroundColor: character.backgroundColor || '#e5e7eb' }}
+        className="size-9 rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold"
+        style={{ backgroundColor: color, color: nameBadgeText(color) }}
       >
         {character.name.slice(0, 2)}
       </div>
@@ -160,52 +168,44 @@ export default function ScriptViewDialog({
     <DialogFrame
       isOpen={isOpen}
       onCancel={onClose}
-      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col"
+      panelClassName="w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col"
     >
-        <div className="shrink-0 px-5 py-3 border-b flex items-center justify-between gap-3">
-          {/* タブ切替 */}
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setActiveTab('chat')}
-              className={`px-3 py-1.5 text-sm rounded-full transition-colors ${activeTab === 'chat' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:bg-accent border'}`}
-            >
-              チャット
-            </button>
-            <button
-              onClick={() => setActiveTab('lines')}
-              className={`px-3 py-1.5 text-sm rounded-full transition-colors ${activeTab === 'lines' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:bg-accent border'}`}
-            >
-              キャラ台詞
-            </button>
-          </div>
-          <div className="flex items-center gap-4">
-            <label className="flex items-center text-sm text-foreground whitespace-nowrap">
+        <DialogHeader
+          icon={ChatBubbleBottomCenterTextIcon}
+          title="ビュー"
+          onClose={onClose}
+          className="shrink-0"
+          actions={
+            <label className="flex items-center gap-2 text-[13px] font-semibold text-fg whitespace-nowrap cursor-pointer mr-1">
               <input
                 type="checkbox"
                 checked={allScenes}
                 onChange={e => setAllScenes(e.target.checked)}
-                className="mr-2"
+                className="ui-checkbox"
               />
               すべてのシーン
             </label>
-            <button
-              onClick={onClose}
-              className="text-muted-foreground hover:text-foreground text-2xl"
-              title="閉じる (Esc)"
-            >
-              ×
-            </button>
-          </div>
-        </div>
+          }
+        />
+        {/* タブはシーンタブと同じ形状。アクティブ面は下のコンテンツ（キャンバス色）とつなげる */}
+        <TabBar
+          items={[
+            { id: 'chat', label: 'チャット' },
+            { id: 'lines', label: 'キャラ台詞' }
+          ]}
+          activeId={activeTab}
+          onChange={setActiveTab}
+          activeSurfaceClass="bg-canvas"
+        />
 
         {activeTab === 'chat' ? (
           <>
-            <p className="shrink-0 px-5 py-1.5 text-xs text-muted-foreground border-b bg-muted/30">
+            <p className="shrink-0 px-5 pt-3 pb-1 text-[11px] leading-[1.55] text-fg-sub bg-canvas">
               フキダシをクリックするとエディタの該当ブロックへ移動します。左右の振り分けはキャラクター編集の「チャットビュー」設定で変更できます。
             </p>
-            <div className="flex-1 overflow-y-auto px-5 py-4 bg-muted/20">
+            <div className="flex-1 overflow-y-auto px-5 py-4 bg-canvas">
               {chatItems.length === 0 ? (
-                <p className="text-muted-foreground text-sm text-center py-8">表示するブロックがありません</p>
+                <p className="text-fg-sub text-sm text-center py-8">表示するブロックがありません</p>
               ) : (
                 chatItems.map((item, i) => {
                   if (item.side === 'center') {
@@ -213,7 +213,7 @@ export default function ScriptViewDialog({
                       <div key={item.block.id} className="text-center my-3">
                         <button
                           onClick={() => jumpTo({ blockId: item.block.id, sceneId: item.sceneId, sceneName: item.sceneName, blockIndex: item.blockIndex, text: item.block.text })}
-                          className="inline-block text-xs text-muted-foreground bg-muted rounded-full px-4 py-1 italic hover:bg-accent transition-colors max-w-full truncate"
+                          className="inline-block text-[13px] text-fg-sub bg-field rounded-full px-4 py-1 italic hover:text-fg transition-colors max-w-full truncate"
                           title="クリックで該当ブロックへ移動"
                         >
                           ─ {item.block.text || '（ト書き）'} ─
@@ -229,17 +229,22 @@ export default function ScriptViewDialog({
                       className={`flex gap-2 items-end ${isRight ? 'flex-row-reverse' : ''} ${item.showHeader && i > 0 ? 'mt-3' : 'mt-1'}`}
                     >
                       {renderChatIcon(item)}
-                      <div className={`max-w-[75%] ${isRight ? 'text-right' : ''}`}>
+                      <div className={`max-w-[74%] ${isRight ? 'text-right' : ''}`}>
                         {item.showHeader && (
-                          <p className="text-[10px] text-muted-foreground mb-0.5 px-1">{item.character?.name || '不明'}</p>
+                          <p className="text-[10px] mb-1 px-1">
+                            <span className="font-bold text-fg-sub">{item.character?.name || '不明'}</span>
+                            {item.block.emotion && item.block.emotion !== 'normal' && (
+                              <span className="ml-1.5 text-fg-faint">{item.block.emotion}</span>
+                            )}
+                          </p>
                         )}
+                        {/* エディタのチャットテーマと同じフキダシ（アバター側の角だけ小さく） */}
                         <button
                           onClick={() => jumpTo({ blockId: item.block.id, sceneId: item.sceneId, sceneName: item.sceneName, blockIndex: item.blockIndex, text: item.block.text })}
-                          className={`text-left text-sm text-foreground whitespace-pre-wrap break-words px-3 py-2 border transition-colors hover:brightness-95 dark:hover:brightness-110 ${isRight ? 'rounded-[16px_16px_4px_16px]' : 'rounded-[16px_16px_16px_4px]'}`}
+                          className={`text-left text-[15px] leading-[1.6] text-fg whitespace-pre-wrap break-words px-[15px] py-[11px] transition-[filter] hover:brightness-95 ${isRight ? 'rounded-[18px_18px_6px_18px]' : 'rounded-[18px_18px_18px_6px]'}`}
                           style={{
-                            // 左右ともパーソナルカラーの淡色（複数キャラ登場時に話者を色で判別できるように）
-                            backgroundColor: `${charColor}33`,
-                            borderColor: `${charColor}55`
+                            backgroundColor: bubbleFill(charColor, isDarkMode),
+                            border: `1.5px solid ${charColor}`
                           }}
                           title="クリックで該当ブロックへ移動"
                         >
@@ -254,25 +259,25 @@ export default function ScriptViewDialog({
           </>
         ) : (
           <>
-            <div className="shrink-0 px-5 py-3 border-b">
+            <div className="shrink-0 px-5 py-3 bg-canvas">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2">
                   {selectedCharacter?.emotions.normal.iconUrl ? (
                     <img
                       src={selectedCharacter.emotions.normal.iconUrl}
                       alt={selectedCharacter.name}
-                      className="w-8 h-8 rounded-full border object-cover shrink-0"
+                      className="size-8 rounded-full object-cover shrink-0"
                     />
                   ) : (
                     <div
-                      className="w-8 h-8 rounded-full border shrink-0"
+                      className="size-8 rounded-full shrink-0"
                       style={{ backgroundColor: selectedCharacter?.backgroundColor || '#e5e7eb' }}
                     />
                   )}
                   <select
                     value={selectedCharacterId}
                     onChange={e => setSelectedCharacterId(e.target.value)}
-                    className="p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent focus:outline-none"
+                    className="ui-input"
                   >
                     {characters.map(char => (
                       <option key={char.id} value={char.id}>
@@ -281,16 +286,16 @@ export default function ScriptViewDialog({
                     ))}
                   </select>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  台詞数: <span className="font-semibold text-foreground">{lines.length}</span> 件
-                  <span className="mx-2">/</span>
-                  合計文字数: <span className="font-semibold text-foreground">{totalChars.toLocaleString()}</span> 文字
+                <div className="text-[13px] text-fg-sub">
+                  台詞数: <span className="font-bold text-fg">{lines.length}</span> 件
+                  <span className="mx-2 text-fg-faint">/</span>
+                  合計文字数: <span className="font-bold text-fg">{totalChars.toLocaleString()}</span> 文字
                 </div>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto px-3 pb-4 bg-canvas">
               {lines.length === 0 ? (
-                <p className="text-muted-foreground text-sm text-center py-8">
+                <p className="text-fg-sub text-sm text-center py-8">
                   {selectedCharacterId ? '該当する台詞がありません' : 'キャラクターを選択してください'}
                 </p>
               ) : (
@@ -299,15 +304,15 @@ export default function ScriptViewDialog({
                     <button
                       key={line.blockId}
                       onClick={() => jumpTo(line)}
-                      className="w-full text-left p-2 rounded hover:bg-accent transition-colors group"
+                      className="w-full text-left px-2 py-2 rounded-xl hover:bg-field transition-colors group"
                       title="クリックで該当ブロックへ移動"
                     >
                       <div className="flex items-baseline gap-2">
-                        <span className="text-xs text-muted-foreground shrink-0 w-8 text-right">{index + 1}.</span>
+                        <span className="text-xs text-fg-faint shrink-0 w-8 text-right">{index + 1}.</span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-foreground whitespace-pre-wrap break-words">{line.text || '（空の台詞）'}</p>
+                          <p className="text-sm text-fg whitespace-pre-wrap break-words">{line.text || '（空の台詞）'}</p>
                           {allScenes && (
-                            <p className="text-xs text-muted-foreground mt-0.5">{line.sceneName}</p>
+                            <p className="text-[11px] text-fg-sub mt-0.5">{line.sceneName}</p>
                           )}
                         </div>
                       </div>

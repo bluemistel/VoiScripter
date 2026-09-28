@@ -22,7 +22,8 @@
   --color-muted-foreground: oklch(0.3211 0 0);
   --color-accent: oklch(95% 0% 220);
   --color-accent-foreground: oklch(96.89% 30% 190);
-  --color-destructive: oklch(0.7294 0.18 0);
+  /* 削除・巻き戻り操作の色。白地でも読めるコントラスト（約4.8:1）を確保する */
+  --color-destructive: oklch(0.58 0.19 20);
   --color-destructive-foreground: oklch(100% 0% 220);
   --color-border: oklch(0.3211 0 0);
   --color-input: rgb(30, 30, 30);
@@ -32,8 +33,58 @@
   --separator-shadow-input: 0 2px 8px -3px rgba(17, 24, 39, 0.6), 0 0 0 1px rgba(17, 24, 39, 0.14);
   --radius: 0.5rem;
 }
- 
+
+/*
+ * ポップ／モダン刷新で追加したトークン（docs/design-handoff/tokens.css）
+ * ダーク値は下の html.dark に定義。
+ * static: インラインスタイルの var() から参照しても必ず出力されるよう、未使用でも書き出す。
+ */
+@theme static {
+  /* primary をテキスト・アイコンに使うときの色（元の primary は白背景で約2:1しか出ないため） */
+  --color-primary-text: oklch(0.52 0.10 186);
+  /* 選択中カード・選択中の選択肢の色面 */
+  --color-primary-tint: oklch(0.78 0.18 186 / 0.10);
+  /* primary 塗りの上の文字 */
+  --color-on-primary: #ffffff;
+
+  --color-destructive-tint: oklch(0.58 0.19 20 / 0.10);
+  --color-destructive-ring: oklch(0.58 0.19 20 / 0.40);
+
+  --color-fg: #332f2c;
+  --color-fg-sub: #6f6a64;      /* 説明文・非アクティブラベル */
+  --color-fg-faint: #8f8a84;    /* 単位・件数・セクションラベル */
+
+  --color-canvas: #fbfbfa;      /* エディタ背景 */
+  --color-panel: #ffffff;       /* ダイアログ本体 */
+  --color-block: #ffffff;       /* 台本ブロック */
+  --color-field: #f1f1ee;       /* 入力欄・セカンダリボタン・チップ */
+  --color-well: rgb(17 24 39 / 0.035); /* カード内のさらに内側・タブ行の帯 */
+  --color-hairline: rgb(17 24 39 / 0.08);
+  /* セカンダリボタンの枠（ウェルやカードの面の上でもボタンと分かる濃さ） */
+  --color-button-border: rgb(17 24 39 / 0.14);
+
+  /* ト書き追加ボタン（ツールバー）とピッカーのト書きアバター。フィールド面より一段濃い */
+  --color-togaki-button: #e4e4de;
+  --color-togaki-button-fg: #5a5a5a;
+
+  /* タブ行の帯（コンテンツ面より一段暗い） */
+  --color-tab-band: rgb(17 24 39 / 0.035);
+}
+
 @layer base {
+  /*
+   * 影のトークン。@theme の --shadow-* に置くと shadow-block 等のユーティリティが
+   * ライト値を直に埋め込み、html.dark の上書きが効かなくなるため、通常の変数として定義する。
+   * 使うときは shadow-(--shadow-block) のように変数参照で書く。
+   */
+  :root {
+    --shadow-dialog: 0 26px 60px -26px rgb(17 24 39 / 0.5);
+    --shadow-block: 0 0 0 1px var(--color-hairline), 0 4px 14px -10px rgb(17 24 39 / 0.3);
+    --shadow-block-selected: 0 0 0 2px rgb(17 24 39 / 0.14), 0 6px 18px -10px rgb(17 24 39 / 0.35);
+    --shadow-toolbar: 0 8px 28px -10px rgb(17 24 39 / 0.4), 0 0 0 1px rgb(17 24 39 / 0.05);
+    --shadow-popover: 0 4px 12px -4px rgb(0 0 0 / 0.25);
+  }
+
   * {
     @apply border-gray-400;
   }
@@ -77,6 +128,194 @@
     --separator-shadow-block: 0 0 0 1px rgba(255, 255, 255, 0.3), 0 0 14px -8px rgba(255, 255, 255, 0.22);
     --separator-shadow-input: 0 0 0 1px rgba(255, 255, 255, 0.28), 0 0 10px -5px rgba(255, 255, 255, 0.2);
     --radius: 0.5rem;
+
+    /* ポップ／モダン刷新で追加したトークン（ダーク） */
+    --color-primary-text: rgb(84 220 179);
+    --color-primary-tint: rgb(29 178 134 / 0.13);
+    --color-on-primary: rgb(15 15 15);
+
+    --color-destructive-tint: rgb(255 80 80 / 0.14);
+    --color-destructive-ring: oklch(0.7294 0.18 0 / 0.38);
+
+    --color-fg: rgb(228 228 228);
+    --color-fg-sub: #9d9995;
+    --color-fg-faint: #84807b;
+
+    --color-canvas: rgb(26 26 26);
+    --color-panel: rgb(36 36 36);
+    --color-block: rgb(39 39 39);
+    --color-field: rgb(255 255 255 / 0.07);
+    --color-well: rgb(255 255 255 / 0.05);
+    --color-hairline: rgb(255 255 255 / 0.10);
+    --color-button-border: rgb(255 255 255 / 0.14);
+
+    --color-togaki-button: rgb(255 255 255 / 0.16);
+    --color-togaki-button-fg: #b5b5b5;
+
+    --color-tab-band: rgb(0 0 0 / 0.18);
+
+    --shadow-dialog: 0 28px 64px -26px #000;
+    --shadow-block: 0 0 0 1px rgb(255 255 255 / 0.07), 0 6px 16px -12px #000;
+    --shadow-block-selected: 0 0 0 2px rgb(255 255 255 / 0.16), 0 8px 20px -12px #000;
+    --shadow-toolbar: 0 10px 30px -10px #000, 0 0 0 1px rgb(255 255 255 / 0.07);
+    --shadow-popover: 0 6px 16px -6px #000;
+  }
+}
+
+/*
+ * フォームコントロール（docs/ui-guidelines.md §6）
+ * 枠線は使わずフィールド面の塗りで示し、フォーカス時だけ primary の2pxリングを出す。
+ * チェック・矢印の SVG は色を埋め込むため、ダーク用を html.dark で差し替える。
+ */
+@layer components {
+  /*
+   * ボタン（docs/ui-guidelines.md §5）。色は primary / secondary / destructive の3種のみ。
+   * 大きさを変えたいときは ui-btn-sm か、padding・font-size のユーティリティを併記する。
+   */
+  .ui-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+    border-radius: 13px;
+    padding: 10px 16px;
+    font-size: 13px;
+    line-height: 1.25;
+    cursor: pointer;
+    transition: filter 0.15s ease, background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .ui-btn:disabled { opacity: 0.5; pointer-events: none; }
+  .ui-btn-sm {
+    gap: 4px;
+    border-radius: 11px;
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  /* 画面に1つだけの主行動 */
+  .ui-btn-primary {
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
+    font-weight: 700;
+    box-shadow: 0 6px 16px -8px var(--color-primary);
+  }
+  .ui-btn-primary:hover { filter: brightness(1.05); }
+  /* 同格に並ぶ操作。フィールド面だけだとウェルやカードに埋もれるため、薄い枠を付ける */
+  .ui-btn-secondary {
+    background-color: var(--color-field);
+    color: var(--color-fg-sub);
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px var(--color-button-border);
+  }
+  .ui-btn-secondary:hover { color: var(--color-fg); }
+  /* 同上（パネル面＋枠）。primary-tint などの色面の上で使う */
+  .ui-btn-secondary-outline {
+    background-color: var(--color-panel);
+    color: var(--color-fg);
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1.5px var(--color-button-border);
+  }
+  .ui-btn-secondary-outline:hover { background-color: var(--color-field); }
+  /* 削除（強） */
+  .ui-btn-destructive {
+    background-color: var(--color-destructive);
+    color: var(--color-destructive-foreground);
+    font-weight: 700;
+  }
+  .ui-btn-destructive:hover { filter: brightness(1.05); }
+  /* データが巻き戻る操作など（弱） */
+  .ui-btn-destructive-weak {
+    background-color: var(--color-destructive-tint);
+    color: var(--color-destructive);
+    font-weight: 700;
+    box-shadow: inset 0 0 0 1.5px var(--color-destructive-ring);
+  }
+  .ui-btn-destructive-weak:hover { filter: brightness(0.97); }
+
+  .ui-input {
+    border: none;
+    border-radius: 12px;
+    background-color: var(--color-field);
+    padding: 10px 13px;
+    font-size: 13.5px;
+    color: var(--color-fg);
+    outline: none;
+    transition: box-shadow 0.15s ease;
+  }
+  .ui-input::placeholder { color: var(--color-fg-faint); }
+  .ui-input:focus-visible,
+  .ui-input:focus { box-shadow: 0 0 0 2px var(--color-primary); }
+  .ui-input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  select.ui-input {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 36px;
+    background-repeat: no-repeat;
+    background-position: right 13px center;
+    background-size: 14px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236f6a64' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m19.5 8.25-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+    cursor: pointer;
+  }
+  html.dark select.ui-input {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239d9995' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m19.5 8.25-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+  }
+  select.ui-input option { background-color: var(--color-panel); color: var(--color-fg); }
+
+  .ui-checkbox,
+  .ui-radio {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: none;
+    width: 19px;
+    height: 19px;
+    margin: 0;
+    background-color: var(--color-field);
+    background-repeat: no-repeat;
+    background-position: center;
+    box-shadow: inset 0 0 0 1.5px var(--color-hairline);
+    cursor: pointer;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .ui-checkbox { border-radius: 6px; }
+  .ui-radio { border-radius: 9999px; }
+  .ui-checkbox:checked,
+  .ui-checkbox:indeterminate,
+  .ui-radio:checked {
+    background-color: var(--color-primary);
+    box-shadow: none;
+  }
+  .ui-checkbox:checked {
+    background-size: 13px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4.5 12.75 6 6 9-13.5'/%3E%3C/svg%3E");
+  }
+  .ui-checkbox:indeterminate {
+    background-size: 13px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M6 12h12'/%3E%3C/svg%3E");
+  }
+  html.dark .ui-checkbox:checked {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f0f0f' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4.5 12.75 6 6 9-13.5'/%3E%3C/svg%3E");
+  }
+  html.dark .ui-checkbox:indeterminate {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f0f0f' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M6 12h12'/%3E%3C/svg%3E");
+  }
+  .ui-radio:checked {
+    background-image: radial-gradient(circle, var(--color-on-primary) 0 3.5px, transparent 4px);
+  }
+  .ui-checkbox:focus-visible,
+  .ui-radio:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+  .ui-checkbox:disabled,
+  .ui-radio:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* セクション内の小見出し（10.5px / 字間 .12em） */
+  .ui-section-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--color-fg-faint);
   }
 }
 

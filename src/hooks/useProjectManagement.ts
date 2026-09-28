@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Project, Scene } from '@/types';
+import { Character, Project, Scene } from '@/types';
 import { buildEmptyScript } from '@/utils/scriptDefaults';
 import { createScriptBlock } from '@/utils/blockFactory';
 import { PROJECT_KEY_SUFFIXES } from '@/utils/explorerTree';
@@ -23,13 +23,13 @@ export interface ProjectManagementHook {
   undoStack: ProjectHistory[];
   redoStack: ProjectHistory[];
   handleCreateProject: (name: string) => void;
-  handleNewProject: (name: string, initialCharacterId?: string) => Project;
+  handleNewProject: (name: string, initialCharacterId?: string, characters?: Character[]) => Project;
   handleDeleteProject: () => void;
   handleRenameProject: (newName: string) => void;
   deleteProjectById: (id: string, options?: { silent?: boolean }) => Promise<void>;
   renameProjectById: (oldId: string, newName: string) => Promise<void>;
   refreshProjectList: () => Promise<void>;
-  handleAddScene: (name: string) => void;
+  handleAddScene: (name: string, characters?: Character[]) => void;
   handleRenameScene: (sceneId: string, newName: string) => void;
   handleDeleteScene: (sceneId: string) => void;
   handleSelectScene: (sceneId: string) => void;
@@ -727,18 +727,13 @@ export const useProjectManagement = (
   const handleRenameProject = (newName: string) => { renameProjectById(project.id, newName); };
 
   // 新しいプロジェクト作成
-  const handleNewProject = (name: string, initialCharacterId?: string): Project => {
+  const handleNewProject = (name: string, initialCharacterId?: string, characters?: Character[]): Project => {
     const emptyScript = buildEmptyScript({ title: '新しいシーン' });
     // キャラクター設定済み（2回目以降のプロジェクト作成）の場合は、説明テキストを出す代わりに
     // 最初のキャラクターの空ブロックを1つ用意しておき、すぐに台本を書き始められるようにする。
     // キャラクター未設定（初回利用）のときは initialCharacterId が渡されず、従来どおり空のまま。
     if (initialCharacterId) {
-      emptyScript.blocks = [{
-        id: Date.now().toString() + Math.random().toString(36).slice(2, 9),
-        characterId: initialCharacterId,
-        emotion: 'normal',
-        text: ''
-      }];
+      emptyScript.blocks = [createScriptBlock(initialCharacterId, 'normal', characters)];
     }
     const newProject: Project = {
       id: name,
@@ -764,7 +759,7 @@ export const useProjectManagement = (
   };
 
   // シーン操作関数
-  const handleAddScene = (name: string) => {
+  const handleAddScene = (name: string, characters?: Character[]) => {
     if (!name.trim()) return;
     if (project.scenes.length >= 30) return;
     if (project.scenes.some(s => s.name === name.trim())) return;
@@ -780,7 +775,7 @@ export const useProjectManagement = (
     const lastBlock = currentBlocks[currentBlocks.length - 1];
     if (lastBlock) {
       emptyScript.blocks = [
-        createScriptBlock(lastBlock.characterId, lastBlock.emotion || 'normal')
+        createScriptBlock(lastBlock.characterId, lastBlock.emotion || 'normal', characters)
       ];
     }
 

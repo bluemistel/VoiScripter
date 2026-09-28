@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { DocumentTextIcon } from '@heroicons/react/24/outline';
 import DialogFrame from '@/components/common/DialogFrame';
+import DialogHeader from '@/components/common/DialogHeader';
+import { buttonClass } from '@/components/common/Button';
 
 interface ProjectDialogProps {
   isOpen: boolean;
@@ -55,21 +57,13 @@ export default function ProjectDialog({
     <DialogFrame
       isOpen={isOpen}
       onCancel={handleCancel}
-      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4"
+      panelClassName="w-full max-w-md mx-4"
     >
-        <div className="flex justify-between items-center p-4 border-b">
-          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-          <button
-            onClick={handleCancel}
-            className="p-1 hover:bg-accent rounded transition-colors"
-          >
-            <XMarkIcon className="w-5 h-5 text-foreground" />
-          </button>
-        </div>
+        <DialogHeader icon={DocumentTextIcon} title={title} onClose={handleCancel} />
         
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className="px-5 pb-5 space-y-5">
           <div>
-            <label htmlFor="projectName" className="block text-sm font-medium text-foreground mb-2">
+            <label htmlFor="projectName" className="block ui-section-label mb-2">
               プロジェクト名
             </label>
             <input
@@ -80,26 +74,26 @@ export default function ProjectDialog({
                 setProjectName(e.target.value);
                 setError('');
               }}
-              className="w-full p-2 border rounded bg-background text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
+              className="ui-input w-full"
               placeholder={placeholder}
               autoFocus
             />
             {error && (
-              <p className="text-sm text-destructive mt-1">{error}</p>
+              <p className="text-xs text-destructive mt-2">{error}</p>
             )}
           </div>
           
-          <div className="flex justify-end space-x-2">
+          <div className="flex justify-end gap-2 pt-1">
             <button
               type="button"
               onClick={handleCancel}
-              className="px-4 py-2 text-sm text-muted-foreground hover:bg-accent rounded transition-colors"
+              className={buttonClass('secondary')}
             >
               キャンセル
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
+              className={buttonClass('primary')}
             >
               {submitButtonText}
             </button>

@@ -17,7 +17,7 @@ const isElementVisible = (el: HTMLElement) => {
 
 const getEnabledActionButtons = (root: ParentNode) => {
   return Array.from(
-    root.querySelectorAll<HTMLButtonElement>('button.bg-primary, button.bg-destructive')
+    root.querySelectorAll<HTMLButtonElement>('button.bg-primary, button.bg-destructive, button.ui-btn-primary, button.ui-btn-destructive')
   ).filter((button) => !button.disabled && isElementVisible(button));
 };
 
@@ -200,7 +200,8 @@ export default function DialogFrame({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className={panelClassName}
+        // パネルの見た目は共通（枠線なし・角丸22px・落ち影のみ）。panelClassName は大きさと中のレイアウトだけを渡す
+        className={`bg-panel text-fg rounded-[22px] shadow-(--shadow-dialog) outline-none ${panelClassName}`}
         onPointerDown={(event) => event.stopPropagation()}
       >
         {children}

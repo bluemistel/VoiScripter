@@ -3,7 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { StandingView } from '@/types';
 import { loadStandingAsset } from '@/utils/standingImageAssets';
+import { AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
 import DialogFrame from '@/components/common/DialogFrame';
+import DialogHeader from '@/components/common/DialogHeader';
+import { buttonClass } from '@/components/common/Button';
 
 const DEFAULT_VIEW: StandingView = { scale: 1, offsetX: 0, offsetY: 0 };
 
@@ -77,18 +80,19 @@ export default function StandingViewAdjustDialog({
     <DialogFrame
       isOpen={isOpen}
       onCancel={onCancel}
-      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-sm mx-4 p-6"
+      panelClassName="w-full max-w-sm mx-4 pb-5"
       overlayClassName="bg-black/60"
       enableEnterShortcut={false}
     >
-        <h3 className="text-lg font-semibold text-foreground mb-1">立ち絵の表示調整</h3>
-        <p className="text-xs text-muted-foreground mb-3">
+        <DialogHeader icon={AdjustmentsHorizontalIcon} title="立ち絵の表示調整" onClose={onCancel} />
+        <div className="px-5">
+        <p className="text-[11px] leading-[1.55] text-fg-sub mb-3">
           「{characterName}」（{emotionLabel}）の立ち絵ステージでの見え方を調整します。<br />
           ドラッグで位置、ホイールまたはスライダーで拡大縮小。
         </p>
 
         <div
-          className="relative w-full h-[380px] border rounded bg-muted/20 overflow-hidden cursor-move touch-none select-none"
+          className="relative w-full h-[380px] rounded-2xl bg-well ring-1 ring-hairline overflow-hidden cursor-move touch-none select-none"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -107,12 +111,12 @@ export default function StandingViewAdjustDialog({
               }}
             />
           ) : (
-            <p className="text-xs text-muted-foreground text-center pt-16">画像を読み込み中…</p>
+            <p className="text-xs text-fg-sub text-center pt-16">画像を読み込み中…</p>
           )}
         </div>
 
         <div className="flex items-center gap-2 mt-3">
-          <span className="text-xs text-muted-foreground shrink-0">ズーム</span>
+          <span className="ui-section-label shrink-0">ズーム</span>
           <input
             type="range"
             min={0.05}
@@ -120,21 +124,21 @@ export default function StandingViewAdjustDialog({
             step={0.01}
             value={Math.min(3, view.scale)}
             onChange={e => setView(v => ({ ...v, scale: parseFloat(e.target.value) }))}
-            className="flex-1"
+            className="flex-1 accent-primary"
           />
-          <span className="text-xs text-muted-foreground w-12 text-right">{Math.round(view.scale * 100)}%</span>
+          <span className="text-xs text-fg-faint w-12 text-right">{Math.round(view.scale * 100)}%</span>
         </div>
 
-        <div className="flex flex-wrap justify-end gap-2 mt-4">
+        <div className="flex flex-wrap justify-end gap-2 mt-5">
           <button
             onClick={onCancel}
-            className="px-3 py-2 text-sm text-muted-foreground hover:bg-accent rounded"
+            className={buttonClass('secondary')}
           >
             キャンセル
           </button>
           <button
             onClick={() => setView(DEFAULT_VIEW)}
-            className="px-3 py-2 text-sm border rounded text-foreground hover:bg-accent"
+            className={buttonClass('secondary')}
             title="原寸・上部中央起点に戻す"
           >
             リセット
@@ -144,10 +148,11 @@ export default function StandingViewAdjustDialog({
               const isDefault = view.scale === 1 && view.offsetX === 0 && view.offsetY === 0;
               onApply(isDefault ? undefined : view);
             }}
-            className="px-3 py-2 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
+            className={buttonClass('primary')}
           >
             適用
           </button>
+        </div>
         </div>
     </DialogFrame>
   );

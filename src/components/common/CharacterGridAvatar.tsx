@@ -1,6 +1,7 @@
 'use client';
 
 import { Character } from '@/types';
+import { nameBadgeText } from '@/utils/colorUtils';
 
 interface CharacterGridAvatarProps {
   character: Character;
@@ -14,14 +15,15 @@ export default function CharacterGridAvatar({ character }: CharacterGridAvatarPr
       <img
         src={iconUrl}
         alt={character.name}
-        className="w-10 h-10 rounded-full object-cover border shrink-0"
+        className="size-10 rounded-full object-cover ring-1 ring-hairline shrink-0"
       />
     );
   }
+  const color = character.backgroundColor || '#e5e7eb';
   return (
     <div
-      className="w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-bold border shrink-0"
-      style={{ backgroundColor: character.backgroundColor || '#e5e7eb' }}
+      className="size-10 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+      style={{ backgroundColor: color, color: nameBadgeText(color) }}
     >
       {character.name?.slice(0, 2) || '?'}
     </div>

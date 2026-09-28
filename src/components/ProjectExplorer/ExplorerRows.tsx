@@ -28,9 +28,9 @@ interface CommonRowProps {
 }
 
 const rowBaseClass =
-  'group flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm select-none cursor-pointer hover:bg-accent transition-colors';
+  'group flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-[13.5px] select-none cursor-pointer hover:bg-field transition-colors';
 
-const dropTargetClass = 'ring-2 ring-primary ring-inset bg-primary/10';
+const dropTargetClass = 'ring-2 ring-primary ring-inset bg-primary-tint';
 
 function KebabButton({ onOpen }: { onOpen: (anchor: DOMRect) => void }) {
   return (
@@ -40,10 +40,10 @@ function KebabButton({ onOpen }: { onOpen: (anchor: DOMRect) => void }) {
         onOpen((e.currentTarget as HTMLElement).getBoundingClientRect());
       }}
       onPointerDown={(e) => e.stopPropagation()}
-      className="shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-muted transition-opacity"
+      className="shrink-0 p-1 rounded-lg opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-well transition-opacity"
       title="メニュー"
     >
-      <EllipsisVerticalIcon className="w-4 h-4 text-foreground" />
+      <EllipsisVerticalIcon className="w-4 h-4 text-fg-sub" />
     </button>
   );
 }
@@ -77,10 +77,10 @@ function ProjectRow({
       title={projectId}
     >
       <span className="w-[18px] shrink-0" />
-      <DocumentTextIcon className="w-5 h-5 shrink-0 text-primary" />
-      <span className="flex-1 truncate text-foreground">{projectId}</span>
+      <DocumentTextIcon className="w-5 h-5 shrink-0 text-primary-text" />
+      <span className="flex-1 truncate text-fg">{projectId}</span>
       {isCurrent && (
-        <span className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
+        <span className="shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full bg-primary-tint text-primary-text">
           編集中
         </span>
       )}
@@ -126,7 +126,7 @@ function FolderRow({
         onClick={() => onToggleFolder(folder.id)}
         title={folder.name}
       >
-        <span className="w-[18px] shrink-0 flex items-center justify-center text-muted-foreground">
+        <span className="w-[18px] shrink-0 flex items-center justify-center text-fg-sub">
           {isExpanded ? <ChevronDownIcon className="w-3.5 h-3.5" /> : <ChevronRightIcon className="w-3.5 h-3.5" />}
         </span>
         {isExpanded ? (
@@ -134,8 +134,8 @@ function FolderRow({
         ) : (
           <FolderIcon className="w-5 h-5 shrink-0 text-secondary" />
         )}
-        <span className="flex-1 truncate text-foreground">{folder.name}</span>
-        <span className="shrink-0 text-[11px] text-muted-foreground opacity-60 group-hover:opacity-0">
+        <span className="flex-1 truncate text-fg">{folder.name}</span>
+        <span className="shrink-0 text-[11px] text-fg-sub opacity-60 group-hover:opacity-0">
           {children.length > 0 ? children.length : ''}
         </span>
         <KebabButton onOpen={(anchor) => onOpenMenu(anchor, { type: 'folder', folder })} />

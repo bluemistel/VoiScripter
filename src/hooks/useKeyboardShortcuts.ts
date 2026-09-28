@@ -3,6 +3,7 @@ import { UndoRedoHook, ProjectHistory } from './useUndoRedo';
 import { ScriptBlock } from '@/types';
 import { ShortcutMap, defaultShortcuts, matchesShortcut, findConflictingDef } from '@/types/shortcuts';
 import { getEmotionForPreset } from '@/utils/emotionUtils';
+import { createScriptBlock } from '@/utils/blockFactory';
 
 export interface KeyboardShortcutsHook {
   registerShortcuts: () => void;
@@ -193,12 +194,11 @@ export const useKeyboardShortcuts = (
             const precedingBlocks = scriptBlocks.slice(0, activeIdx + 1);
             const lastSpeakerBlock = [...precedingBlocks].reverse().find(block => block.characterId);
             const fallbackCharacterId = characters.find(c => c.id)?.id || '';
-            const newBlock: ScriptBlock = {
-              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-              characterId: lastSpeakerBlock?.characterId || fallbackCharacterId,
-              emotion: lastSpeakerBlock?.emotion || 'normal',
-              text: ''
-            };
+            const newBlock = createScriptBlock(
+              lastSpeakerBlock?.characterId || fallbackCharacterId,
+              lastSpeakerBlock?.emotion || 'normal',
+              characters
+            );
             onInsertBlock(newBlock, activeIdx + 1);
             if (setIsCtrlEnterBlock) setIsCtrlEnterBlock(true);
             setTimeout(() => {

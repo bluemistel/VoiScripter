@@ -14,6 +14,7 @@ export interface CharacterManagementHook {
   handleDeleteCharacter: (id: string) => void;
   handleAddGroup: (group: string) => void;
   handleDeleteGroup: (group: string) => void;
+  handleRenameGroup: (oldName: string, newName: string) => boolean;
   handleReorderCharacters: (newOrder: Character[]) => void;
   handleReorderGroups: (newOrder: string[]) => void;
   handleImportCharacterCSV: (file: File) => Promise<void>;
@@ -235,6 +236,29 @@ export const useCharacterManagement = (
   };
 
   // グループのクレジット表記を設定（空文字で削除）
+  // グループ名の変更（並び順・所属キャラクター・クレジット表記を引き継ぐ）
+  // 空・「なし」・既存と重複する名前は受け付けず false を返す
+  const handleRenameGroup = (oldName: string, newName: string): boolean => {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === 'なし') return false;
+    if (trimmed === oldName) return true;
+    if (groups.includes(trimmed)) return false;
+
+    setGroups(prev => prev.map(g => (g === oldName ? trimmed : g)));
+    setCharacters(prev => prev.map(char =>
+      char.group === oldName ? { ...char, group: trimmed } : char
+    ));
+    setGroupCredits(prev => {
+      if (!(oldName in prev)) return prev;
+      const next: GroupCredits = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        next[key === oldName ? trimmed : key] = value;
+      });
+      return next;
+    });
+    return true;
+  };
+
   const handleSetGroupCredit = (group: string, credit: string) => {
     setGroupCredits(prev => {
       const trimmed = credit.trim();
@@ -475,6 +499,7 @@ export const useCharacterManagement = (
     handleDeleteCharacter,
     handleAddGroup,
     handleDeleteGroup,
+    handleRenameGroup,
     handleReorderCharacters,
     handleReorderGroups,
     handleImportCharacterCSV,

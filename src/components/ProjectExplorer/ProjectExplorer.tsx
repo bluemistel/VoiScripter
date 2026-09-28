@@ -27,6 +27,8 @@ import {
   ArrowRightCircleIcon,
 } from '@heroicons/react/24/outline';
 import DialogFrame from '@/components/common/DialogFrame';
+import DialogHeader from '@/components/common/DialogHeader';
+import { buttonClass } from '@/components/common/Button';
 import { ExplorerFolder, ExplorerNode, ExplorerTreeData } from '@/types';
 import {
   buildTreeNodes,
@@ -121,15 +123,15 @@ function ExplorerBody({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 overflow-y-auto p-2 ${rest.isDragging && isOver && rest.dropTargetFolderId === null ? 'bg-primary/5' : ''}`}
+      className={`flex-1 overflow-y-auto px-3 pb-3 ${rest.isDragging && isOver && rest.dropTargetFolderId === null ? 'bg-primary-tint' : ''}`}
     >
       {nodes.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-10">プロジェクトがありません</p>
+        <p className="text-sm text-fg-sub text-center py-10">プロジェクトがありません</p>
       ) : (
         <ExplorerTreeList nodes={nodes} depth={0} {...rest} />
       )}
       {rest.isDragging && (
-        <div className="mx-2 mt-3 mb-1 p-3 border-2 border-dashed rounded-lg text-xs text-muted-foreground text-center">
+        <div className="mx-2 mt-3 mb-1 p-3 border-2 border-dashed border-hairline bg-well rounded-2xl text-xs text-fg-sub text-center">
           ここにドロップでルート（最上位）へ移動
         </div>
       )}
@@ -361,36 +363,34 @@ export default function ProjectExplorer({
         isOpen={isOpen}
         onCancel={handleCancel}
         enableEnterShortcut={false}
-        panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-2xl mx-4 flex flex-col h-[80vh] max-h-[640px] overflow-hidden"
+        panelClassName="w-full max-w-2xl mx-4 flex flex-col h-[80vh] max-h-[640px] overflow-hidden"
       >
-        <div className="flex justify-between items-center p-4 border-b shrink-0">
-          <h2 className="text-lg font-semibold text-foreground">新しい台本</h2>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setSubDialog({ kind: 'newProject', folderId: null })}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-              title="新しい台本を作成"
-            >
-              <DocumentPlusIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">新しい台本</span>
-            </button>
-            <button
-              onClick={() => setSubDialog({ kind: 'newFolder', parentId: null })}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-lg text-foreground hover:bg-accent transition-colors"
-              title="新しいフォルダを作成"
-            >
-              <FolderPlusIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">フォルダ</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 hover:bg-accent rounded-lg transition-colors ml-1"
-              title="閉じる"
-            >
-              <XMarkIcon className="w-5 h-5 text-foreground" />
-            </button>
-          </div>
-        </div>
+        <DialogHeader
+          icon={FolderIcon}
+          title="新しい台本"
+          onClose={onClose}
+          className="shrink-0"
+          actions={
+            <>
+              <button
+                onClick={() => setSubDialog({ kind: 'newProject', folderId: null })}
+                className={buttonClass('primary', 'sm')}
+                title="新しい台本を作成"
+              >
+                <DocumentPlusIcon className="size-4" />
+                <span className="hidden sm:inline">新しい台本</span>
+              </button>
+              <button
+                onClick={() => setSubDialog({ kind: 'newFolder', parentId: null })}
+                className={buttonClass('secondary', 'sm')}
+                title="新しいフォルダを作成"
+              >
+                <FolderPlusIcon className="size-4" />
+                <span className="hidden sm:inline">フォルダ</span>
+              </button>
+            </>
+          }
+        />
 
         <DndContext
           sensors={sensors}
@@ -412,13 +412,13 @@ export default function ProjectExplorer({
           />
           <DragOverlay>
             {activeDrag && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-popover border shadow-lg opacity-90">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm bg-panel ring-1 ring-hairline shadow-(--shadow-popover) opacity-90">
                 {activeDrag.type === 'folder' ? (
                   <FolderIcon className="w-5 h-5 text-secondary" />
                 ) : (
                   <DocumentTextIcon className="w-5 h-5 text-primary" />
                 )}
-                <span className="text-foreground truncate max-w-[200px]">{activeDrag.name}</span>
+                <span className="text-fg truncate max-w-[200px]">{activeDrag.name}</span>
               </div>
             )}
           </DragOverlay>
@@ -430,7 +430,7 @@ export default function ProjectExplorer({
         <>
           <div className="fixed inset-0 z-[60]" onPointerDown={() => setMenu(null)} />
           <div
-            className="fixed z-[61] bg-popover border rounded-lg shadow-lg py-1"
+            className="fixed z-[61] bg-panel rounded-xl ring-1 ring-hairline shadow-(--shadow-popover) py-1 overflow-hidden"
             style={{ left: menu.position.left, top: menu.position.top, width: MENU_WIDTH }}
           >
             {menuItems.map((item, i) => (
@@ -440,8 +440,8 @@ export default function ProjectExplorer({
                   setMenu(null);
                   item.onClick();
                 }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-accent transition-colors ${
-                  'danger' in item && item.danger ? 'text-destructive' : 'text-foreground'
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13.5px] text-left transition-colors ${
+                  'danger' in item && item.danger ? 'text-destructive hover:bg-destructive-tint' : 'text-fg hover:bg-field'
                 }`}
               >
                 {item.icon}

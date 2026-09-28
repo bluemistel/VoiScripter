@@ -16,7 +16,10 @@ import {
   CloudArrowUpIcon,
   FolderIcon,
   ChevronDownIcon,
-  ChatBubbleBottomCenterTextIcon
+  ChatBubbleBottomCenterTextIcon,
+  XMarkIcon,
+  PencilSquareIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 import {
   DndContext,
@@ -39,6 +42,8 @@ import Settings from './Settings';
 import CSVExportDialog from './CSVExportDialog';
 import { Character, Project, Scene, GroupCredits } from '@/types';
 import DialogFrame from '@/components/common/DialogFrame';
+import DialogHeader from '@/components/common/DialogHeader';
+import Button from '@/components/common/Button';
 
 // ロゴパスを取得するカスタムフック
 const useLogoPath = () => {
@@ -116,13 +121,19 @@ function SortableSceneTab({
   return (
     <div
       ref={setNodeRef}
-      style={{ ...style, minWidth: 100, maxWidth: 120 }}
+      style={{ ...style, maxWidth: 120 }}
       data-scene-id={scene.id}
-      className={`relative rounded text-foreground text-sm font-medium mr-1 whitespace-nowrap group ${isSelected ? 'bg-secondary/70 text-secondary-foreground' : 'bg-muted hover:bg-accent'} ${isBlockDropTarget ? 'ring-2 ring-primary/60 bg-primary/10' : ''}`}
+      // アクティブタブはエディタのキャンバスと同じ面にして地続きに見せ、上辺にアクセント罫を引く
+      className={`relative shrink-0 rounded-t-xl text-[13px] whitespace-nowrap group transition-colors ${
+        isSelected
+          ? 'bg-canvas text-fg font-bold shadow-[inset_0_3px_0_var(--color-primary)]'
+          : 'text-fg-sub hover:bg-well'
+      } ${isBlockDropTarget ? 'ring-2 ring-inset ring-primary/60 bg-primary-tint' : ''}`}
     >
       {/* ドラッグ可能なメイン領域 */}
       <div
-        className="px-4 py-1 cursor-pointer flex items-center"
+        // モバイルは×が常時出るため右側を少し広く取る
+        className={`pl-5 pr-6 sm:pr-5 ${isSelected ? 'py-2' : 'py-[7px]'} cursor-pointer flex items-center focus:outline-none`}
         {...attributes}
         {...listeners}
         onMouseDown={handleMouseDown}
@@ -138,23 +149,54 @@ function SortableSceneTab({
       </div>
       
       {/* ×ボタン領域（ドラッグイベントを無効化） */}
-      <div className="absolute right-0 top-0 bottom-0 w-6 flex items-center justify-center">
+      <div className="absolute right-0.5 top-0 bottom-0 flex items-center justify-center">
         <button
           onClick={e => { e.stopPropagation(); onDelete(); }}
           onMouseDown={e => { e.stopPropagation(); }}
           onMouseUp={e => { e.stopPropagation(); }}
           onTouchStart={e => { e.stopPropagation(); }}
           onTouchEnd={e => { e.stopPropagation(); }}
-          className="p-1 rounded hover:bg-destructive/20 text-destructive sm:hidden sm:group-hover:inline-block md:hidden md:group-hover:inline-block inline-block"
+          className="size-4 rounded-full items-center justify-center text-fg-faint hover:text-destructive hover:bg-destructive-tint sm:hidden sm:group-hover:flex md:hidden md:group-hover:flex flex"
           title="シーンを削除"
         >
-          ×
+          <XMarkIcon className="size-3" strokeWidth={2.5} />
         </button>
       </div>
       {children}
     </div>
   );
 }
+
+/** ヘッダー右側のアイコンボタン。開いている機能だけ primary-tint の面を敷く */
+function HeaderIconButton({
+  onClick,
+  title,
+  active = false,
+  className = 'size-9',
+  children
+}: {
+  onClick: () => void;
+  title: string;
+  active?: boolean;
+  /** 大きさの上書き（モバイルのハンバーガーは44pxのタップ領域） */
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`${className} shrink-0 rounded-[10px] flex items-center justify-center text-primary transition-colors [&>svg]:size-5.5 ${
+        active ? 'bg-primary-tint' : 'hover:bg-field'
+      }`}
+      title={title}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** ドロップダウンメニューの面（枠線を使わず、ヘアラインのリングと落ち影で浮かせる） */
+const MENU_PANEL_CLASS = 'bg-panel rounded-xl ring-1 ring-hairline shadow-(--shadow-popover) py-1 overflow-hidden';
 
 interface HeaderProps {
   characters: Character[];
@@ -178,6 +220,7 @@ interface HeaderProps {
   groups: string[];
   onAddGroup: (group: string) => void;
   onDeleteGroup: (group: string) => void;
+  onRenameGroup?: (oldName: string, newName: string) => boolean;
   groupCredits: GroupCredits;
   onSetGroupCredit: (group: string, credit: string) => void;
   onReorderCharacters?: (newOrder: Character[]) => void;
@@ -206,6 +249,11 @@ interface HeaderProps {
   showLatestDownloadMenu?: boolean;
   onOpenLatestDownload?: () => void;
   blockDropTargetSceneId?: string | null;
+  /** 開いている機能のアイコンを強調するための状態（page 側で管理しているもの） */
+  isSearchOpen?: boolean;
+  isScriptViewOpen?: boolean;
+  isDataSyncOpen?: boolean;
+  isSettingsDialogOpen?: boolean;
 }
 
 // CSVインポート時の選択ダイアログ
@@ -223,24 +271,19 @@ function ImportChoiceDialog({ isOpen, onClose, onImportToCurrent, onImportToNew 
     <DialogFrame
       isOpen={isOpen}
       onCancel={handleCancel}
-      panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6 relative"
+      panelClassName="w-full max-w-md mx-4"
     >
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-foreground">CSVインポート先の選択</h3>
-          <button
-            onClick={handleCancel}
-            className="text-muted-foreground hover:text-foreground text-2xl"
-            title="キャンセル"
-          >
-            ×
-          </button>
-        </div>
-        <div className="space-y-4">
-          <button onClick={() => { setNewProjectName(''); onImportToCurrent(); }} className="w-full px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold">現在のプロジェクトのシーンに追加</button>
+        <DialogHeader icon={ArrowDownTrayIcon} title="CSVインポート先の選択" onClose={handleCancel} />
+        <div className="px-5 pb-5 space-y-5">
+          <Button variant="secondary-outline" className="w-full" onClick={() => { setNewProjectName(''); onImportToCurrent(); }}>
+            現在のプロジェクトのシーンに追加
+          </Button>
           <div>
-            <div className="mb-2 text-foreground">新しいプロジェクトを作成してインポート</div>
-            <input type="text" value={newProjectName} onChange={e => setNewProjectName(e.target.value)} placeholder="プロジェクト名" className="w-full p-2 border rounded mb-2" />
-            <button onClick={() => { onImportToNew(newProjectName); setNewProjectName(''); }} disabled={!newProjectName.trim()} className="w-full px-4 py-2 bg-secondary text-secondary-foreground rounded hover:bg-secondary/90 font-semibold disabled:opacity-50">新規作成してインポート</button>
+            <div className="text-[14.5px] font-bold text-fg mb-2.5">新しいプロジェクトを作成してインポート</div>
+            <input type="text" value={newProjectName} onChange={e => setNewProjectName(e.target.value)} placeholder="プロジェクト名" className="ui-input w-full mb-2.5" />
+            <Button variant="primary" className="w-full" onClick={() => { onImportToNew(newProjectName); setNewProjectName(''); }} disabled={!newProjectName.trim()}>
+              新規作成してインポート
+            </Button>
           </div>
         </div>
     </DialogFrame>
@@ -269,6 +312,7 @@ export default function Header(props: HeaderProps) {
     groups,
     onAddGroup,
     onDeleteGroup,
+    onRenameGroup,
     groupCredits,
     onSetGroupCredit,
     onReorderCharacters,
@@ -297,7 +341,11 @@ export default function Header(props: HeaderProps) {
     onNotification,
     showLatestDownloadMenu = false,
     onOpenLatestDownload,
-    blockDropTargetSceneId = null
+    blockDropTargetSceneId = null,
+    isSearchOpen = false,
+    isScriptViewOpen = false,
+    isDataSyncOpen = false,
+    isSettingsDialogOpen = false
   } = props;
   const logoPath = useLogoPath();
 
@@ -533,59 +581,53 @@ export default function Header(props: HeaderProps) {
   };
 
   return (
-    <header className="bg-background shadow-sm  sticky top-0 z-50 border-b">
+    <header className="bg-panel shadow-[0_1px_0_var(--color-hairline)] sticky top-0 z-50">
       {/* 上部ヘッダー（スクロールで非表示） */}
-      <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-16">
-        <h1 className="text-2xl font-bold text-primary tracking-tight flex items-center">
-          <img src={logoPath} alt="VoiScripter" className="hidden sm:block h-8 mr-2" />
-          <div className="ml-2 text-lg font-normal text-foreground align-middle">
-            <button
-              onClick={onOpenProjectExplorer}
-              className="flex items-center gap-1.5 text-foreground cursor-pointer hover:bg-accent rounded px-2 py-1 transition"
-              title="プロジェクトを開く"
-            >
-              <FolderIcon className="w-5 h-5 shrink-0 text-secondary" />
-              <span className="max-w-[200px] truncate">{projectName}</span>
-              <ChevronDownIcon className="w-3.5 h-3.5 shrink-0 opacity-60" />
-            </button>
-          </div>
-          {/* プロジェクト操作ボタン */}
-          <div className="flex items-center space-x-1 ml-2">
-            <button
-              onClick={onNewProject}
-              className="p-1 text-primary hover:bg-accent rounded-lg transition"
-              title="新しいプロジェクト"
-            >
-              <DocumentTextIcon className="w-7 h-7"/>
-            </button>
-            <span
-              className="hidden sm:inline text-xs text-muted-foreground whitespace-nowrap select-none"
-              title="台本全体の文字数（全シーンの台詞の合計。ト書き・改行は含みません）"
-            >
-              {totalScriptChars.toLocaleString()}字
-            </span>
-          </div>
+      <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-15">
+        <h1 className="flex items-center gap-2.5 min-w-0">
+          <img src={logoPath} alt="VoiScripter" className="hidden sm:block h-8" />
+          <button
+            onClick={onOpenProjectExplorer}
+            className="flex items-center gap-[7px] min-w-0 px-3 py-1.5 rounded-full bg-field text-fg cursor-pointer transition-shadow hover:shadow-[inset_0_0_0_1.5px_var(--color-hairline)]"
+            title="プロジェクトを開く"
+          >
+            <FolderIcon className="size-4.5 shrink-0 text-secondary" />
+            <span className="max-w-[200px] truncate text-[15px] font-medium">{projectName}</span>
+            <ChevronDownIcon className="size-[13px] shrink-0 opacity-50" />
+          </button>
+          {/* プロジェクト操作ボタン（モバイルはハンバーガーメニューに集約） */}
+          <span className="hidden md:flex">
+            <HeaderIconButton onClick={onNewProject} title="新しいプロジェクト">
+              <DocumentTextIcon />
+            </HeaderIconButton>
+          </span>
+          <span
+            className="hidden sm:inline text-[11px] text-fg-faint whitespace-nowrap select-none"
+            title="台本全体の文字数（全シーンの台詞の合計。ト書き・改行は含みません）"
+          >
+            {totalScriptChars.toLocaleString()}字
+          </span>
         </h1>
         {/* Desktop menu - hidden on mobile */}
-        <div className="hidden md:flex items-center space-x-2">
-          <button
+        <div className="hidden md:flex items-center gap-0.5">
+          <HeaderIconButton
             onClick={() => setIsCSVExportDialogOpen(true)}
-            className="p-1 text-primary hover:bg-accent rounded-lg transition"
             title="エクスポート"
+            active={isCSVExportDialogOpen}
           >
-            <ArrowUpTrayIcon className="w-7 h-7"/>
-          </button>
+            <ArrowUpTrayIcon />
+          </HeaderIconButton>
           <div className="relative" ref={importMenuRef}>
-            <button
+            <HeaderIconButton
               onClick={() => setIsImportMenuOpen(v => !v)}
-              className="p-1 text-primary hover:bg-accent rounded-lg transition"
               title="インポート"
+              active={isImportMenuOpen}
             >
-              <ArrowDownTrayIcon className="w-7 h-7"/>
-            </button>
+              <ArrowDownTrayIcon />
+            </HeaderIconButton>
             {isImportMenuOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-popover border rounded-lg shadow-lg z-50">
-                <label className="block w-full text-left px-4 py-2 hover:bg-accent text-foreground cursor-pointer">
+              <div className={`absolute right-0 mt-2 w-60 z-50 ${MENU_PANEL_CLASS}`}>
+                <label className="block w-full text-left px-4 py-2 text-[13.5px] hover:bg-field text-fg cursor-pointer">
                   CSVインポート（話者,セリフ）
                   <input
                     type="file"
@@ -594,7 +636,7 @@ export default function Header(props: HeaderProps) {
                     onChange={(e) => handleFileImport(e, 'script')}
                   />
                 </label>
-                <label className="block w-full text-left px-4 py-2 hover:bg-accent text-foreground cursor-pointer">
+                <label className="block w-full text-left px-4 py-2 text-[13.5px] hover:bg-field text-fg cursor-pointer">
                   キャラクター設定のインポート
                   <input
                     type="file"
@@ -603,7 +645,7 @@ export default function Header(props: HeaderProps) {
                     onChange={(e) => handleFileImport(e, 'character')}
                   />
                 </label>
-                <label className="block w-full text-left px-4 py-2 hover:bg-accent text-foreground cursor-pointer">
+                <label className="block w-full text-left px-4 py-2 text-[13.5px] hover:bg-field text-fg cursor-pointer">
                   プロジェクトのインポート（json）
                   <input
                     type="file"
@@ -615,92 +657,85 @@ export default function Header(props: HeaderProps) {
               </div>
             )}
           </div>
-          <button
-            onClick={onOpenSearch}
-            className="p-1 text-primary hover:bg-accent rounded-lg transition"
-            title="検索 (Ctrl+F)"
-          >
-            <MagnifyingGlassIcon className="w-7 h-7" />
-          </button>
-          <button
+          <HeaderIconButton onClick={onOpenSearch} title="検索 (Ctrl+F)" active={isSearchOpen}>
+            <MagnifyingGlassIcon />
+          </HeaderIconButton>
+          <HeaderIconButton
             onClick={onOpenScriptView}
-            className="p-1 text-primary hover:bg-accent rounded-lg transition"
             title="ビュー（チャット / キャラ台詞）"
+            active={isScriptViewOpen}
           >
-            <ChatBubbleBottomCenterTextIcon className="w-7 h-7" />
-          </button>
-          <button
+            <ChatBubbleBottomCenterTextIcon />
+          </HeaderIconButton>
+          <HeaderIconButton
             onClick={() => setIsCharacterModalOpen(true)}
-            className="p-1 text-primary hover:bg-accent rounded-lg transition"
             title="キャラクター設定"
+            active={isCharacterModalOpen}
           >
-            <UsersIcon className="w-7 h-7" />
-          </button>
-          <button
-            onClick={toggleTheme}
-            className="p-1 text-primary hover:bg-accent rounded-lg transition"
-            title="ダークモード切替"
-          >
-            {isDarkMode ? (
-              <SunIcon className="w-7 h-7" />
-            ) : (
-              <MoonIcon className="w-7 h-7" />
-            )}
-          </button>
-          <button
-            onClick={onOpenDataSync}
-            className="p-1 text-primary hover:bg-accent rounded-lg transition"
-            title="データ同期"
-          >
-            <CloudArrowUpIcon className="w-7 h-7" />
-          </button>
+            <UsersIcon />
+          </HeaderIconButton>
+          <HeaderIconButton onClick={toggleTheme} title="ダークモード切替">
+            {isDarkMode ? <SunIcon /> : <MoonIcon />}
+          </HeaderIconButton>
+          <HeaderIconButton onClick={onOpenDataSync} title="データ同期" active={isDataSyncOpen}>
+            <CloudArrowUpIcon />
+          </HeaderIconButton>
           {showLatestDownloadMenu && (
             <button
               onClick={onOpenLatestDownload}
-              className="px-2 py-1 text-xs text-primary hover:bg-accent rounded-lg transition border"
+              className="h-8 px-3 mx-1 text-xs font-bold text-primary-text bg-field rounded-full transition-shadow hover:shadow-[inset_0_0_0_1.5px_var(--color-hairline)]"
               title="最新版のダウンロード案内"
             >
               最新版のDL
             </button>
           )}
-          <button
-            onClick={onOpenSettings}
-            className="p-1 text-primary hover:bg-accent rounded-lg transition"
-            title="設定"
-          >
-            <Cog6ToothIcon className="w-7 h-7" />
-          </button>
+          <HeaderIconButton onClick={onOpenSettings} title="設定" active={isSettingsDialogOpen}>
+            <Cog6ToothIcon />
+          </HeaderIconButton>
         </div>
 
         {/* Mobile hamburger menu - visible on mobile only */}
         <div className="md:hidden relative" ref={mobileMenuRef}>
-          <button
+          <HeaderIconButton
             onClick={() => setIsMobileMenuOpen(v => !v)}
-            className="p-1 text-primary hover:bg-accent rounded-lg transition"
             title="メニュー"
+            active={isMobileMenuOpen}
+            className="size-11"
           >
-            <Bars3Icon className="w-7 h-7" />
-          </button>
-          
+            <Bars3Icon />
+          </HeaderIconButton>
+
           {isMobileMenuOpen && (
-            <div className="absolute right-0 mt-2 w-56 bg-popover border rounded-lg shadow-lg z-50">
+            <div className={`absolute right-0 mt-2 w-72 z-50 ${MENU_PANEL_CLASS}`}>
+              <button
+                onClick={() => {
+                  onNewProject();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="block w-full text-left px-4 py-3 text-[13.5px] hover:bg-field text-fg"
+              >
+                <div className="flex items-center space-x-3">
+                  <DocumentTextIcon className="size-5 text-primary-text" />
+                  <span>新しいプロジェクト</span>
+                </div>
+              </button>
               <button
                 onClick={() => {
                   setIsCSVExportDialogOpen(true);
                   setIsMobileMenuOpen(false);
                 }}
-                className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground"
+                className="block w-full text-left px-4 py-3 text-[13.5px] hover:bg-field text-fg"
               >
                 <div className="flex items-center space-x-3">
-                  <ArrowUpTrayIcon className="w-5 h-5" />
+                  <ArrowUpTrayIcon className="size-5 text-primary-text" />
                   <span>エクスポート</span>
                 </div>
               </button>
               
-              <div className="border-t">
-                <label className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground cursor-pointer">
+              <div className="mt-1 pt-1 shadow-[0_-1px_0_var(--color-hairline)]">
+                <label className="block w-full text-left px-4 py-3 text-[13.5px] hover:bg-field text-fg cursor-pointer">
                   <div className="flex items-center space-x-3">
-                    <ArrowDownTrayIcon className="w-5 h-5" />
+                    <ArrowDownTrayIcon className="size-5 text-primary-text" />
                     <span>CSVインポート（話者,セリフ）</span>
                   </div>
                   <input
@@ -713,9 +748,9 @@ export default function Header(props: HeaderProps) {
                     }}
                   />
                 </label>
-                <label className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground cursor-pointer">
+                <label className="block w-full text-left px-4 py-3 text-[13.5px] hover:bg-field text-fg cursor-pointer">
                   <div className="flex items-center space-x-3">
-                    <ArrowDownTrayIcon className="w-5 h-5" />
+                    <ArrowDownTrayIcon className="size-5 text-primary-text" />
                     <span>キャラクター設定のインポート</span>
                   </div>
                   <input
@@ -728,9 +763,9 @@ export default function Header(props: HeaderProps) {
                     }}
                   />
                 </label>
-                <label className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground cursor-pointer">
+                <label className="block w-full text-left px-4 py-3 text-[13.5px] hover:bg-field text-fg cursor-pointer">
                   <div className="flex items-center space-x-3">
-                    <ArrowDownTrayIcon className="w-5 h-5" />
+                    <ArrowDownTrayIcon className="size-5 text-primary-text" />
                     <span>プロジェクトのインポート（json）</span>
                   </div>
                   <input
@@ -745,16 +780,16 @@ export default function Header(props: HeaderProps) {
                 </label>
               </div>
               
-              <div className="border-t">
+              <div className="mt-1 pt-1 shadow-[0_-1px_0_var(--color-hairline)]">
                 <button
                   onClick={() => {
                     onOpenSearch();
                     setIsMobileMenuOpen(false);
                   }}
-                  className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground"
+                  className="block w-full text-left px-4 py-3 text-[13.5px] hover:bg-field text-fg"
                 >
                   <div className="flex items-center space-x-3">
-                    <MagnifyingGlassIcon className="w-5 h-5" />
+                    <MagnifyingGlassIcon className="size-5 text-primary-text" />
                     <span>検索</span>
                   </div>
                 </button>
@@ -764,10 +799,10 @@ export default function Header(props: HeaderProps) {
                     onOpenScriptView();
                     setIsMobileMenuOpen(false);
                   }}
-                  className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground"
+                  className="block w-full text-left px-4 py-3 text-[13.5px] hover:bg-field text-fg"
                 >
                   <div className="flex items-center space-x-3">
-                    <ChatBubbleBottomCenterTextIcon className="w-5 h-5" />
+                    <ChatBubbleBottomCenterTextIcon className="size-5 text-primary-text" />
                     <span>ビュー（チャット / キャラ台詞）</span>
                   </div>
                 </button>
@@ -777,10 +812,10 @@ export default function Header(props: HeaderProps) {
                     setIsCharacterModalOpen(true);
                     setIsMobileMenuOpen(false);
                   }}
-                  className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground"
+                  className="block w-full text-left px-4 py-3 text-[13.5px] hover:bg-field text-fg"
                 >
                   <div className="flex items-center space-x-3">
-                    <UsersIcon className="w-5 h-5" />
+                    <UsersIcon className="size-5 text-primary-text" />
                     <span>キャラクター設定</span>
                   </div>
                 </button>
@@ -790,13 +825,13 @@ export default function Header(props: HeaderProps) {
                     toggleTheme();
                     setIsMobileMenuOpen(false);
                   }}
-                  className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground"
+                  className="block w-full text-left px-4 py-3 text-[13.5px] hover:bg-field text-fg"
                 >
                   <div className="flex items-center space-x-3">
                     {isDarkMode ? (
-                      <SunIcon className="w-5 h-5" />
+                      <SunIcon className="size-5 text-primary-text" />
                     ) : (
-                      <MoonIcon className="w-5 h-5" />
+                      <MoonIcon className="size-5 text-primary-text" />
                     )}
                     <span>ダークモード切替</span>
                   </div>
@@ -807,10 +842,10 @@ export default function Header(props: HeaderProps) {
                     onOpenDataSync();
                     setIsMobileMenuOpen(false);
                   }}
-                  className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground"
+                  className="block w-full text-left px-4 py-3 text-[13.5px] hover:bg-field text-fg"
                 >
                   <div className="flex items-center space-x-3">
-                    <CloudArrowUpIcon className="w-5 h-5" />
+                    <CloudArrowUpIcon className="size-5 text-primary-text" />
                     <span>データ同期</span>
                   </div>
                 </button>
@@ -820,10 +855,10 @@ export default function Header(props: HeaderProps) {
                       onOpenLatestDownload?.();
                       setIsMobileMenuOpen(false);
                     }}
-                    className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground"
+                    className="block w-full text-left px-4 py-3 text-[13.5px] hover:bg-field text-fg"
                   >
                     <div className="flex items-center space-x-3">
-                      <DocumentTextIcon className="w-5 h-5" />
+                      <DocumentTextIcon className="size-5 text-primary-text" />
                       <span>最新版のDL</span>
                     </div>
                   </button>
@@ -834,10 +869,10 @@ export default function Header(props: HeaderProps) {
                     onOpenSettings();
                     setIsMobileMenuOpen(false);
                   }}
-                  className="block w-full text-left px-4 py-3 hover:bg-accent text-foreground"
+                  className="block w-full text-left px-4 py-3 text-[13.5px] hover:bg-field text-fg"
                 >
                   <div className="flex items-center space-x-3">
-                    <Cog6ToothIcon className="w-5 h-5" />
+                    <Cog6ToothIcon className="size-5 text-primary-text" />
                     <span>設定</span>
                   </div>
                 </button>
@@ -847,7 +882,8 @@ export default function Header(props: HeaderProps) {
         </div>
       </div>
       {/* 下部ヘッダー（シーンタブ、固定表示） */}
-      <div className="sticky top-0 z-40 flex items-center space-x-2 px-4 py-2 border-b bg-background">
+      {/* タブ行はヘッダーと同じ面。アクティブタブだけキャンバス色にして下のエディタとつなげる */}
+      <div className="sticky top-0 z-40 flex items-end gap-[3px] px-4 min-h-8">
         {scenes.length > 1 && (
           <DndContext 
             sensors={sceneSensors} 
@@ -861,7 +897,7 @@ export default function Header(props: HeaderProps) {
             >
               <div
                 ref={sceneTabContainerRef}
-                className="flex overflow-x-auto no-scrollbar"
+                className="flex items-end gap-[3px] overflow-x-auto no-scrollbar"
               >
                 {scenes.map((scene, idx) => (
                   <SortableSceneTab
@@ -884,10 +920,10 @@ export default function Header(props: HeaderProps) {
         {scenes.length < 30 && (
           <button
             onClick={() => setIsAddSceneDialogOpen(true)}
-            className="p-1 rounded-full bg-background/95 backdrop-blur  hover:bg-muted transition"
+            className="size-6.5 shrink-0 mb-[5px] ml-1 rounded-full bg-field flex items-center justify-center text-fg-faint transition-colors hover:text-fg"
             title="シーンを追加"
           >
-            <PlusIcon className="w-5 h-5" />
+            <PlusIcon className="size-[15px]" strokeWidth={2} />
           </button>
         )}
       </div>
@@ -896,21 +932,23 @@ export default function Header(props: HeaderProps) {
         <DialogFrame
           isOpen={isAddSceneDialogOpen}
           onCancel={() => { setIsAddSceneDialogOpen(false); setSceneError(''); setNewSceneName(''); }}
-          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+          panelClassName="w-full max-w-md mx-4"
         >
-            <h3 className="text-lg font-semibold text-foreground mb-4">シーンを追加</h3>
-            <input
-              type="text"
-              value={newSceneName}
-              onChange={e => { setNewSceneName(e.target.value); setSceneError(''); }}
-              className="w-full p-2 border rounded mb-2"
-              placeholder="シーン名"
-              autoFocus
-            />
-            {sceneError && <p className="text-sm text-destructive mb-2">{sceneError}</p>}
-            <div className="flex justify-end space-x-2">
-              <button onClick={() => { setIsAddSceneDialogOpen(false); setSceneError(''); setNewSceneName(''); }} className="px-4 py-2 text-muted-foreground hover:bg-accent rounded">キャンセル</button>
-              <button onClick={handleAddSceneLocal} className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold">OK</button>
+            <DialogHeader icon={PlusIcon} title="シーンを追加" onClose={() => { setIsAddSceneDialogOpen(false); setSceneError(''); setNewSceneName(''); }} />
+            <div className="px-5 pb-5">
+              <input
+                type="text"
+                value={newSceneName}
+                onChange={e => { setNewSceneName(e.target.value); setSceneError(''); }}
+                className="ui-input w-full"
+                placeholder="シーン名"
+                autoFocus
+              />
+              {sceneError && <p className="text-xs text-destructive mt-2">{sceneError}</p>}
+              <div className="flex justify-end gap-2 mt-5">
+                <Button variant="secondary" onClick={() => { setIsAddSceneDialogOpen(false); setSceneError(''); setNewSceneName(''); }}>キャンセル</Button>
+                <Button variant="primary" onClick={handleAddSceneLocal}>OK</Button>
+              </div>
             </div>
         </DialogFrame>
       )}
@@ -925,6 +963,7 @@ export default function Header(props: HeaderProps) {
           groups={groups}
           onAddGroup={onAddGroup}
           onDeleteGroup={onDeleteGroup}
+          onRenameGroup={onRenameGroup}
           groupCredits={groupCredits}
           onSetGroupCredit={onSetGroupCredit}
           onReorderCharacters={onReorderCharacters}
@@ -992,21 +1031,23 @@ export default function Header(props: HeaderProps) {
         <DialogFrame
           isOpen={isRenameSceneDialogOpen}
           onCancel={() => { setIsRenameSceneDialogOpen(false); setRenameSceneError(''); }}
-          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+          panelClassName="w-full max-w-md mx-4"
         >
-            <h3 className="text-lg font-semibold text-foreground mb-4">シーン名の変更</h3>
-            <input
-              type="text"
-              value={renameSceneName}
-              onChange={e => { setRenameSceneName(e.target.value); setRenameSceneError(''); }}
-              className="w-full p-2 border rounded mb-2"
-              placeholder="新しいシーン名"
-              autoFocus
-            />
-            {renameSceneError && <p className="text-sm text-destructive mb-2">{renameSceneError}</p>}
-            <div className="flex justify-end space-x-2">
-              <button onClick={() => { setIsRenameSceneDialogOpen(false); setRenameSceneError(''); }} className="px-4 py-2 text-muted-foreground hover:bg-accent rounded">キャンセル</button>
-              <button onClick={handleRenameSceneLocal} className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 font-semibold">変更</button>
+            <DialogHeader icon={PencilSquareIcon} title="シーン名の変更" onClose={() => { setIsRenameSceneDialogOpen(false); setRenameSceneError(''); }} />
+            <div className="px-5 pb-5">
+              <input
+                type="text"
+                value={renameSceneName}
+                onChange={e => { setRenameSceneName(e.target.value); setRenameSceneError(''); }}
+                className="ui-input w-full"
+                placeholder="新しいシーン名"
+                autoFocus
+              />
+              {renameSceneError && <p className="text-xs text-destructive mt-2">{renameSceneError}</p>}
+              <div className="flex justify-end gap-2 mt-5">
+                <Button variant="secondary" onClick={() => { setIsRenameSceneDialogOpen(false); setRenameSceneError(''); }}>キャンセル</Button>
+                <Button variant="primary" onClick={handleRenameSceneLocal}>変更</Button>
+              </div>
             </div>
         </DialogFrame>
       )}
@@ -1015,13 +1056,15 @@ export default function Header(props: HeaderProps) {
         <DialogFrame
           isOpen={isDeleteSceneDialogOpen}
           onCancel={() => setIsDeleteSceneDialogOpen(false)}
-          panelClassName="bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6"
+          panelClassName="w-full max-w-md mx-4"
         >
-            <h3 className="text-lg font-semibold text-foreground mb-4">シーンの削除</h3>
-            <p className="mb-4 text-foreground">「{deleteTargetSceneName}」を削除しますか？<br/>この操作は元に戻せません。</p>
-            <div className="flex justify-end space-x-2">
-              <button onClick={() => setIsDeleteSceneDialogOpen(false)} className="px-4 py-2 text-muted-foreground hover:bg-accent rounded">キャンセル</button>
-              <button onClick={handleDeleteSceneLocal} className="px-4 py-2 bg-destructive text-destructive-foreground rounded hover:bg-destructive/80 font-semibold">削除</button>
+            <DialogHeader icon={TrashIcon} title="シーンの削除" onClose={() => setIsDeleteSceneDialogOpen(false)} />
+            <div className="px-5 pb-5">
+              <p className="text-[13.5px] text-fg leading-relaxed">「{deleteTargetSceneName}」を削除しますか？<br/>この操作は元に戻せません。</p>
+              <div className="flex justify-end gap-2 mt-5">
+                <Button variant="secondary" onClick={() => setIsDeleteSceneDialogOpen(false)}>キャンセル</Button>
+                <Button variant="destructive" onClick={handleDeleteSceneLocal}>削除</Button>
+              </div>
             </div>
         </DialogFrame>
       )}

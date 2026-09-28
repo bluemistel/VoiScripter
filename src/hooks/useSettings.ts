@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { DataManagementHook } from './useDataManagement';
 
 // フキダシの見た目テーマ
-export type BubbleTheme = 'classic' | 'pop' | 'cinema' | 'chat';
+// フキダシのデザイン。旧「クラシック」は「ポップ」に統合した（保存値 'classic' は 'pop' として読み込む）
+export type BubbleTheme = 'pop' | 'cinema' | 'chat';
 
 export interface SettingsHook {
   saveDirectory: string;
@@ -39,7 +40,7 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
   const [reverseToolbarOrder, setReverseToolbarOrder] = useState<boolean>(false);
   const [fontSize, setFontSize] = useState<number>(16);
   const [simpleMode, setSimpleMode] = useState<boolean>(false);
-  const [bubbleTheme, setBubbleTheme] = useState<BubbleTheme>('classic');
+  const [bubbleTheme, setBubbleTheme] = useState<BubbleTheme>('pop');
   const [stagePanelEnabled, setStagePanelEnabled] = useState<boolean>(false);
   const [stagePanelSide, setStagePanelSide] = useState<'left' | 'right'>('right');
 
@@ -72,7 +73,9 @@ export const useSettings = (dataManagement: DataManagementHook): SettingsHook =>
           setSimpleMode(savedSimpleMode === 'true');
         }
         const savedBubbleTheme = await dataManagement.loadData('voiscripter_bubbleTheme');
-        if (savedBubbleTheme === 'classic' || savedBubbleTheme === 'pop' || savedBubbleTheme === 'cinema' || savedBubbleTheme === 'chat') {
+        if (savedBubbleTheme === 'classic') {
+          setBubbleTheme('pop');
+        } else if (savedBubbleTheme === 'pop' || savedBubbleTheme === 'cinema' || savedBubbleTheme === 'chat') {
           setBubbleTheme(savedBubbleTheme);
         }
         const savedStageEnabled = await dataManagement.loadData('voiscripter_stagePanelEnabled');
