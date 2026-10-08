@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { createScriptBlock } from '../utils/blockFactory';
+import { createScriptBlock, speakerChangeUpdates } from '../utils/blockFactory';
 import { Character } from '../types';
 
 const characters: Character[] = [
@@ -52,5 +52,20 @@ describe('createScriptBlock', () => {
     const block = createScriptBlock('linked-first', 'normal', characters);
     expect(block.userPresetId).toBe('p-angry');
     expect(block.emotion).toBe('怒り');
+  });
+});
+
+describe('speakerChangeUpdates', () => {
+  it('話者を切り替えたら、新しい話者の一番上のプリセットを付ける', () => {
+    expect(speakerChangeUpdates('akane', characters)).toEqual({ characterId: 'akane', emotion: 'normal', userPresetId: 'p-std' });
+  });
+
+  it('一番上のプリセットに連動する表情があれば、表情も合わせる', () => {
+    expect(speakerChangeUpdates('linked-first', characters)).toEqual({ characterId: 'linked-first', emotion: '怒り', userPresetId: 'p-angry' });
+  });
+
+  it('プリセットを持たない話者・ト書きでは、前の話者のプリセットと表情を外す', () => {
+    expect(speakerChangeUpdates('plain', characters)).toEqual({ characterId: 'plain', emotion: 'normal', userPresetId: undefined });
+    expect(speakerChangeUpdates('', characters)).toEqual({ characterId: '', emotion: 'normal', userPresetId: undefined });
   });
 });

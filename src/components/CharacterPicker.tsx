@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Character } from '@/types';
 import { UsersIcon } from '@heroicons/react/24/outline';
 import CharacterGridAvatar from '@/components/common/CharacterGridAvatar';
@@ -14,7 +14,16 @@ interface CharacterPickerProps {
   onSelect: (characterId: string) => void;
   onClose: () => void;
   title?: string;
+  /**
+   * 指定するとデスクトップ表示では画面中央ではなく、この要素（話者アイコンなど）の横に重ねて表示する。
+   * アイコンから視線を大きく動かさずに選べるようにするため。モバイルは従来どおりボトムシート。
+   */
+  anchorEl?: HTMLElement | null;
 }
+
+/** アンカー横に出すときの、アンカーとの間隔と画面端からの余白 */
+const ANCHOR_GAP = 10;
+const VIEWPORT_MARGIN = 8;
 
 const GRID_COLUMNS = 2;
 /** キャラクターに割り当てる数字キー（有効キャラクターの並び順で先頭9名） */
@@ -27,7 +36,8 @@ export default function CharacterPicker({
   initialCharacterId,
   onSelect,
   onClose,
-  title = '話者を選択'
+  title = '話者を選択',
+  anchorEl = null
 }: CharacterPickerProps) {
   // 選択肢は先頭がト書き（characterId: ''）、以降が有効キャラクター
   const options = useMemo(
@@ -66,6 +76,44 @@ export default function CharacterPicker({
   useEffect(() => {
     itemRefs.current[activeIndex]?.scrollIntoView({ block: 'nearest' });
   }, [activeIndex]);
+
+  // アンカー横の表示位置。右側に出し、入らなければ左側、どちらも入らなければアンカーの下に出す。
+  // 縦は画面内に収める。スクロールやリサイズでアンカーが動いたら追従する。
+  const isAnchored = !isMobileView && !!anchorEl;
+  const [anchoredPosition, setAnchoredPosition] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!isAnchored || !anchorEl) return;
+    const place = () => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      const anchor = anchorEl.getBoundingClientRect();
+      const width = panel.offsetWidth;
+      const height = panel.offsetHeight;
+      const maxLeft = window.innerWidth - width - VIEWPORT_MARGIN;
+      const maxTop = window.innerHeight - height - VIEWPORT_MARGIN;
+      let left: number;
+      let top = anchor.top;
+      if (anchor.right + ANCHOR_GAP <= maxLeft) {
+        left = anchor.right + ANCHOR_GAP;
+      } else if (anchor.left - ANCHOR_GAP - width >= VIEWPORT_MARGIN) {
+        left = anchor.left - ANCHOR_GAP - width;
+      } else {
+        left = anchor.left;
+        top = anchor.bottom + ANCHOR_GAP;
+      }
+      setAnchoredPosition({
+        left: Math.max(VIEWPORT_MARGIN, Math.min(left, maxLeft)),
+        top: Math.max(VIEWPORT_MARGIN, Math.min(top, maxTop))
+      });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [isAnchored, anchorEl]);
 
   const cancel = () => onClose();
 
@@ -187,6 +235,30 @@ export default function CharacterPicker({
           ref={panelRef}
           tabIndex={-1}
           className="w-full bg-panel text-fg rounded-t-[22px] shadow-(--shadow-dialog) pb-[max(1.25rem,env(safe-area-inset-bottom))] focus:outline-none"
+          onClick={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
+        >
+          {header}
+          {gridItems}
+          {hint}
+        </div>
+      </div>
+    );
+  }
+
+  if (isAnchored) {
+    // 背景は暗くせず、アイコンの横にポップオーバーとして重ねる（外側クリックで閉じる）
+    return (
+      <div className="fixed inset-0 z-50" onClick={cancel}>
+        <div
+          ref={panelRef}
+          tabIndex={-1}
+          className="fixed w-96 max-w-[calc(100vw-16px)] bg-panel text-fg rounded-[22px] ring-1 ring-hairline shadow-(--shadow-dialog) pb-5 focus:outline-none"
+          // 位置が決まるまでは見せない（中央から飛ぶように見えないように）
+          style={anchoredPosition
+            ? { left: anchoredPosition.left, top: anchoredPosition.top }
+            : { left: 0, top: 0, visibility: 'hidden' }}
           onClick={e => e.stopPropagation()}
           onPointerDown={e => e.stopPropagation()}
           onMouseDown={e => e.stopPropagation()}

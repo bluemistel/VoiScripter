@@ -41,3 +41,19 @@ export const createScriptBlock = (
   if (!characterId || !characters) return block;
   return withDefaultPreset(block, characters.find(c => c.id === characterId));
 };
+
+/**
+ * 話者を切り替えるときの更新内容。表情は標準に戻し、新しい話者の既定プリセットを付ける
+ * （ブロック追加時と同じ規則。プリセットを持たない話者・ト書きはプリセットなし）。
+ * 前の話者の表情・プリセットを持ち越さないよう、3つとも必ず上書きする。
+ */
+export const speakerChangeUpdates = (
+  characterId: string,
+  characters: Character[]
+): Pick<ScriptBlock, 'characterId' | 'emotion' | 'userPresetId'> => {
+  const base: ScriptBlock = { id: '', characterId, emotion: 'normal', text: '' };
+  const { emotion, userPresetId } = characterId
+    ? withDefaultPreset(base, characters.find(c => c.id === characterId))
+    : base;
+  return { characterId, emotion, userPresetId };
+};

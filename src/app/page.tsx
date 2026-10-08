@@ -723,6 +723,7 @@ export default function Home() {
         scenes={project.scenes}
         selectedSceneId={selectedSceneId}
         onAddScene={(name: string) => projectManagement.handleAddScene(name, characters)}
+        onDuplicateScene={projectManagement.handleDuplicateScene}
         onRenameScene={projectManagement.handleRenameScene}
         onDeleteScene={(sceneId: string) => {
           delete sceneSelectionMemoryRef.current[sceneId];
@@ -1012,6 +1013,14 @@ export default function Home() {
             uiState.setIsProjectExplorerOpen(false);
           } catch (error) {
             showNotification('プロジェクトの作成に失敗しました', 'error');
+          }
+        }}
+        onDuplicateProject={async (id) => {
+          const newId = await projectManagement.duplicateProjectById(id);
+          // 複製は元と同じフォルダに置く
+          const folderId = projectExplorer.tree.projectLocations[id] ?? null;
+          if (newId && folderId) {
+            projectExplorer.moveProject(newId, folderId);
           }
         }}
         onRenameProject={async (oldId, newName) => {

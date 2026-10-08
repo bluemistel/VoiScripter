@@ -3,6 +3,9 @@ import { Character, Project, Scene } from '@/types';
 import { buildEmptyScript } from '@/utils/scriptDefaults';
 import { createScriptBlock } from '@/utils/blockFactory';
 import { PROJECT_KEY_SUFFIXES } from '@/utils/explorerTree';
+import { nextCopyName } from '@/utils/duplicateNaming';
+import { duplicateScene } from '@/utils/sceneDuplicate';
+import { copyStoryPanelAsset } from '@/utils/storyPanelAssets';
 import { DataManagementHook } from './useDataManagement';
 
 // 全ストレージキーからプロジェクト本体キーだけを抽出してプロジェクトIDに変換
@@ -28,8 +31,12 @@ export interface ProjectManagementHook {
   handleRenameProject: (newName: string) => void;
   deleteProjectById: (id: string, options?: { silent?: boolean }) => Promise<void>;
   renameProjectById: (oldId: string, newName: string) => Promise<void>;
+  /** プロジェクトを「名前 (1)」の名前で複製する。開いているプロジェクトは切り替えない。作成した名前を返す */
+  duplicateProjectById: (id: string) => Promise<string | null>;
   refreshProjectList: () => Promise<void>;
   handleAddScene: (name: string, characters?: Character[]) => void;
+  /** シーンを複製し、元のシーンの直後に追加して開く */
+  handleDuplicateScene: (sceneId: string, name: string) => void;
   handleRenameScene: (sceneId: string, newName: string) => void;
   handleDeleteScene: (sceneId: string) => void;
   handleSelectScene: (sceneId: string) => void;
@@ -726,6 +733,60 @@ export const useProjectManagement = (
 
   const handleRenameProject = (newName: string) => { renameProjectById(project.id, newName); };
 
+  // プロジェクト複製（開いていないプロジェクトも複製可能）
+  const duplicateProjectById = async (id: string): Promise<string | null> => {
+    const newId = nextCopyName(id, projectList);
+    try {
+      // 開いているプロジェクトは保存が遅延しているため、メモリ上の最新の状態を使う
+      let source: Project;
+      if (id === projectId) {
+        source = project;
+      } else {
+        const raw = await dataManagement.loadData(`voiscripter_project_${id}`);
+        if (raw === null) {
+          onNotification('プロジェクトデータが見つかりません', 'error');
+          return null;
+        }
+        source = JSON.parse(raw) as Project;
+      }
+
+      // 同期設定は引き継がない（引き継ぐと複製側の変更が元のプロジェクトの同期先を上書きしてしまう）
+      const { syncMeta: _syncMeta, ...rest } = source;
+      const duplicated: Project = { ...rest, id: newId, name: newId };
+      await dataManagement.saveData(`voiscripter_project_${newId}`, JSON.stringify(duplicated));
+
+      // プロジェクト単位のキャラクター設定・グループ・最後に開いたシーンも写す（undo/redo は写さない）
+      for (const suffix of ['_characters', '_groups', '_lastScene']) {
+        const value = await dataManagement.loadData(`voiscripter_project_${id}${suffix}`);
+        if (value !== null) {
+          await dataManagement.saveData(`voiscripter_project_${newId}${suffix}`, value);
+        }
+      }
+
+      // ストーリーパネルの画像はプロジェクトIDを含むキーで保存されているため、複製先へ写す
+      for (const scene of duplicated.scenes ?? []) {
+        for (const script of scene.scripts ?? []) {
+          for (const segment of script.storySegments ?? []) {
+            if (!segment.imageRef?.assetId) continue;
+            await copyStoryPanelAsset(
+              { projectId: id, scriptId: script.id },
+              { projectId: newId, scriptId: script.id },
+              segment.id
+            );
+          }
+        }
+      }
+
+      setProjectList(prev => (prev.includes(newId) ? prev : [...prev, newId]));
+      onNotification(`プロジェクト「${newId}」を作成しました`, 'success');
+      return newId;
+    } catch (error) {
+      console.error('プロジェクト複製エラー:', error);
+      onNotification('プロジェクトの複製に失敗しました', 'error');
+      return null;
+    }
+  };
+
   // 新しいプロジェクト作成
   const handleNewProject = (name: string, initialCharacterId?: string, characters?: Character[]): Project => {
     const emptyScript = buildEmptyScript({ title: '新しいシーン' });
@@ -789,6 +850,36 @@ export const useProjectManagement = (
     setSelectedSceneId(newSceneId);
   };
 
+  const handleDuplicateScene = (sceneId: string, name: string) => {
+    const newName = name.trim();
+    if (!newName) return;
+    if (project.scenes.length >= 30) return;
+    if (project.scenes.some(s => s.name === newName)) return;
+    const source = project.scenes.find(s => s.id === sceneId);
+    if (!source) return;
+
+    const { scene: newScene, scriptIdMap } = duplicateScene(source, newName);
+    setProject(prev => {
+      const index = prev.scenes.findIndex(s => s.id === sceneId);
+      const scenes = [...prev.scenes];
+      scenes.splice(index >= 0 ? index + 1 : scenes.length, 0, newScene);
+      return { ...prev, scenes };
+    });
+    setSelectedSceneId(newScene.id);
+
+    // ストーリーパネルの画像は台本IDを含むキーで保存されているので、複製先の台本へ写す
+    for (const script of source.scripts) {
+      for (const segment of script.storySegments ?? []) {
+        if (!segment.imageRef?.assetId) continue;
+        void copyStoryPanelAsset(
+          { projectId: project.id, scriptId: script.id },
+          { projectId: project.id, scriptId: scriptIdMap[script.id] },
+          segment.id
+        );
+      }
+    }
+  };
+
   const handleRenameScene = (sceneId: string, newName: string) => {
     if (!newName.trim()) return;
     if (project.scenes.some(s => s.name === newName.trim() && s.id !== sceneId)) return;
@@ -839,8 +930,10 @@ export const useProjectManagement = (
     handleRenameProject,
     deleteProjectById,
     renameProjectById,
+    duplicateProjectById,
     refreshProjectList,
     handleAddScene,
+    handleDuplicateScene,
     handleRenameScene,
     handleDeleteScene,
     handleSelectScene,

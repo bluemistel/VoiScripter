@@ -25,6 +25,7 @@ import {
   PencilIcon,
   TrashIcon,
   ArrowRightCircleIcon,
+  DocumentDuplicateIcon,
 } from '@heroicons/react/24/outline';
 import DialogFrame from '@/components/common/DialogFrame';
 import DialogHeader from '@/components/common/DialogHeader';
@@ -77,6 +78,8 @@ interface ProjectExplorerProps {
   onSelectProject: (projectId: string) => void;
   onCreateProject: (name: string, folderId: string | null) => void;
   onRenameProject: (oldId: string, newName: string) => void;
+  /** 「名前 (1)」の名前で複製する（開いているプロジェクトは切り替えない） */
+  onDuplicateProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   onDeleteFolderRecursive: (folderId: string) => void;
 }
@@ -148,6 +151,7 @@ export default function ProjectExplorer({
   onSelectProject,
   onCreateProject,
   onRenameProject,
+  onDuplicateProject,
   onDeleteProject,
   onDeleteFolderRecursive,
 }: ProjectExplorerProps) {
@@ -246,7 +250,7 @@ export default function ProjectExplorer({
   };
 
   const openMenu = (anchor: DOMRect, target: MenuTarget) => {
-    const itemCount = 4;
+    const itemCount = 5;
     const estHeight = itemCount * MENU_ITEM_HEIGHT + 16;
     const left = Math.max(8, Math.min(anchor.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8));
     const top =
@@ -309,6 +313,11 @@ export default function ProjectExplorer({
             label: '名前を変更',
             icon: <PencilIcon className="w-4 h-4" />,
             onClick: () => setSubDialog({ kind: 'renameProject', projectId: (menu.target as { type: 'project'; projectId: string }).projectId }),
+          },
+          {
+            label: '複製',
+            icon: <DocumentDuplicateIcon className="w-4 h-4" />,
+            onClick: () => onDuplicateProject((menu.target as { type: 'project'; projectId: string }).projectId),
           },
           {
             label: 'フォルダへ移動…',

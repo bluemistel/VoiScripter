@@ -1,6 +1,6 @@
 {
   "name": "VoiScripter",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "description": "音声合成ソフトの台本作成支援ツール",
   "author": "あおもや",
   "private": true,

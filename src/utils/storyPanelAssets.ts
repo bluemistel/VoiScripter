@@ -111,6 +111,21 @@ export const removeStoryPanelAsset = async (projectId: string, scriptId: string,
   }
 };
 
+/**
+ * シーン・プロジェクトの複製用。画像はプロジェクトID・台本IDを含むキーで保存されているため、
+ * 複製先のキーへ写す（元の画像を消しても複製側が残るように）。画像が無ければ何もしない。
+ */
+export const copyStoryPanelAsset = async (
+  from: { projectId: string; scriptId: string },
+  to: { projectId: string; scriptId: string },
+  segmentId: string
+): Promise<void> => {
+  const image = await loadStoryPanelAsset(from.projectId, from.scriptId, segmentId);
+  if (image) {
+    await saveStoryPanelAsset(to.projectId, to.scriptId, segmentId, image);
+  }
+};
+
 export const migrateLegacyStoryPanelAssets = async (): Promise<{ migrated: number; failed: number }> => {
   if (typeof window === 'undefined') return { migrated: 0, failed: 0 };
   const keys = Object.keys(localStorage).filter((key) => key.startsWith(STORY_ASSET_PREFIX));

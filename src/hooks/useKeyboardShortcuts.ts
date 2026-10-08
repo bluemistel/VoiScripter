@@ -3,7 +3,7 @@ import { UndoRedoHook, ProjectHistory } from './useUndoRedo';
 import { ScriptBlock } from '@/types';
 import { ShortcutMap, defaultShortcuts, matchesShortcut, findConflictingDef } from '@/types/shortcuts';
 import { getEmotionForPreset } from '@/utils/emotionUtils';
-import { createScriptBlock } from '@/utils/blockFactory';
+import { createScriptBlock, speakerChangeUpdates } from '@/utils/blockFactory';
 
 export interface KeyboardShortcutsHook {
   registerShortcuts: () => void;
@@ -309,7 +309,8 @@ export const useKeyboardShortcuts = (
             const charIdx = validCharacters.findIndex(c => c.id === block.characterId);
             if (charIdx > 0) {
               event.preventDefault();
-              onUpdateBlock(block.id, { characterId: validCharacters[charIdx - 1].id });
+              // 話者ピッカーで選んだときと同じく、表情を戻して新しい話者の既定プリセットを付ける
+              onUpdateBlock(block.id, speakerChangeUpdates(validCharacters[charIdx - 1].id, characters));
             }
           }
         }
@@ -326,7 +327,7 @@ export const useKeyboardShortcuts = (
             const charIdx = validCharacters.findIndex(c => c.id === block.characterId);
             if (charIdx >= 0 && charIdx < validCharacters.length - 1) {
               event.preventDefault();
-              onUpdateBlock(block.id, { characterId: validCharacters[charIdx + 1].id });
+              onUpdateBlock(block.id, speakerChangeUpdates(validCharacters[charIdx + 1].id, characters));
             }
           }
         }

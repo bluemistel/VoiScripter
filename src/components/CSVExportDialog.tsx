@@ -316,8 +316,9 @@ export default function CSVExportDialog({
   ];
 
   const renderScriptTab = () => (
+    <>
     <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden md:grid md:grid-cols-[384px_1fr]">
-      {/* 左: 必須（出力する内容・ファイル形式）。下端のプレビューとエクスポートは固定し、上だけスクロールする */}
+      {/* 左: 必須（出力する内容・ファイル形式）。下端のプレビューは固定し、上だけスクロールする */}
       <div className="md:flex md:flex-col md:min-h-0">
         <div className="p-5 md:flex-1 md:min-h-0 md:overflow-y-auto">
         <StepHeading step={1} title="出力する内容" required />
@@ -394,25 +395,12 @@ export default function CSVExportDialog({
 
         </div>
 
-        {/* 出力プレビューとエクスポートは左列の下端に固定 */}
+        {/* 出力プレビューは左列の下端に固定（必須の設定の結果をすぐ下で確かめられるように） */}
         <div className="px-5 pb-5 pt-1 md:pt-4 md:shadow-[0_-1px_0_var(--color-hairline)]">
           <div className="ui-section-label mb-2">出力プレビュー</div>
           <pre className="rounded-[11px] bg-well px-3.5 py-2.5 font-mono text-[11.5px] leading-[1.7] text-fg-sub whitespace-pre overflow-x-auto min-h-[4.6rem]">
             {preview.lines.length > 0 ? preview.lines.join('\n') : '（出力対象のブロックがありません）'}
           </pre>
-          <div className="flex items-center justify-between gap-3 mt-4">
-            <span className="text-xs text-fg-faint">
-              {preview.blockCount.toLocaleString()} ブロック ・ {preview.charCount.toLocaleString()} 字
-            </span>
-            <button
-              type="button"
-              onClick={handleScriptExport}
-              disabled={needsGroupSelection || needsSceneSelection}
-              className={`${buttonClass('primary')} px-6 py-3 text-sm`}
-            >
-              {exportToClipboard ? 'クリップボードに出力' : 'エクスポート'}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -587,6 +575,22 @@ export default function CSVExportDialog({
         </div>
       </div>
     </div>
+
+    {/* エクスポートはダイアログの最下段・右端に固定する（設定を上から順に決めて、最後に押す導線） */}
+    <div className="shrink-0 flex items-center justify-between gap-3 px-5 py-3.5 shadow-[0_-1px_0_var(--color-hairline)]">
+      <span className="text-xs text-fg-faint">
+        {preview.blockCount.toLocaleString()} ブロック ・ {preview.charCount.toLocaleString()} 字
+      </span>
+      <button
+        type="button"
+        onClick={handleScriptExport}
+        disabled={needsGroupSelection || needsSceneSelection}
+        className={`${buttonClass('primary')} px-6 py-3 text-sm`}
+      >
+        {exportToClipboard ? 'クリップボードに出力' : 'エクスポート'}
+      </button>
+    </div>
+    </>
   );
 
   const renderBackupTab = () => (

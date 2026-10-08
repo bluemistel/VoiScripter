@@ -10,7 +10,6 @@ import {
   useSensors,
   DragStartEvent,
   DragEndEvent,
-  DragMoveEvent,
   DragOverlay
 } from '@dnd-kit/core';
 import {
@@ -21,10 +20,10 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Script, ScriptBlock, Character, Emotion, StorySeparatorSegment, StorySeparatorImage } from '@/types';
 import { loadStoryPanelAsset, removeStoryPanelAsset, saveStoryPanelAsset } from '@/utils/storyPanelAssets';
-import { getEmotionKeys, getEmotionIconUrl, getPresetIdForEmotion, getEmotionForPreset } from '@/utils/emotionUtils';
+import { getEmotionIconUrl, getEmotionForPreset } from '@/utils/emotionUtils';
 import { bubbleFill, nameBadgeText, nameLabelText } from '@/utils/colorUtils';
 import { buildChatSideMap } from '@/utils/chatUtils';
-import { createScriptBlock } from '@/utils/blockFactory';
+import { createScriptBlock, speakerChangeUpdates } from '@/utils/blockFactory';
 import CharacterPicker from '@/components/CharacterPicker';
 import DialogFrame from '@/components/common/DialogFrame';
 import DialogHeader from '@/components/common/DialogHeader';
@@ -46,7 +45,8 @@ import {
   ChevronUpDownIcon,
   PencilSquareIcon,
   PlusIcon,
-  UsersIcon
+  UsersIcon,
+  CheckCircleIcon
 } from '@heroicons/react/24/outline';
 
 interface ScriptEditorProps {
@@ -112,6 +112,8 @@ interface SortableBlockProps {
   onRequestSpeakerPicker?: (anchorIndex: number) => void;
   /** 複数ブロックを選択中（話者の切り替えは単一ブロックの操作なので切替ボタンを出さない） */
   isMultiSelection?: boolean;
+  /** 選択モード（モバイル）。タップは選択の追加／解除だけにし、入力やブロック内の操作はさせない */
+  selectionMode?: boolean;
 }
 
 /** 既定のキャラクター色（アイコン背景が未設定のとき） */
@@ -133,6 +135,13 @@ const blockControlGuards = {
   onMouseDown: (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); },
   onTouchStart: (e: React.TouchEvent) => e.stopPropagation()
 };
+
+/**
+ * 本文（textarea）上のクリックを、ブロックの複数選択として扱うか。
+ * Ctrl/⌘ は常に、Shift は入力中でない本文のときだけ（入力中の Shift+クリックは文字の範囲選択）。
+ */
+const isBlockSelectionClick = (e: React.MouseEvent | MouseEvent, textarea: HTMLTextAreaElement) =>
+  e.ctrlKey || e.metaKey || (e.shiftKey && document.activeElement !== textarea);
 
 /** アバターの寸法（表示モードごと） */
 interface AvatarSpec {
@@ -164,7 +173,8 @@ function SortableBlock({
   onInsertBlock,
   insertIdx,
   onRequestSpeakerPicker,
-  isMultiSelection = false
+  isMultiSelection = false,
+  selectionMode = false
 }: SortableBlockProps & { textareaRef: (el: HTMLTextAreaElement | null) => void; isSelected: boolean; isMultiDragGhost?: boolean }) {
   const {
     attributes,
@@ -207,7 +217,9 @@ function SortableBlock({
   // textareaのfocus状態を管理
   const [isTextareaFocused, setIsTextareaFocused] = useState(false);
   const [isSpeakerPickerOpen, setIsSpeakerPickerOpen] = useState(false);
-  const [isEmotionPickerOpen, setIsEmotionPickerOpen] = useState(false);
+  // 話者ピッカーをデスクトップでアイコンの横に出すための基準要素
+  const [speakerPickerAnchor, setSpeakerPickerAnchor] = useState<HTMLElement | null>(null);
+  const avatarRef = useRef<HTMLDivElement | null>(null);
   const [isMobileView, setIsMobileView] = useState(false);
   const focusBeforeSpeakerPickerRef = useRef<HTMLElement | null>(null);
 
@@ -243,12 +255,12 @@ function SortableBlock({
   const speakerPickerCharacters = selectableCharacters.filter(c => c.id !== '');
 
   const handleSelectCharacter = (characterId: string) => {
-    onUpdate({ characterId, emotion: 'normal', userPresetId: undefined });
+    onUpdate(speakerChangeUpdates(characterId, characters));
   };
 
-  const openSpeakerPicker = () => {
+  const openSpeakerPicker = (anchor: HTMLElement | null) => {
     focusBeforeSpeakerPickerRef.current = document.activeElement as HTMLElement | null;
-    setIsEmotionPickerOpen(false);
+    setSpeakerPickerAnchor(anchor);
     setIsSpeakerPickerOpen(true);
   };
 
@@ -265,41 +277,15 @@ function SortableBlock({
     setTimeout(() => target?.focus?.(), 0);
   };
 
-  // このキャラクターの感情ラベル一覧（normal のみなら感情ピッカーは出さない）
-  const emotionKeys = character ? getEmotionKeys(character) : [];
-  const hasEmotionVariants = emotionKeys.length > 1;
-  // 未設定・削除済みの感情は標準として扱う
-  const currentEmotion: Emotion = emotionKeys.includes(block.emotion) ? block.emotion : 'normal';
+  // 表情は個別に選ばせず、プリセットの切り替えに連動させる（プリセットと表情の組み合わせを崩さない）
   const presets = character?.userPresets ?? [];
   const selectedPreset = presets.find(p => p.id === block.userPresetId);
-
-  // 感情を選択（アイコン側）→ 連動するプリセットも同時に切り替える。
-  // 連動プリセットを持たない表情（標準など）を選んだ場合はプリセットも解除して整合させる。
-  const handleSelectEmotion = (emotion: Emotion) => {
-    const linkedPresetId = character ? getPresetIdForEmotion(character, emotion) : undefined;
-    onUpdate({ emotion, userPresetId: linkedPresetId });
-    setIsEmotionPickerOpen(false);
-  };
 
   // プリセットを選択（プリセットリスト側）→ 連動する表情（アイコン・立ち絵ステージ）も同時に切り替える。
   // そのプリセットに紐づく表情差分がなければ標準表情に戻す。
   const handleSelectPreset = (presetId: string | undefined) => {
     const emotion = character ? getEmotionForPreset(character, presetId) : 'normal';
     onUpdate({ userPresetId: presetId, emotion });
-  };
-
-  // 感情ピッカー内のアイコン表示
-  const renderEmotionOption = (emotion: Emotion) => {
-    if (!character) return null;
-    const iconUrl = getEmotionIconUrl(character, emotion);
-    return iconUrl ? (
-      <img src={iconUrl} alt={emotion} className="size-9 rounded-full object-cover ring-1 ring-hairline shrink-0" />
-    ) : (
-      <div
-        className="size-9 rounded-full ring-1 ring-hairline shrink-0"
-        style={{ backgroundColor: character.backgroundColor || FALLBACK_CHARACTER_COLOR }}
-      />
-    );
   };
 
   const keepTextareaAboveToolbar = (target: HTMLTextAreaElement) => {
@@ -372,8 +358,14 @@ function SortableBlock({
     rows: 1,
     onChange: (e: ChangeEvent<HTMLTextAreaElement>) => onUpdate({ text: e.target.value }),
     onKeyDown: handleTextareaKeyDown,
+    readOnly: selectionMode,
     onPointerDown: (e: React.PointerEvent) => e.stopPropagation(),
-    onMouseDown: (e: React.MouseEvent) => e.stopPropagation(),
+    onMouseDown: (e: React.MouseEvent<HTMLTextAreaElement>) => {
+      e.stopPropagation();
+      // Ctrl/⌘/Shift+クリックはブロックの複数選択に使う（入力欄にフォーカスさせない）。
+      // 入力中の Shift+クリックは文字の範囲選択なので、そのまま通す。
+      if (isBlockSelectionClick(e, e.currentTarget)) e.preventDefault();
+    },
     onTouchStart: (e: React.TouchEvent) => e.stopPropagation(),
     onFocus: () => { setIsTextareaFocused(true); onTextareaFocus?.(); },
     onBlur: () => setIsTextareaFocused(false),
@@ -392,14 +384,10 @@ function SortableBlock({
   // 既定値（標準の表情・プリセット未選択）の表示は、ホバー中か選択中だけ出す
   const revealOnHover = isActive ? '' : 'opacity-0 group-hover/block:opacity-100 focus-visible:opacity-100';
 
-  // チャットテーマ: キャラの左右振り分けと連続発言判定
+  // チャットテーマ: キャラの左右振り分け。
+  // 連続発言でもエディタではアイコンと名前を省略しない（アイコンが話者切り替えの入口のため）。省略は通しビューだけで行う。
   const isChatRight = variant === 'chat' && !!character &&
     buildChatSideMap(characters).get(character.id) === 'right';
-  const showChatName = (() => {
-    if (variant !== 'chat' || !character) return false;
-    const blockIndex = script.blocks.findIndex(b => b.id === block.id);
-    return blockIndex <= 0 || script.blocks[blockIndex - 1].characterId !== block.characterId;
-  })();
 
   const renderAvatar = ({ size, nameClass, switchSize, switchIconSize, switchOffset }: AvatarSpec) => {
     if (!character) return null;
@@ -407,11 +395,11 @@ function SortableBlock({
     const iconUrl = getEmotionIconUrl(character, block.emotion);
     const displayName = character.name.length > 8 ? character.name.slice(0, 8) + '…' : character.name;
     return (
-      <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <div ref={avatarRef} className="relative shrink-0" style={{ width: size, height: size }}>
         <button
           type="button"
           className={`block size-full rounded-full cursor-pointer transition-[outline] duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
-          onClick={(e) => { e.stopPropagation(); openSpeakerPicker(); }}
+          onClick={(e) => { e.stopPropagation(); openSpeakerPicker(avatarRef.current); }}
           // アバターはドラッグの掴み所でもあるため pointerdown は止めない（ドラッグ後のclickは dnd-kit が抑止する）
           onMouseDown={(e) => e.preventDefault()}
           title="話者を切り替え"
@@ -438,7 +426,7 @@ function SortableBlock({
             tabIndex={-1}
             className="absolute rounded-full bg-panel shadow-(--shadow-popover) flex items-center justify-center"
             style={{ width: switchSize, height: switchSize, right: -switchOffset, bottom: -switchOffset }}
-            onClick={(e) => { e.stopPropagation(); openSpeakerPicker(); }}
+            onClick={(e) => { e.stopPropagation(); openSpeakerPicker(avatarRef.current); }}
             {...blockControlGuards}
             title="話者を切り替え"
           >
@@ -454,7 +442,7 @@ function SortableBlock({
     <button
       type="button"
       className={`shrink-0 rounded-md p-1 text-fg-faint transition-colors hover:text-fg hover:bg-well ${className}`}
-      onClick={(e) => { e.stopPropagation(); openSpeakerPicker(); }}
+      onClick={(e) => { e.stopPropagation(); openSpeakerPicker(e.currentTarget); }}
       {...blockControlGuards}
       title="話者を切り替え"
     >
@@ -494,42 +482,11 @@ function SortableBlock({
     );
   };
 
-  const renderEmotionPopover = (alignRight: boolean) => isEmotionPickerOpen && (
-    <>
-      <div
-        className="fixed inset-0 z-40"
-        onClick={(e) => { e.stopPropagation(); setIsEmotionPickerOpen(false); }}
-        onPointerDown={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-      />
-      <div
-        className={`absolute ${alignRight ? 'right-0' : 'left-0'} top-full mt-1.5 z-50 w-44 max-h-64 overflow-y-auto p-1.5 bg-panel rounded-xl ring-1 ring-hairline shadow-(--shadow-popover)`}
-        onPointerDown={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {emotionKeys.map(emotion => (
-          <button
-            key={emotion}
-            type="button"
-            onClick={(e) => { e.stopPropagation(); handleSelectEmotion(emotion); }}
-            className={`w-full flex items-center gap-2 p-1.5 rounded-lg text-left text-xs transition-colors ${
-              currentEmotion === emotion ? 'bg-primary-tint text-primary-text font-bold' : 'text-fg hover:bg-field'
-            }`}
-          >
-            {renderEmotionOption(emotion)}
-            <span className="truncate">{emotion === 'normal' ? '標準' : emotion}</span>
-          </button>
-        ))}
-      </div>
-    </>
-  );
-
   /**
-   * 感情・プリセットの表示と切り替え口。
-   * chip: 話者名バッジの右隣のチップ（クラシック/ポップ/チャット）、text: 小さな文字（シネマ/シンプル）
+   * プリセットの表示と切り替え口（表情はプリセットに連動するため、表情だけのチップは出さない）。
+   * chip: 話者名バッジの右隣のチップ（ポップ/チャット）、text: 小さな文字（シネマ/シンプル）
    */
-  const renderMetaControls = (look: 'chip' | 'text', alignRight = false) => {
+  const renderMetaControls = (look: 'chip' | 'text') => {
     if (!character) return null;
     const baseClass = look === 'chip'
       ? 'relative text-[10px] leading-normal px-[9px] py-px rounded-full bg-panel text-fg-sub whitespace-nowrap max-w-40 truncate transition-opacity'
@@ -537,21 +494,6 @@ function SortableBlock({
     const chipStyle = look === 'chip' ? { border: `1.5px solid ${charColor}` } : undefined;
     return (
       <>
-        {hasEmotionVariants && (
-          <span className="relative flex">
-            <button
-              type="button"
-              className={`${baseClass} cursor-pointer ${currentEmotion === 'normal' && !isEmotionPickerOpen ? revealOnHover : ''}`}
-              style={chipStyle}
-              onClick={(e) => { e.stopPropagation(); setIsEmotionPickerOpen(v => !v); }}
-              {...blockControlGuards}
-              title="表情を選択"
-            >
-              {currentEmotion === 'normal' ? '標準' : currentEmotion}
-            </button>
-            {renderEmotionPopover(alignRight)}
-          </span>
-        )}
         {presets.length > 0 && (
           <span
             className={`${baseClass} ${selectedPreset ? '' : revealOnHover} has-[select:focus-visible]:opacity-100`}
@@ -620,7 +562,7 @@ function SortableBlock({
         </div>
         {!isTogaki && (
           <div className="shrink-0 flex items-center gap-2">
-            {renderMetaControls('text', true)}
+            {renderMetaControls('text')}
           </div>
         )}
         {renderHoverPalette('top-1/2 -translate-y-1/2 right-1.5', true)}
@@ -666,7 +608,7 @@ function SortableBlock({
       </>
     );
   } else if (variant === 'chat') {
-    // 左右振り分けのチャット。連続発言ではアバターと名前を省略する
+    // 左右振り分けのチャット（連続発言の省略は通しビューだけ。エディタでは毎行アイコンから話者を切り替えられるようにする）
     if (isTogaki) {
       rootClass = `flex justify-center py-1 px-2.5 rounded-[18px] ${isActive ? 'bg-block' : ''}`;
       body = (
@@ -682,22 +624,17 @@ function SortableBlock({
         </>
       );
     } else {
-      rootClass = `flex items-start gap-2.5 ${isChatRight ? 'flex-row-reverse' : ''} ${showChatName ? 'p-2.5' : 'px-2.5'} rounded-[18px] ${isActive ? 'bg-block' : ''}`;
+      rootClass = `flex items-start gap-2.5 ${isChatRight ? 'flex-row-reverse' : ''} p-2.5 rounded-[18px] ${isActive ? 'bg-block' : ''}`;
       const bubbleRadius = isChatRight ? '18px 18px 6px 18px' : '18px 18px 18px 6px';
       body = (
         <>
-          {showChatName
-            ? renderAvatar({ size: 44, nameClass: 'text-[9px]', switchSize: 19, switchIconSize: 12, switchOffset: 4 })
-            : <div className="w-11 shrink-0" />}
+          {renderAvatar({ size: 44, nameClass: 'text-[9px]', switchSize: 19, switchIconSize: 12, switchOffset: 4 })}
           <div className="relative flex-1 min-w-0 max-w-[74%]">
-            {/* 連続発言では名前を省略。感情・プリセットは選択中だけ出す */}
-            {(showChatName || isActive) && (
-              <div className={`absolute -top-2 ${isChatRight ? 'right-3.5' : 'left-3.5'} z-[2] flex items-center gap-[5px] max-w-[calc(100%-28px)]`}>
-                {isChatRight && renderMetaControls('chip', true)}
-                {showChatName && renderNameBadge(isActive ? 'var(--color-block)' : 'var(--color-canvas)')}
-                {!isChatRight && renderMetaControls('chip')}
-              </div>
-            )}
+            <div className={`absolute -top-2 ${isChatRight ? 'right-3.5' : 'left-3.5'} z-[2] flex items-center gap-[5px] max-w-[calc(100%-28px)]`}>
+              {isChatRight && renderMetaControls('chip')}
+              {renderNameBadge(isActive ? 'var(--color-block)' : 'var(--color-canvas)')}
+              {!isChatRight && renderMetaControls('chip')}
+            </div>
             <textarea
               {...textareaBehavior}
               placeholder="セリフを入力"
@@ -706,7 +643,7 @@ function SortableBlock({
                 height: 'auto',
                 fontSize: editorFontSize(),
                 lineHeight: 1.6,
-                padding: showChatName ? '15px 15px 13px' : '13px 15px',
+                padding: '15px 15px 13px',
                 borderRadius: bubbleRadius,
                 border: `1.5px solid ${charColor}`,
                 backgroundColor: bubbleFill(charColor, isDarkMode)
@@ -777,12 +714,13 @@ function SortableBlock({
       {...attributes}
       {...listeners}
       style={style}
-      // 感情ピッカーを開いている間は後続ブロックより手前に出す
-      className={`relative group/block cursor-grab touch-manipulation focus:outline-none ${isEmotionPickerOpen ? 'z-20' : ''} ${rootClass}`}
+      className={`relative group/block cursor-grab touch-manipulation focus:outline-none ${rootClass}`}
       onClick={onClick}
       data-block-index={script.blocks.findIndex(b => b.id === block.id)}
     >
       {body}
+      {/* 選択モード中はブロック全体を覆い、タップを選択の追加／解除だけにする（ドラッグはこの面からも始められる） */}
+      {selectionMode && <div className="absolute inset-0 z-[4] rounded-[inherit]" aria-hidden="true" />}
     </div>
     {isSpeakerPickerOpen && (
       <CharacterPicker
@@ -791,6 +729,7 @@ function SortableBlock({
         onSelect={handleSpeakerPicked}
         onClose={closeSpeakerPicker}
         title="話者を切り替え"
+        anchorEl={speakerPickerAnchor}
       />
     )}
     </>
@@ -1540,15 +1479,48 @@ export default function ScriptEditor({
   
   // マウス選択用の状態
   const [lastClickedIndex, setLastClickedIndex] = useState<number>(-1);
+  // 選択モード（モバイル）: Ctrl/Shift の代わりに、タップで複数ブロックを選ぶ
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+
+  const toggleSelectionMode = () => {
+    // 入力中の本文があればキーボードを閉じる（選択モード中は入力させない）
+    if (!isSelectionMode && document.activeElement instanceof HTMLTextAreaElement) {
+      document.activeElement.blur();
+    }
+    setIsSelectionMode(!isSelectionMode);
+  };
+
+  // 切り替えボタンはタッチ用ツールバーにしか無いため、PCの幅に戻ったら選択モードも終える
+  useEffect(() => {
+    if (!isMobileLayout) setIsSelectionMode(false);
+  }, [isMobileLayout]);
   
   // ブロック選択の処理
   const handleBlockClick = (blockId: string, index: number, event: React.MouseEvent) => {
-    // textarea内のクリックは無視
-    if ((event.target as HTMLElement).tagName === 'TEXTAREA') {
+    // 選択モード（モバイル）: タップで選択に加える／外す
+    if (isSelectionMode) {
+      event.preventDefault();
+      onSelectedBlockIdsChange(
+        selectedBlockIds.includes(blockId)
+          ? selectedBlockIds.filter(id => id !== blockId)
+          : [...selectedBlockIds, blockId]
+      );
+      setLastClickedIndex(index);
+      return;
+    }
+
+    // textarea内のクリックは入力なので無視（Ctrl/Shift+クリックだけは複数選択として扱う）
+    const target = event.target as HTMLElement;
+    if (target instanceof HTMLTextAreaElement && !isBlockSelectionClick(event, target)) {
       return;
     }
 
     event.preventDefault();
+
+    // 複数選択の操作中は入力欄のフォーカスを外す（フォーカス中の強調が選択と紛らわしいため）
+    if ((event.ctrlKey || event.metaKey || event.shiftKey) && document.activeElement instanceof HTMLTextAreaElement) {
+      document.activeElement.blur();
+    }
     
     // Shiftキーを押しながらの選択時にブラウザの選択状態を無効化
     if (event.shiftKey) {
@@ -1567,10 +1539,12 @@ export default function ScriptEditor({
           : [...selectedBlockIds, blockId]
       );
       setLastClickedIndex(index);
-    } else if (event.shiftKey && lastClickedIndex >= 0) {
-      // Shift+クリック: 範囲選択
-      const start = Math.min(lastClickedIndex, index);
-      const end = Math.max(lastClickedIndex, index);
+    } else if (event.shiftKey && (lastClickedIndex >= 0 || selectedBlockIds.length > 0)) {
+      // Shift+クリック: 範囲選択（起点は最後にクリックしたブロック。入力欄から選んだ場合は選択中の先頭）
+      const fallbackIndex = script.blocks.findIndex(b => b.id === selectedBlockIds[0]);
+      const anchorIndex = lastClickedIndex >= 0 ? lastClickedIndex : fallbackIndex >= 0 ? fallbackIndex : index;
+      const start = Math.min(anchorIndex, index);
+      const end = Math.max(anchorIndex, index);
       const rangeBlockIds = script.blocks
         .slice(start, end + 1)
         .map(block => block.id);
@@ -1675,7 +1649,9 @@ export default function ScriptEditor({
         
         // Electron版での追加処理
         if (typeof window !== 'undefined' && window.electronAPI) {
-          ref.addEventListener('click', () => {
+          ref.addEventListener('click', (e) => {
+            // Ctrl/Shift+クリックはブロックの複数選択なのでフォーカスしない
+            if (isBlockSelectionClick(e, ref)) return;
             // クリック時にフォーカスを確実にする
             setTimeout(() => {
               ref.focus();
@@ -2110,14 +2086,26 @@ export default function ScriptEditor({
     onBlockDragStateChange?.(true, draggedIds);
   };
 
-  const handleDragMove = (event: DragMoveEvent) => {
-    if (onDragMovePosition && event.activatorEvent) {
-      const activatorEvent = event.activatorEvent as PointerEvent;
-      const x = activatorEvent.clientX + (event.delta?.x || 0);
-      const y = activatorEvent.clientY + (event.delta?.y || 0);
-      onDragMovePosition(x, y);
-    }
-  };
+  // ドラッグ中のポインター位置（シーンタブへのドロップ判定用）。
+  // dnd-kit の delta はページのスクロール量を含むため、「開始位置＋delta」では
+  // 自動スクロールが起きると実際のポインター位置からずれ、タブの上にいても判定されない。
+  // そのため、ドラッグ中は実際のポインター位置を直接拾う。
+  const onDragMovePositionRef = useRef(onDragMovePosition);
+  onDragMovePositionRef.current = onDragMovePosition;
+  useEffect(() => {
+    if (!activeDragId) return;
+    const handlePointerMove = (e: PointerEvent) => onDragMovePositionRef.current?.(e.clientX, e.clientY);
+    const handleTouchMove = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      if (touch) onDragMovePositionRef.current?.(touch.clientX, touch.clientY);
+    };
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, [activeDragId]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveDragId(null);
@@ -2528,7 +2516,10 @@ export default function ScriptEditor({
                   sensors={sensors}
                   collisionDetection={closestCenter}
                   onDragStart={handleDragStart}
-                  onDragMove={handleDragMove}
+                  onDragCancel={() => {
+                    setActiveDragId(null);
+                    setTimeout(() => onBlockDragStateChange?.(false, []), 100);
+                  }}
                   onDragEnd={handleDragEnd}
                 >
                   <SortableContext
@@ -2636,6 +2627,7 @@ export default function ScriptEditor({
                             textareaRef={el => textareaRefs.current[index] = el}
                             isSelected={selectedBlockIds.includes(block.id)}
                             isMultiSelection={selectedBlockIds.length > 1}
+                            selectionMode={isSelectionMode}
                             isMultiDragGhost={!!activeDragId && activeDragId !== block.id && selectedBlockIds.length > 1 && selectedBlockIds.includes(block.id)}
                             onClick={(event) => handleBlockClick(block.id, index, event)}
                             onTextareaFocus={() => onActiveBlockChange?.(block.id)}
@@ -2904,6 +2896,18 @@ export default function ScriptEditor({
                 <ArrowDownIcon />
               </button>
             </>
+          )}
+          {/* 複数選択の切り替え（タッチ操作には Ctrl/Shift+クリックが無いため） */}
+          {isTouchToolbar && (
+            <button
+              type="button"
+              onClick={toggleSelectionMode}
+              className={`${toolbarButtonClass} ${isSelectionMode ? '!bg-primary-tint !text-primary-text' : ''}`}
+              title={isSelectionMode ? '複数選択を終了' : '複数選択（タップで選択に追加）'}
+              aria-pressed={isSelectionMode}
+            >
+              <CheckCircleIcon />
+            </button>
           )}
           <button
             type="button"

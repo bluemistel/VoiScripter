@@ -24,12 +24,13 @@ import {
 import {
   DndContext,
   closestCenter,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
   DragStartEvent,
-  DragEndEvent
+  DragEndEvent,
+  Modifier
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -44,6 +45,7 @@ import { Character, Project, Scene, GroupCredits } from '@/types';
 import DialogFrame from '@/components/common/DialogFrame';
 import DialogHeader from '@/components/common/DialogHeader';
 import Button from '@/components/common/Button';
+import { nextCopyName } from '@/utils/duplicateNaming';
 
 // ロゴパスを取得するカスタムフック
 const useLogoPath = () => {
@@ -57,6 +59,18 @@ const useLogoPath = () => {
   }, []);
 
   return logoPath;
+};
+
+/**
+ * シーンタブのドラッグを横方向だけにし、タブ列（タブの親要素）の幅の中に収める。
+ * 縦に動かしたり、タブ列の外へ持ち出したりして他のタブが画面外へずれないようにする。
+ */
+const restrictSceneTabDrag: Modifier = ({ transform, draggingNodeRect, containerNodeRect }) => {
+  const restricted = { ...transform, y: 0 };
+  if (!draggingNodeRect || !containerNodeRect) return restricted;
+  const minX = containerNodeRect.left - draggingNodeRect.left;
+  const maxX = containerNodeRect.right - draggingNodeRect.right;
+  return { ...restricted, x: Math.min(Math.max(transform.x, minX), maxX) };
 };
 
 // ソート可能なシーンタブコンポーネント
@@ -87,7 +101,9 @@ function SortableSceneTab({
   } = useSortable({ id: scene.id });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
+    // 幅の違うタブと入れ替わるときの拡大縮小（scale）は使わず、移動だけにする。
+    // scale がかかるとタブが横長になり、タブ列のはみ出しが広がって右へ際限なく動けてしまう
+    transform: CSS.Translate.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1
   };
@@ -132,14 +148,17 @@ function SortableSceneTab({
     >
       {/* ドラッグ可能なメイン領域 */}
       <div
-        // モバイルは×が常時出るため右側を少し広く取る
-        className={`pl-5 pr-6 sm:pr-5 ${isSelected ? 'py-2' : 'py-[7px]'} cursor-pointer flex items-center focus:outline-none`}
+        // モバイルは×が常時出るため右側を少し広く取る。
+        // 長押しで並び替えるため、文字選択・長押しメニューは出さない
+        className={`pl-5 pr-6 sm:pr-5 ${isSelected ? 'py-2' : 'py-[7px]'} cursor-pointer flex items-center focus:outline-none select-none [-webkit-touch-callout:none]`}
         {...attributes}
         {...listeners}
-        onMouseDown={handleMouseDown}
+        // dnd-kit のセンサー（listeners）の開始処理を上書きしないよう、両方呼ぶ
+        onMouseDown={(e) => { listeners?.onMouseDown?.(e); handleMouseDown(e); }}
         onMouseUp={handleMouseUp}
-        onTouchStart={handleMouseDown}
+        onTouchStart={(e) => { listeners?.onTouchStart?.(e); handleMouseDown(e); }}
         onTouchEnd={handleMouseUp}
+        onContextMenu={(e) => e.preventDefault()}
         onDragStart={handleDragStart}
         onDoubleClick={onRename}
       >
@@ -231,6 +250,8 @@ interface HeaderProps {
   scenes: Scene[];
   selectedSceneId: string | null;
   onAddScene: (name: string) => void;
+  /** 表示中のシーンを複製して追加する */
+  onDuplicateScene: (sceneId: string, name: string) => void;
   onRenameScene: (sceneId: string, newName: string) => void;
   onDeleteScene: (sceneId: string) => void;
   onSelectScene: (sceneId: string) => void;
@@ -323,6 +344,7 @@ export default function Header(props: HeaderProps) {
     scenes,
     selectedSceneId,
     onAddScene,
+    onDuplicateScene,
     onRenameScene,
     onDeleteScene,
     onSelectScene,
@@ -374,16 +396,18 @@ export default function Header(props: HeaderProps) {
   const importMenuRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
-  // シーンのドラッグ&ドロップ用センサー（タッチデバイス対応）
+  // シーンのドラッグ&ドロップ用センサー。
+  // タッチは長押し（250ms）で並び替え、すばやいスワイプはタブ列の横スクロールにする。
+  // PointerSensor はタッチにも反応してスクロールと競合するため、マウスとタッチを分けて扱う。
   const sceneSensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: {
         distance: 8,
       },
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 100,
+        delay: 250,
         tolerance: 5,
       },
     })
@@ -561,6 +585,29 @@ export default function Header(props: HeaderProps) {
   const [isAddSceneDialogOpen, setIsAddSceneDialogOpen] = useState(false);
   const [newSceneName, setNewSceneName] = useState('');
   const [sceneError, setSceneError] = useState('');
+  // 空のシーンを追加するか、表示中のシーンを複製するか
+  const [addSceneMode, setAddSceneMode] = useState<'empty' | 'duplicate'>('empty');
+  const currentScene = scenes.find(s => s.id === selectedSceneId) ?? null;
+  const copySceneName = currentScene ? nextCopyName(currentScene.name, scenes.map(s => s.name)) : '';
+
+  const closeAddSceneDialog = () => {
+    setIsAddSceneDialogOpen(false);
+    setSceneError('');
+    setNewSceneName('');
+    setAddSceneMode('empty');
+  };
+
+  // 複製を選んだら、名前が未入力か自動入力のままのときだけ「元の名前 (1)」を入れる
+  const changeAddSceneMode = (mode: 'empty' | 'duplicate') => {
+    setAddSceneMode(mode);
+    setSceneError('');
+    if (mode === 'duplicate' && !newSceneName.trim()) {
+      setNewSceneName(copySceneName);
+    } else if (mode === 'empty' && newSceneName === copySceneName) {
+      setNewSceneName('');
+    }
+  };
+
   const handleAddSceneLocal = () => {
     if (!newSceneName.trim()) {
       setSceneError('シーン名を入力してください');
@@ -574,10 +621,12 @@ export default function Header(props: HeaderProps) {
       setSceneError('同名のシーンが既に存在します');
       return;
     }
-    onAddScene(newSceneName.trim());
-    setNewSceneName('');
-    setSceneError('');
-    setIsAddSceneDialogOpen(false);
+    if (addSceneMode === 'duplicate' && currentScene) {
+      onDuplicateScene(currentScene.id, newSceneName.trim());
+    } else {
+      onAddScene(newSceneName.trim());
+    }
+    closeAddSceneDialog();
   };
 
   return (
@@ -588,16 +637,16 @@ export default function Header(props: HeaderProps) {
           <img src={logoPath} alt="VoiScripter" className="hidden sm:block h-8" />
           <button
             onClick={onOpenProjectExplorer}
-            className="flex items-center gap-[7px] min-w-0 px-3 py-1.5 rounded-full bg-field text-fg cursor-pointer transition-shadow hover:shadow-[inset_0_0_0_1.5px_var(--color-hairline)]"
+            className="flex items-center gap-[7px] min-w-0 px-3 py-1.5 rounded-full text-fg cursor-pointer transition-colors hover:bg-field"
             title="プロジェクトを開く"
           >
             <FolderIcon className="size-4.5 shrink-0 text-secondary" />
             <span className="max-w-[200px] truncate text-[15px] font-medium">{projectName}</span>
             <ChevronDownIcon className="size-[13px] shrink-0 opacity-50" />
           </button>
-          {/* プロジェクト操作ボタン（モバイルはハンバーガーメニューに集約） */}
-          <span className="hidden md:flex">
-            <HeaderIconButton onClick={onNewProject} title="新しいプロジェクト">
+          {/* 新しいプロジェクトはよく使うため、モバイルでもメニューに畳まずヘッダーに出す（タップ領域44px） */}
+          <span className="flex shrink-0">
+            <HeaderIconButton onClick={onNewProject} title="新しいプロジェクト" className="size-11 md:size-9">
               <DocumentTextIcon />
             </HeaderIconButton>
           </span>
@@ -707,18 +756,6 @@ export default function Header(props: HeaderProps) {
 
           {isMobileMenuOpen && (
             <div className={`absolute right-0 mt-2 w-72 z-50 ${MENU_PANEL_CLASS}`}>
-              <button
-                onClick={() => {
-                  onNewProject();
-                  setIsMobileMenuOpen(false);
-                }}
-                className="block w-full text-left px-4 py-3 text-[13.5px] hover:bg-field text-fg"
-              >
-                <div className="flex items-center space-x-3">
-                  <DocumentTextIcon className="size-5 text-primary-text" />
-                  <span>新しいプロジェクト</span>
-                </div>
-              </button>
               <button
                 onClick={() => {
                   setIsCSVExportDialogOpen(true);
@@ -886,8 +923,12 @@ export default function Header(props: HeaderProps) {
       <div className="sticky top-0 z-40 flex items-end gap-[3px] px-4 min-h-8">
         {scenes.length > 1 && (
           <DndContext 
-            sensors={sceneSensors} 
+            sensors={sceneSensors}
             collisionDetection={closestCenter}
+            modifiers={[restrictSceneTabDrag]}
+            // 自動スクロールは使わない。スクロール量は modifiers の制限の後に足されるため、
+            // ページやタブ列が流れるとタブが縦方向・タブ列の外へ際限なく動いてしまう
+            autoScroll={false}
             onDragStart={handleSceneDragStart}
             onDragEnd={handleSceneDragEnd}
           >
@@ -920,7 +961,7 @@ export default function Header(props: HeaderProps) {
         {scenes.length < 30 && (
           <button
             onClick={() => setIsAddSceneDialogOpen(true)}
-            className="size-6.5 shrink-0 mb-[5px] ml-1 rounded-full bg-field flex items-center justify-center text-fg-faint transition-colors hover:text-fg"
+            className="size-6.5 shrink-0 mb-[5px] ml-1 rounded-full flex items-center justify-center text-fg-faint transition-colors hover:bg-field hover:text-fg"
             title="シーンを追加"
           >
             <PlusIcon className="size-[15px]" strokeWidth={2} />
@@ -931,11 +972,36 @@ export default function Header(props: HeaderProps) {
       {isAddSceneDialogOpen && (
         <DialogFrame
           isOpen={isAddSceneDialogOpen}
-          onCancel={() => { setIsAddSceneDialogOpen(false); setSceneError(''); setNewSceneName(''); }}
+          onCancel={closeAddSceneDialog}
           panelClassName="w-full max-w-md mx-4"
         >
-            <DialogHeader icon={PlusIcon} title="シーンを追加" onClose={() => { setIsAddSceneDialogOpen(false); setSceneError(''); setNewSceneName(''); }} />
+            <DialogHeader icon={PlusIcon} title="シーンを追加" onClose={closeAddSceneDialog} />
             <div className="px-5 pb-5">
+              {/* タブ行にボタンを増やさず、複製もここから選べるようにする（モバイルでも押しやすい） */}
+              {currentScene && (
+                <div className="space-y-1 mb-3" role="radiogroup" aria-label="追加の方法">
+                  <label className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl cursor-pointer text-[13.5px] text-fg hover:bg-field">
+                    <input
+                      type="radio"
+                      name="add-scene-mode"
+                      className="ui-radio"
+                      checked={addSceneMode === 'empty'}
+                      onChange={() => changeAddSceneMode('empty')}
+                    />
+                    空のシーン
+                  </label>
+                  <label className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl cursor-pointer text-[13.5px] text-fg hover:bg-field min-w-0">
+                    <input
+                      type="radio"
+                      name="add-scene-mode"
+                      className="ui-radio"
+                      checked={addSceneMode === 'duplicate'}
+                      onChange={() => changeAddSceneMode('duplicate')}
+                    />
+                    <span className="truncate">表示中のシーン「{currentScene.name}」を複製</span>
+                  </label>
+                </div>
+              )}
               <input
                 type="text"
                 value={newSceneName}
@@ -946,7 +1012,7 @@ export default function Header(props: HeaderProps) {
               />
               {sceneError && <p className="text-xs text-destructive mt-2">{sceneError}</p>}
               <div className="flex justify-end gap-2 mt-5">
-                <Button variant="secondary" onClick={() => { setIsAddSceneDialogOpen(false); setSceneError(''); setNewSceneName(''); }}>キャンセル</Button>
+                <Button variant="secondary" onClick={closeAddSceneDialog}>キャンセル</Button>
                 <Button variant="primary" onClick={handleAddSceneLocal}>OK</Button>
               </div>
             </div>
