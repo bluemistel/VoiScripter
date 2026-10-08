@@ -1,0 +1,73 @@
+/*
+ * ポップ／モダン刷新で追加・調整するトークン
+ * src/app/globals.css の既存トークン定義（ライト / .dark）と同じ書式に合わせて追記すること。
+ * 既存の --color-primary / --color-destructive / 前景・背景の値はそのまま維持する。
+ */
+
+/* ---------- Light ---------- */
+:root {
+  /* primary をテキスト・アイコンに使うときの色（元の primary は白背景で約2:1しか出ないため） */
+  --color-primary-text: oklch(0.52 0.10 186);
+  /* 選択中カード・選択中の選択肢の色面 */
+  --color-primary-tint: oklch(0.78 0.18 186 / 0.10);
+  /* primary 塗りの上の文字 */
+  --color-on-primary: #ffffff;
+
+  --color-destructive: oklch(0.58 0.19 20);
+  --color-destructive-tint: oklch(0.58 0.19 20 / 0.10);
+  --color-destructive-ring: oklch(0.58 0.19 20 / 0.40);
+
+  --color-fg: #332f2c;
+  --color-fg-sub: #6f6a64;      /* 説明文・非アクティブラベル */
+  --color-fg-faint: #8f8a84;    /* 単位・件数・セクションラベル */
+
+  --color-canvas: #fbfbfa;      /* エディタ背景 */
+  --color-panel: #ffffff;       /* ダイアログ本体 */
+  --color-block: #ffffff;       /* 台本ブロック */
+  --color-field: #f1f1ee;       /* 入力欄・セカンダリボタン・チップ */
+  --color-well: rgb(17 24 39 / 0.035); /* カード内のさらに内側・タブ行の帯 */
+  --color-hairline: rgb(17 24 39 / 0.08);
+
+  --shadow-dialog: 0 26px 60px -26px rgb(17 24 39 / 0.5);
+  --shadow-block: 0 0 0 1px var(--color-hairline), 0 4px 14px -10px rgb(17 24 39 / 0.3);
+  --shadow-block-selected: 0 0 0 2px rgb(17 24 39 / 0.14), 0 6px 18px -10px rgb(17 24 39 / 0.35);
+  --shadow-toolbar: 0 8px 28px -10px rgb(17 24 39 / 0.4), 0 0 0 1px rgb(17 24 39 / 0.05);
+  --shadow-popover: 0 4px 12px -4px rgb(0 0 0 / 0.25);
+}
+
+/* ---------- Dark ---------- */
+.dark {
+  --color-primary-text: rgb(84 220 179);
+  --color-primary-tint: rgb(29 178 134 / 0.13);
+  --color-on-primary: rgb(15 15 15);
+
+  --color-destructive: oklch(0.7294 0.18 0);
+  --color-destructive-tint: rgb(255 80 80 / 0.14);
+  --color-destructive-ring: oklch(0.7294 0.18 0 / 0.38);
+
+  --color-fg: rgb(228 228 228);
+  --color-fg-sub: #9d9995;
+  --color-fg-faint: #84807b;
+
+  --color-canvas: rgb(26 26 26);
+  --color-panel: rgb(36 36 36);
+  --color-block: rgb(39 39 39);
+  --color-field: rgb(255 255 255 / 0.07);
+  --color-well: rgb(255 255 255 / 0.05);
+  --color-hairline: rgb(255 255 255 / 0.10);
+
+  --shadow-dialog: 0 28px 64px -26px #000;
+  --shadow-block: 0 0 0 1px rgb(255 255 255 / 0.07), 0 6px 16px -12px #000;
+  --shadow-block-selected: 0 0 0 2px rgb(255 255 255 / 0.16), 0 8px 20px -12px #000;
+  --shadow-toolbar: 0 10px 30px -10px #000, 0 0 0 1px rgb(255 255 255 / 0.07);
+  --shadow-popover: 0 6px 16px -6px #000;
+}
+
+/*
+ * キャラクターのパーソナルカラー（characterColor）の派生
+ * 実装は src/utils/colorUtils.ts にヘルパーを追加する想定:
+ *   bubbleBorder(color)       => color                      （2px 枠）
+ *   bubbleFill(color, isDark) => color + (isDark ? '24' : '14')  （8桁HEXのアルファ）
+ *   nameBadgeText(color)      => color を L≈0.30 まで暗くした色（ライト・ダーク共通で濃色文字）
+ *   nameLabelText(color,isDark)=> ライト: L≈0.45 の暗いトーン / ダーク: L≈0.82 の明るいトーン（シネマの話者名・シンプル系で使用）
+ */
