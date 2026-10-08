@@ -14,6 +14,12 @@
       "port": 3000
     },
     {
+      "name": "static-out",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "3100", "--directory", "out"],
+      "port": 3100
+    },
+    {
       "name": "sync-mock",
       "runtimeExecutable": "node",
       "runtimeArgs": ["sync_poc/local_sync_server.js"],

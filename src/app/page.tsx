@@ -118,8 +118,11 @@ export default function Home() {
   };
 
   // クロスシーンDnD用: クロージャから最新値を参照するためのref同期
-  projectRef.current = project;
-  selectedSceneIdRef.current = selectedSceneId;
+  // （描画中にrefへ書き込まないよう、描画の確定後に反映する。参照するのはドラッグ中のタイマー処理だけ）
+  useEffect(() => {
+    projectRef.current = project;
+    selectedSceneIdRef.current = selectedSceneId;
+  });
 
   // ローディング状態の管理：データ管理とプロジェクトの初期化が完了するまで待つ
   useEffect(() => {

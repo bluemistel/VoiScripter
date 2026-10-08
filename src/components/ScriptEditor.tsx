@@ -219,7 +219,6 @@ function SortableBlock({
   const [isSpeakerPickerOpen, setIsSpeakerPickerOpen] = useState(false);
   // 話者ピッカーをデスクトップでアイコンの横に出すための基準要素
   const [speakerPickerAnchor, setSpeakerPickerAnchor] = useState<HTMLElement | null>(null);
-  const avatarRef = useRef<HTMLDivElement | null>(null);
   const [isMobileView, setIsMobileView] = useState(false);
   const focusBeforeSpeakerPickerRef = useRef<HTMLElement | null>(null);
 
@@ -395,11 +394,12 @@ function SortableBlock({
     const iconUrl = getEmotionIconUrl(character, block.emotion);
     const displayName = character.name.length > 8 ? character.name.slice(0, 8) + '…' : character.name;
     return (
-      <div ref={avatarRef} className="relative shrink-0" style={{ width: size, height: size }}>
+      // アバターの枠（話者ピッカーを横に出す基準。中のボタンから parentElement で参照する）
+      <div className="relative shrink-0" style={{ width: size, height: size }}>
         <button
           type="button"
           className={`block size-full rounded-full cursor-pointer transition-[outline] duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
-          onClick={(e) => { e.stopPropagation(); openSpeakerPicker(avatarRef.current); }}
+          onClick={(e) => { e.stopPropagation(); openSpeakerPicker(e.currentTarget.parentElement); }}
           // アバターはドラッグの掴み所でもあるため pointerdown は止めない（ドラッグ後のclickは dnd-kit が抑止する）
           onMouseDown={(e) => e.preventDefault()}
           title="話者を切り替え"
@@ -426,7 +426,7 @@ function SortableBlock({
             tabIndex={-1}
             className="absolute rounded-full bg-panel shadow-(--shadow-popover) flex items-center justify-center"
             style={{ width: switchSize, height: switchSize, right: -switchOffset, bottom: -switchOffset }}
-            onClick={(e) => { e.stopPropagation(); openSpeakerPicker(avatarRef.current); }}
+            onClick={(e) => { e.stopPropagation(); openSpeakerPicker(e.currentTarget.parentElement); }}
             {...blockControlGuards}
             title="話者を切り替え"
           >
@@ -2091,7 +2091,9 @@ export default function ScriptEditor({
   // 自動スクロールが起きると実際のポインター位置からずれ、タブの上にいても判定されない。
   // そのため、ドラッグ中は実際のポインター位置を直接拾う。
   const onDragMovePositionRef = useRef(onDragMovePosition);
-  onDragMovePositionRef.current = onDragMovePosition;
+  useEffect(() => {
+    onDragMovePositionRef.current = onDragMovePosition;
+  });
   useEffect(() => {
     if (!activeDragId) return;
     const handlePointerMove = (e: PointerEvent) => onDragMovePositionRef.current?.(e.clientX, e.clientY);

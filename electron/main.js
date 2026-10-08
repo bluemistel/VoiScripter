@@ -10,6 +10,63 @@ app.setPath('userData', path.join(app.getPath('userData'), 'VoiScripter'));
 let mainWindow;
 let splashWindow;
 
+// ── 保存・フォルダ選択ダイアログの「前回のフォルダ」 ──
+// Electron 43 以降は OS が前回のフォルダを覚えず、毎回「ダウンロード」から開くため、アプリ側で覚えておく。
+// settings.json は画面側が丸ごと上書きするので、別ファイルに保存する。
+// kind: 'export'（CSV・テキスト・バックアップなどの書き出し先） / 'saveDirectory'（データ保存先の選択）
+const getDialogDirsPath = () => path.join(app.getPath('userData'), 'dialog-dirs.json');
+
+function loadLastDialogDir(kind) {
+  try {
+    const dirs = JSON.parse(fs.readFileSync(getDialogDirsPath(), 'utf8'));
+    const dir = dirs[kind];
+    // 削除・移動されたフォルダは使わない（OS 既定の場所から開く）
+    return typeof dir === 'string' && fs.existsSync(dir) ? dir : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastDialogDir(kind, dir) {
+  if (!dir) return;
+  try {
+    let dirs = {};
+    try {
+      dirs = JSON.parse(fs.readFileSync(getDialogDirsPath(), 'utf8')) || {};
+    } catch {
+      // 初回・壊れている場合は作り直す
+    }
+    dirs[kind] = dir;
+    fs.writeFileSync(getDialogDirsPath(), JSON.stringify(dirs, null, 2), 'utf8');
+  } catch (error) {
+    if (isDev) {
+      console.error('前回のフォルダの保存に失敗しました:', error);
+    }
+  }
+}
+
+// ファイル名の前に前回の書き出し先を付ける（覚えていなければファイル名だけ＝OS 既定の場所）
+const withLastExportDir = (fileName) => {
+  const dir = loadLastDialogDir('export');
+  return dir ? path.join(dir, fileName) : fileName;
+};
+
+// 画面側の <a download> による保存（プロジェクトの JSON・キャラクター設定のバックアップなど）も
+// 同じ書き出し先から開き、保存したフォルダを覚える。セッションは共通なので一度だけ登録する。
+let isDownloadHandlerRegistered = false;
+function registerDownloadDirMemory(session) {
+  if (isDownloadHandlerRegistered) return;
+  isDownloadHandlerRegistered = true;
+  session.on('will-download', (_event, item) => {
+    item.setSaveDialogOptions({ defaultPath: withLastExportDir(item.getFilename()) });
+    item.once('done', (_doneEvent, state) => {
+      if (state === 'completed' && item.getSavePath()) {
+        saveLastDialogDir('export', path.dirname(item.getSavePath()));
+      }
+    });
+  });
+}
+
 // セキュリティ設定
 app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
 app.commandLine.appendSwitch('disable-web-security', 'false');
@@ -371,6 +428,9 @@ function createWindow() {
     mainWindow = null;
   });
 
+  // 書き出しのダイアログで前回のフォルダから開く
+  registerDownloadDirMemory(mainWindow.webContents.session);
+
   // 外部リンクをデフォルトブラウザで開く
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -597,12 +657,28 @@ ipcMain.handle('get-app-name', () => {
 
 // ファイルシステム操作
 ipcMain.handle('selectDirectory', async () => {
+  // 今の保存先があればそこから、なければ前回選んだフォルダから開く
+  let currentDirectory = '';
+  try {
+    const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+    if (fs.existsSync(settingsPath)) {
+      currentDirectory = JSON.parse(fs.readFileSync(settingsPath, 'utf8')).saveDirectory || '';
+    }
+  } catch {
+    // 設定が読めなくてもダイアログは開く
+  }
+  const defaultPath = (currentDirectory && fs.existsSync(currentDirectory))
+    ? currentDirectory
+    : loadLastDialogDir('saveDirectory');
+
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory'],
-    title: 'データ保存先ディレクトリを選択'
+    title: 'データ保存先ディレクトリを選択',
+    ...(defaultPath ? { defaultPath } : {})
   });
-  
+
   if (!result.canceled && result.filePaths.length > 0) {
+    saveLastDialogDir('saveDirectory', result.filePaths[0]);
     return result.filePaths[0];
   }
   return null;
@@ -772,17 +848,22 @@ ipcMain.handle('loadSettings', async () => {
 // CSVファイル保存
 ipcMain.handle('saveCSVFile', async (event, defaultName, csvContent) => {
   try {
+    // テキスト（.txt）の書き出しにも使われるため、ファイルの種類は拡張子に合わせる
+    const isText = path.extname(defaultName).toLowerCase() === '.txt';
     const result = await dialog.showSaveDialog(mainWindow, {
-      title: 'CSVのエクスポート',
-      defaultPath: defaultName,
+      title: isText ? 'テキストのエクスポート' : 'CSVのエクスポート',
+      defaultPath: withLastExportDir(defaultName),
       filters: [
-        { name: 'CSVファイル', extensions: ['csv'] },
+        isText
+          ? { name: 'テキストファイル', extensions: ['txt'] }
+          : { name: 'CSVファイル', extensions: ['csv'] },
         { name: 'すべてのファイル', extensions: ['*'] }
       ]
     });
-    
+
     if (!result.canceled && result.filePath) {
       fs.writeFileSync(result.filePath, csvContent, 'utf8');
+      saveLastDialogDir('export', path.dirname(result.filePath));
       return result.filePath;
     }
     return null;
