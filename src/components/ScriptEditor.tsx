@@ -394,8 +394,9 @@ function SortableBlock({
     const iconUrl = getEmotionIconUrl(character, block.emotion);
     const displayName = character.name.length > 8 ? character.name.slice(0, 8) + '…' : character.name;
     return (
-      // アバターの枠（話者ピッカーを横に出す基準。中のボタンから parentElement で参照する）
-      <div className="relative shrink-0" style={{ width: size, height: size }}>
+      // アバターの枠（話者ピッカーを横に出す基準。中のボタンから parentElement で参照する。
+      // ブロック追加時のピッカーも data-speaker-anchor で同じ位置を基準にする）
+      <div data-speaker-anchor className="relative shrink-0" style={{ width: size, height: size }}>
         <button
           type="button"
           className={`block size-full rounded-full cursor-pointer transition-[outline] duration-300 ${animateBorder ? 'outline-4 outline-primary outline-offset-2' : ''}`}
@@ -441,6 +442,7 @@ function SortableBlock({
   const renderTogakiSwitch = (className: string) => (
     <button
       type="button"
+      data-speaker-anchor
       className={`shrink-0 rounded-md p-1 text-fg-faint transition-colors hover:text-fg hover:bg-well ${className}`}
       onClick={(e) => { e.stopPropagation(); openSpeakerPicker(e.currentTarget); }}
       {...blockControlGuards}
@@ -823,7 +825,7 @@ export default function ScriptEditor({
   const [dragOverSegmentId, setDragOverSegmentId] = useState<string | null>(null);
   const pendingFocusIndexAfterDelete = useRef<number | null>(null);
   // 話者選択ピッカー（addBlockSpeakerPicker が ON のときだけ表示）
-  const [speakerPickerRequest, setSpeakerPickerRequest] = useState<{ mode: 'append' | 'insertBelow'; anchorIndex: number } | null>(null);
+  const [speakerPickerRequest, setSpeakerPickerRequest] = useState<{ mode: 'append' | 'insertBelow'; anchorIndex: number; anchorEl: HTMLElement | null } | null>(null);
   const focusBeforePickerRef = useRef<HTMLElement | null>(null);
   
   useEffect(() => {
@@ -2221,8 +2223,14 @@ export default function ScriptEditor({
   // 起動直後は再レンダーでフォーカスが移るため、この時点の要素を控えてキャンセル時に戻す。
   const requestAddBlock = useCallback((mode: 'append' | 'insertBelow', anchorIndex: number) => {
     focusBeforePickerRef.current = document.activeElement as HTMLElement | null;
-    setSpeakerPickerRequest({ mode, anchorIndex });
-  }, []);
+    // デスクトップでは、追加の基準になるブロック（直下追加は選択中のブロック、最下段追加・未選択は最後のブロック）の
+    // アイコン横にピッカーを出す。ブロックが無ければ従来どおり画面中央。
+    const baseIndex = mode === 'insertBelow' && anchorIndex >= 0 ? anchorIndex : script.blocks.length - 1;
+    const anchorEl = baseIndex >= 0
+      ? document.querySelector<HTMLElement>(`[data-block-index="${baseIndex}"] [data-speaker-anchor]`)
+      : null;
+    setSpeakerPickerRequest({ mode, anchorIndex, anchorEl });
+  }, [script.blocks.length]);
 
   const cancelSpeakerPicker = useCallback(() => {
     const target = focusBeforePickerRef.current;
@@ -2967,6 +2975,7 @@ export default function ScriptEditor({
           onSelect={handleSpeakerPickerSelect}
           onClose={cancelSpeakerPicker}
           title={speakerPickerRequest.mode === 'append' ? '最下段に追加する話者' : '直下に追加する話者'}
+          anchorEl={speakerPickerRequest.anchorEl}
         />
       )}
     </>
